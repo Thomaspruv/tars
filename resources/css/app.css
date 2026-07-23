@@ -1,0 +1,157 @@
+@import 'tailwindcss';
+@import '../../vendor/livewire/flux/dist/flux.css';
+
+@source '../views';
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../vendor/livewire/flux-pro/stubs/**/*.blade.php';
+@source '../../vendor/livewire/flux/stubs/**/*.blade.php';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+    --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+    --color-zinc-50: #fafafa;
+    --color-zinc-100: #f5f5f5;
+    --color-zinc-200: #e5e5e5;
+    --color-zinc-300: #d4d4d4;
+    --color-zinc-400: #a3a3a3;
+    --color-zinc-500: #737373;
+    --color-zinc-600: #525252;
+    --color-zinc-700: #404040;
+    --color-zinc-800: #262626;
+    --color-zinc-900: #171717;
+    --color-zinc-950: #0a0a0a;
+
+    --color-accent: var(--color-neutral-800);
+    --color-accent-content: var(--color-neutral-800);
+    --color-accent-foreground: var(--color-white);
+}
+
+@layer theme {
+    .dark {
+        --color-accent: var(--color-white);
+        --color-accent-content: var(--color-white);
+        --color-accent-foreground: var(--color-neutral-800);
+    }
+}
+
+@layer base {
+
+    *,
+    ::after,
+    ::before,
+    ::backdrop,
+    ::file-selector-button {
+        border-color: var(--color-gray-200, currentColor);
+    }
+}
+
+/* TARS — tokens sémantiques (design system v1) */
+:root,
+[data-theme='dark'] {
+    color-scheme: dark;
+
+    --bg: #0B0D12;
+    --surf: #131720;
+    --surf2: #1B2029;
+    --bd: rgba(148, 163, 199, .14);
+    --bd2: rgba(148, 163, 199, .25);
+    --tx: #E6E9F2;
+    --mut: #8A93A8;
+    --ac: #53D6E8;
+    --achov: #8AE6F2;
+    --acT: #07090D;
+    --acbg: rgba(83, 214, 232, .12);
+    --ai: #9D8CF5;
+    --aibg: rgba(157, 140, 245, .12);
+    --ok: #4ADE80;
+    --okbg: rgba(74, 222, 128, .13);
+    --warn: #FBBF24;
+    --warnbg: rgba(251, 191, 36, .13);
+    --dgr: #F87171;
+    --dgrbg: rgba(248, 113, 113, .15);
+    --in: #0B0D12;
+    --glow: 0 0 18px rgba(83, 214, 232, .25);
+    --aiglow: 0 0 18px rgba(157, 140, 245, .28);
+    --gradient-signature: linear-gradient(135deg, #53D6E8, #7C6CF0);
+}
+
+[data-theme='light'] {
+    color-scheme: light;
+
+    --bg: #F4F5F8;
+    --surf: #FFFFFF;
+    --surf2: #ECEEF3;
+    --bd: rgba(20, 25, 40, .1);
+    --bd2: rgba(20, 25, 40, .2);
+    --tx: #171B26;
+    --mut: #5D6579;
+    --ac: #0796B2;
+    --achov: #0AB6D8;
+    --acT: #FFFFFF;
+    --acbg: rgba(7, 150, 178, .1);
+    --ai: #7C5CE8;
+    --aibg: rgba(124, 92, 232, .1);
+    --ok: #16A34A;
+    --okbg: rgba(22, 163, 74, .1);
+    --warn: #B45309;
+    --warnbg: rgba(180, 83, 9, .1);
+    --dgr: #DC5555;
+    --dgrbg: rgba(220, 85, 85, .12);
+    --in: #FFFFFF;
+    --glow: 0 1px 3px rgba(20, 25, 40, .08);
+    --aiglow: 0 1px 3px rgba(20, 25, 40, .08);
+}
+
+@keyframes pulse-soft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .45; }
+}
+
+.animate-pulse-soft {
+    animation: pulse-soft 1.6s ease-in-out infinite;
+}
+
+html[data-theme] body {
+    background-color: var(--bg);
+    color: var(--tx);
+    transition: background-color .25s, color .25s;
+}
+
+html[data-theme] ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+html[data-theme] ::-webkit-scrollbar-thumb {
+    background-color: var(--bd2);
+    border-radius: 99px;
+}
+
+/* Theme-icon visibility follows the app's own data-theme attribute, never
+   Tailwind's dark: variant, since that stays in sync with Flux's separate
+   appearance store and would drift out of sync with our token system. */
+[data-theme='dark'] [data-theme-icon='sun'],
+[data-theme='light'] [data-theme-icon='moon'] {
+    display: none;
+}
+
+[data-flux-field]:not(ui-radio, ui-checkbox) {
+    @apply grid gap-2;
+}
+
+[data-flux-label] {
+    @apply  !mb-0 !leading-tight;
+}
+
+input:focus[data-flux-control],
+textarea:focus[data-flux-control],
+select:focus[data-flux-control] {
+    @apply outline-hidden ring-2 ring-accent ring-offset-2 ring-offset-accent-foreground;
+}
+
+/* \[:where(&)\]:size-4 {
+    @apply size-4;
+} */

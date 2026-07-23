@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+#
+# Starts the local dev environment for this project.
+#
+# Laravel Valet serves the PHP app continuously in the background once the
+# site is linked and Valet's services are running — this script never runs
+# `php artisan serve`. It only starts what Valet does NOT manage: the queue
+# worker, log tailing (Pail), and the Vite dev server.
+
+set -euo pipefail
+cd "$(dirname "$0")"
+
+SITE_NAME="$(basename "$(pwd)")"
+SITE_URL="http://${SITE_NAME}.test"
+
+if ! valet links 2>/dev/null | grep -qi "$SITE_NAME"; then
+    echo "Linking ${SITE_NAME} with Valet..."
+    valet link "$SITE_NAME"
+fi
+
+echo "Valet is serving ${SITE_URL}"
+valet open "$SITE_NAME"
+
+npx concurrently \
+    -c "#93c5fd,#c4b5fd,#fdba74" \
+    --names=queue,logs,vite \
+    --kill-others-on-fail \
+    "php artisan queue:listen --tries=1 --timeout=0" \
+    "php artisan pail --timeout=0" \
+    "npm run dev"
