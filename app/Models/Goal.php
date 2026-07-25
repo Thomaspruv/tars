@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -113,5 +114,13 @@ class Goal extends Model
     public function decisions(): HasMany
     {
         return $this->hasMany(Decision::class);
+    }
+
+    /**
+     * @return MorphToMany<BrainDocument, $this>
+     */
+    public function brainDocuments(): MorphToMany
+    {
+        return $this->morphToMany(BrainDocument::class, 'anchorable', 'brain_document_anchors');
     }
 }

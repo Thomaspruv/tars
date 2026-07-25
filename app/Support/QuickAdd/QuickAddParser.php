@@ -5,12 +5,15 @@ namespace App\Support\QuickAdd;
 use App\Enums\TaskPriority;
 use App\Models\Entity;
 use App\Models\Goal;
+use App\Support\FuzzyMatcher;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 class QuickAddParser
 {
+    public function __construct(private readonly FuzzyMatcher $fuzzyMatcher = new FuzzyMatcher) {}
+
     private const array WEEKDAYS = [
         'lundi' => Carbon::MONDAY,
         'mardi' => Carbon::TUESDAY,
@@ -139,21 +142,7 @@ class QuickAddParser
 
     private function fuzzyFindEntity(string $needle): ?Entity
     {
-        $normalized = Str::of($needle)->lower()->replace('-', ' ')->toString();
-
-        $best = null;
-        $bestScore = 0;
-
-        foreach (Entity::all() as $entity) {
-            $score = $this->matchScore(Str::lower($entity->name), $normalized);
-
-            if ($score >= 55 && $score > $bestScore) {
-                $best = $entity;
-                $bestScore = $score;
-            }
-        }
-
-        return $best;
+        return $this->fuzzyMatcher->bestMatch(Entity::all(), $needle, fn (Entity $entity): string => $entity->name);
     }
 
     private function fuzzyFindGoal(string $needle): ?Goal
@@ -165,31 +154,6 @@ class QuickAddParser
             return $bySlug;
         }
 
-        $normalized = Str::of($needle)->lower()->replace('-', ' ')->toString();
-
-        $best = null;
-        $bestScore = 0;
-
-        foreach (Goal::all() as $goal) {
-            $score = $this->matchScore(Str::lower($goal->title), $normalized);
-
-            if ($score >= 55 && $score > $bestScore) {
-                $best = $goal;
-                $bestScore = $score;
-            }
-        }
-
-        return $best;
-    }
-
-    private function matchScore(string $haystack, string $needle): int|float
-    {
-        similar_text($haystack, $needle, $percent);
-
-        return match (true) {
-            $haystack === $needle => 100,
-            str_contains($haystack, $needle) => 90,
-            default => $percent,
-        };
+        return $this->fuzzyMatcher->bestMatch(Goal::all(), $needle, fn (Goal $goal): string => $goal->title);
     }
 }
