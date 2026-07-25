@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\NoteSource;
 use App\Models\Entity;
 use App\Models\Task;
 use App\Support\Brain\BrainSettings;
+use App\Support\Entity\EntityDetailFields;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -18,6 +18,9 @@ new #[Title('Entité')] class extends Component
     public string $editName = '';
 
     public string $editNotes = '';
+
+    /** @var array<string, mixed> */
+    public array $editDetails = [];
 
     public string $newNoteContent = '';
 
@@ -56,6 +59,24 @@ new #[Title('Entité')] class extends Component
         return $this->entity->brainDocuments()->latest('mtime')->get();
     }
 
+    /**
+     * @return list<array{key: string, label: string, type: string, options?: array<string, string>}>
+     */
+    #[Computed]
+    public function detailFields(): array
+    {
+        return EntityDetailFields::forType($this->entity->type);
+    }
+
+    /**
+     * @return list<array{label: string, value: string}>
+     */
+    #[Computed]
+    public function filledDetails(): array
+    {
+        return EntityDetailFields::filledPairs($this->entity->type, $this->entity->details ?? []);
+    }
+
     public function toggleTask(int $taskId): void
     {
         Task::findOrFail($taskId)->toggleCompletion();
@@ -67,6 +88,7 @@ new #[Title('Entité')] class extends Component
     {
         $this->editName = $this->entity->name;
         $this->editNotes = (string) $this->entity->notes;
+        $this->editDetails = $this->entity->details ?? [];
         $this->showEditModal = true;
     }
 
@@ -75,11 +97,13 @@ new #[Title('Entité')] class extends Component
         $validated = $this->validate([
             'editName' => ['required', 'string', 'max:255'],
             'editNotes' => ['nullable', 'string'],
+            ...EntityDetailFields::validationRules($this->entity->type, 'editDetails'),
         ]);
 
         $this->entity->update([
             'name' => $validated['editName'],
             'notes' => $validated['editNotes'],
+            'details' => array_filter($validated['editDetails'] ?? [], fn ($value): bool => $value !== null && $value !== ''),
         ]);
 
         $this->showEditModal = false;
@@ -126,6 +150,20 @@ new #[Title('Entité')] class extends Component
 
     <div class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
         <div class="space-y-8">
+            @if ($this->filledDetails !== [])
+                <div>
+                    <h2 class="text-base font-semibold text-(--tx)">Informations</h2>
+                    <dl class="mt-3 space-y-2 rounded-[14px] border border-(--bd) bg-(--surf) p-4 text-sm">
+                        @foreach ($this->filledDetails as $pair)
+                            <div class="flex items-center justify-between gap-4">
+                                <dt class="text-(--mut)">{{ $pair['label'] }}</dt>
+                                <dd class="text-right text-(--tx)">{{ $pair['value'] }}</dd>
+                            </div>
+                        @endforeach
+                    </dl>
+                </div>
+            @endif
+
             @if ($this->recurringTasks->isNotEmpty())
                 <div>
                     <h2 class="text-base font-semibold text-(--tx)">Échéances récurrentes</h2>
@@ -166,7 +204,7 @@ new #[Title('Entité')] class extends Component
                 <div class="mt-3 space-y-2">
                     @forelse ($this->notes as $note)
                         <div class="rounded-[10px] border border-(--bd) bg-(--surf) p-3" wire:key="note-{{ $note->id }}">
-                            @if ($note->source === NoteSource::Agent)
+                            @if ($note->source === \App\Enums\NoteSource::Agent)
                                 <span class="font-mono text-[10px] font-semibold text-(--ai)">◈ AGENT</span>
                             @endif
                             <p class="mt-1 text-sm text-(--tx)">{{ $note->content }}</p>
@@ -207,6 +245,8 @@ new #[Title('Entité')] class extends Component
                 <label class="text-xs text-(--mut)">Notes</label>
                 <textarea wire:model="editNotes" rows="3" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)"></textarea>
             </div>
+
+            <x-entity-detail-fields :fields="$this->detailFields" prefix="editDetails" />
 
             <div class="flex justify-end gap-2">
                 <x-btn variant="ghost" wire:click="$set('showEditModal', false)">Annuler</x-btn>

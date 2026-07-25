@@ -21,11 +21,12 @@ use Illuminate\Support\Carbon;
  * @property EntityType $type
  * @property EntityContext $context
  * @property string|null $notes
+ * @property array<string, mixed>|null $details
  * @property EntityStatus $status
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['life_area_id', 'name', 'type', 'context', 'notes', 'status'])]
+#[Fillable(['life_area_id', 'name', 'type', 'context', 'notes', 'details', 'status'])]
 class Entity extends Model
 {
     /** @use HasFactory<EntityFactory> */
@@ -52,6 +53,7 @@ class Entity extends Model
         return [
             'type' => EntityType::class,
             'context' => EntityContext::class,
+            'details' => 'array',
             'status' => EntityStatus::class,
         ];
     }

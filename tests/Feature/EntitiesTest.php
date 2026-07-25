@@ -45,3 +45,54 @@ test('it requires a name to create an entity', function () {
         ->call('createEntity')
         ->assertHasErrors(['name']);
 });
+
+test('it creates an entity with type-specific detail fields', function () {
+    $this->actingAs(User::factory()->create());
+
+    $area = LifeArea::factory()->create();
+
+    Livewire::test('pages::entities')
+        ->call('openCreateModal')
+        ->set('name', 'Appart Lyon')
+        ->set('type', 'property')
+        ->set('lifeAreaId', $area->id)
+        ->set('details.address', '3 rue de la République')
+        ->set('details.surface_m2', '54')
+        ->set('details.occupation', '')
+        ->call('createEntity')
+        ->assertSet('showCreateModal', false);
+
+    $entity = Entity::where('name', 'Appart Lyon')->firstOrFail();
+
+    expect($entity->details)->toBe([
+        'address' => '3 rue de la République',
+        'surface_m2' => '54',
+    ]);
+});
+
+test('detail fields are all optional', function () {
+    $this->actingAs(User::factory()->create());
+
+    $area = LifeArea::factory()->create();
+
+    Livewire::test('pages::entities')
+        ->call('openCreateModal')
+        ->set('name', 'SCI Test')
+        ->set('type', 'company')
+        ->set('lifeAreaId', $area->id)
+        ->call('createEntity')
+        ->assertHasNoErrors();
+
+    expect(Entity::where('name', 'SCI Test')->firstOrFail()->details)->toBe([]);
+});
+
+test('switching type clears the previously entered detail fields', function () {
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages::entities')
+        ->call('openCreateModal')
+        ->set('type', 'property')
+        ->set('details.address', '3 rue de la République')
+        ->set('type', 'vehicle')
+        ->assertSet('details', []);
+});

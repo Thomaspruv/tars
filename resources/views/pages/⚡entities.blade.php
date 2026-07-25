@@ -2,6 +2,7 @@
 
 use App\Models\Entity;
 use App\Models\LifeArea;
+use App\Support\Entity\EntityDetailFields;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -18,6 +19,9 @@ new #[Title('Entités')] class extends Component
     public ?int $lifeAreaId = null;
 
     public string $notes = '';
+
+    /** @var array<string, mixed> */
+    public array $details = [];
 
     #[Computed]
     public function entities(): Collection
@@ -37,6 +41,20 @@ new #[Title('Entités')] class extends Component
         return LifeArea::orderBy('position')->get();
     }
 
+    /**
+     * @return list<array{key: string, label: string, type: string, options?: array<string, string>}>
+     */
+    #[Computed]
+    public function detailFields(): array
+    {
+        return EntityDetailFields::forType($this->type);
+    }
+
+    public function updatedType(): void
+    {
+        $this->details = [];
+    }
+
     public function nextDueDateFor(Entity $entity)
     {
         return $entity->tasks
@@ -48,7 +66,7 @@ new #[Title('Entités')] class extends Component
 
     public function openCreateModal(): void
     {
-        $this->reset(['name', 'notes']);
+        $this->reset(['name', 'notes', 'details']);
         $this->type = 'company';
         $this->lifeAreaId = $this->allLifeAreas->first()?->id;
         $this->showCreateModal = true;
@@ -61,6 +79,7 @@ new #[Title('Entités')] class extends Component
             'type' => ['required', 'in:company,property,vehicle,other'],
             'lifeAreaId' => ['required', 'exists:life_areas,id'],
             'notes' => ['nullable', 'string'],
+            ...EntityDetailFields::validationRules($this->type, 'details'),
         ]);
 
         Entity::create([
@@ -68,6 +87,7 @@ new #[Title('Entités')] class extends Component
             'name' => $validated['name'],
             'type' => $validated['type'],
             'notes' => $validated['notes'],
+            'details' => array_filter($validated['details'] ?? [], fn ($value): bool => $value !== null && $value !== ''),
         ]);
 
         $this->showCreateModal = false;
@@ -111,13 +131,15 @@ new #[Title('Entités')] class extends Component
 
             <div>
                 <label class="text-xs text-(--mut)">Type</label>
-                <select wire:model="type" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)">
+                <select wire:model.live="type" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)">
                     <option value="company">Entreprise</option>
                     <option value="property">Bien</option>
                     <option value="vehicle">Véhicule</option>
                     <option value="other">Autre</option>
                 </select>
             </div>
+
+            <x-entity-detail-fields :fields="$this->detailFields" prefix="details" />
 
             <div>
                 <label class="text-xs text-(--mut)">Domaine de vie</label>
