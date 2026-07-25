@@ -138,6 +138,71 @@ html[data-theme] ::-webkit-scrollbar-thumb {
     display: none;
 }
 
+/* Rendered vault markdown (⚡brain.blade.php) — no typography plugin installed,
+   so headings/lists/code are styled directly against the design system tokens
+   rather than pulling in @tailwindcss/typography for a handful of elements. */
+.brain-content {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--tx);
+}
+
+.brain-content :where(h1, h2, h3) {
+    margin-top: 1.4em;
+    margin-bottom: .5em;
+    font-weight: 600;
+    color: var(--tx);
+}
+
+.brain-content h1 { font-size: 20px; }
+.brain-content h2 { font-size: 17px; }
+.brain-content h3 { font-size: 15px; }
+
+.brain-content p {
+    margin-top: .75em;
+    margin-bottom: .75em;
+}
+
+.brain-content :where(ul, ol) {
+    margin: .5em 0;
+    padding-left: 1.4em;
+}
+
+.brain-content li {
+    margin: .25em 0;
+}
+
+.brain-content a {
+    color: var(--ac);
+    text-underline-offset: 2px;
+}
+
+.brain-content code {
+    border-radius: 4px;
+    background: var(--surf2);
+    padding: .1em .35em;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+}
+
+.brain-content pre {
+    border-radius: 10px;
+    background: var(--surf2);
+    padding: 12px 14px;
+    overflow-x: auto;
+}
+
+.brain-content pre code {
+    background: none;
+    padding: 0;
+}
+
+.brain-content blockquote {
+    border-left: 2px solid var(--bd2);
+    padding-left: 12px;
+    color: var(--mut);
+}
+
 [data-flux-field]:not(ui-radio, ui-checkbox) {
     @apply grid gap-2;
 }

@@ -295,7 +295,7 @@ new #[Title('Cerveau')] class extends Component
                             <x-btn variant="primary" wire:click="save">Enregistrer</x-btn>
                         </div>
                     @else
-                        <div class="prose prose-sm mt-4 max-w-none text-(--tx)">
+                        <div class="brain-content mt-4">
                             {!! $this->renderedContent !!}
                         </div>
                     @endif
