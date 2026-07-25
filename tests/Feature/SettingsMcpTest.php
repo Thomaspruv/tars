@@ -64,3 +64,12 @@ test('counts calls from the last 7 days', function () {
 
     expect($status['callsLast7Days'])->toBe(1);
 });
+
+test('shows the hermes connection block', function () {
+    $this->actingAs(User::factory()->create());
+
+    $this->get(route('settings.index'))
+        ->assertSee('Configuration côté Hermes')
+        ->assertSee('Authorization: Bearer', false)
+        ->assertSee('172.17.0.1');
+});

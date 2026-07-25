@@ -455,6 +455,18 @@ new #[Title('Réglages')] class extends Component
                 </div>
             </div>
         </div>
+
+        <div class="mt-4 rounded-[14px] border border-(--bd) bg-(--surf) p-5">
+            <h3 class="text-xs font-semibold text-(--mut)">Configuration côté Hermes</h3>
+            <dl class="mt-3 space-y-1.5 font-mono text-xs text-(--tx)">
+                <div>URL : {{ $this->mcpEndpointUrl }}</div>
+                <div>Header : Authorization: Bearer &lt;token&gt;</div>
+                <div class="text-(--mut)">
+                    Depuis un conteneur Docker sur ce même VPS, utilise <span class="text-(--tx)">172.17.0.1</span> à la place du domaine ;
+                    le domaine public reste nécessaire si Hermes tourne ailleurs.
+                </div>
+            </dl>
+        </div>
     </div>
 
     <flux:modal wire:model.self="showFormModal" class="md:w-[380px]">
