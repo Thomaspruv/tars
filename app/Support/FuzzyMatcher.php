@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 class FuzzyMatcher
@@ -17,21 +18,28 @@ class FuzzyMatcher
      */
     public function bestMatch(iterable $candidates, string $needle, \Closure $label, int $threshold = 55): mixed
     {
+        return $this->rankedMatches($candidates, $needle, $label, $threshold)->first();
+    }
+
+    /**
+     * Rank every candidate scoring at or above the threshold, highest score first.
+     *
+     * @template TCandidate
+     *
+     * @param  iterable<TCandidate>  $candidates
+     * @param  \Closure(TCandidate): string  $label
+     * @return Collection<int, TCandidate>
+     */
+    public function rankedMatches(iterable $candidates, string $needle, \Closure $label, int $threshold = 55): Collection
+    {
         $normalized = Str::of($needle)->lower()->replace('-', ' ')->toString();
 
-        $best = null;
-        $bestScore = 0;
-
-        foreach ($candidates as $candidate) {
-            $score = $this->score(Str::lower($label($candidate)), $normalized);
-
-            if ($score >= $threshold && $score > $bestScore) {
-                $best = $candidate;
-                $bestScore = $score;
-            }
-        }
-
-        return $best;
+        return collect($candidates)
+            ->map(fn ($candidate): array => [$candidate, $this->score(Str::lower($label($candidate)), $normalized)])
+            ->filter(fn (array $pair): bool => $pair[1] >= $threshold)
+            ->sortByDesc(fn (array $pair): int|float => $pair[1])
+            ->map(fn (array $pair): mixed => $pair[0])
+            ->values();
     }
 
     public function score(string $haystack, string $needle): int|float
