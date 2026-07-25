@@ -12,13 +12,32 @@ class GitRepository
 
     public function ensureCloned(string $remote, string $branch, string $path): void
     {
-        if (File::isDirectory($path.'/.git')) {
+        if (! File::isDirectory($path.'/.git')) {
+            File::ensureDirectoryExists(dirname($path));
+
+            Process::run(['git', 'clone', '--branch', $branch, '--single-branch', $remote, $path])->throw();
+
             return;
         }
 
-        File::ensureDirectoryExists(dirname($path));
+        $this->realign($remote, $branch, $path);
+    }
 
-        Process::run(['git', 'clone', '--branch', $branch, '--single-branch', $remote, $path])->throw();
+    private function realign(string $remote, string $branch, string $path): void
+    {
+        $currentRemote = trim(Process::path($path)->run(['git', 'remote', 'get-url', 'origin'])->output());
+        $currentBranch = trim(Process::path($path)->run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])->output());
+
+        if ($currentRemote === $remote && $currentBranch === $branch) {
+            return;
+        }
+
+        if ($currentRemote !== $remote) {
+            Process::path($path)->run(['git', 'remote', 'set-url', 'origin', $remote])->throw();
+        }
+
+        Process::path($path)->run(['git', 'fetch', 'origin'])->throw();
+        Process::path($path)->run(['git', 'checkout', '-B', $branch, '--track', "origin/{$branch}"])->throw();
     }
 
     public function pull(string $path): GitPullResult
