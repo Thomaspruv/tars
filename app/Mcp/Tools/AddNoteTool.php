@@ -12,11 +12,10 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
-use Laravel\Mcp\Server\Tool;
 
 #[Name('add_note')]
 #[Description("Crée une note dans le cerveau (dossier TARS/ du vault), avec commit git. L'ancrage sur une entité/objectif se fait par nom, résolu automatiquement à l'indexation.")]
-class AddNoteTool extends Tool
+class AddNoteTool extends LoggedTool
 {
     public function __construct(
         private readonly BrainSettings $settings,
@@ -33,7 +32,7 @@ class AddNoteTool extends Tool
         ];
     }
 
-    public function handle(Request $request): Response
+    protected function execute(Request $request): Response
     {
         $validated = $request->validate([
             'content' => ['required', 'string'],

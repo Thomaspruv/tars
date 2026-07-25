@@ -2,7 +2,6 @@
 
 namespace App\Mcp\Tools;
 
-use App\Mcp\Support\AmbiguousToolCall;
 use App\Mcp\Support\NameResolver;
 use App\Models\Task;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -10,11 +9,10 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
-use Laravel\Mcp\Server\Tool;
 
 #[Name('list_tasks')]
 #[Description("Liste les tâches ouvertes, filtrables par période (aujourd'hui, semaine, retard) et/ou par objectif/entité (noms approximatifs).")]
-class ListTasksTool extends Tool
+class ListTasksTool extends LoggedTool
 {
     public function __construct(private readonly NameResolver $resolver = new NameResolver) {}
 
@@ -27,16 +25,7 @@ class ListTasksTool extends Tool
         ];
     }
 
-    public function handle(Request $request): Response
-    {
-        try {
-            return $this->listTasks($request);
-        } catch (AmbiguousToolCall $e) {
-            return Response::text($e->getMessage());
-        }
-    }
-
-    private function listTasks(Request $request): Response
+    protected function execute(Request $request): Response
     {
         $validated = $request->validate([
             'filter' => ['nullable', 'in:today,week,overdue'],

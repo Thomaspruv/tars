@@ -3,18 +3,16 @@
 namespace App\Mcp\Tools;
 
 use App\Enums\TaskStatus;
-use App\Mcp\Support\AmbiguousToolCall;
 use App\Mcp\Support\NameResolver;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
-use Laravel\Mcp\Server\Tool;
 
 #[Name('complete_task')]
 #[Description('Marque une tâche ouverte comme faite, par titre approximatif. Si la tâche est récurrente, elle avance simplement à sa prochaine échéance au lieu de disparaître.')]
-class CompleteTaskTool extends Tool
+class CompleteTaskTool extends LoggedTool
 {
     public function __construct(private readonly NameResolver $resolver = new NameResolver) {}
 
@@ -25,16 +23,7 @@ class CompleteTaskTool extends Tool
         ];
     }
 
-    public function handle(Request $request): Response
-    {
-        try {
-            return $this->completeTask($request);
-        } catch (AmbiguousToolCall $e) {
-            return Response::text($e->getMessage());
-        }
-    }
-
-    private function completeTask(Request $request): Response
+    protected function execute(Request $request): Response
     {
         $validated = $request->validate(['task' => ['required', 'string']]);
 

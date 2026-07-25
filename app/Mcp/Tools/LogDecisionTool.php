@@ -3,7 +3,6 @@
 namespace App\Mcp\Tools;
 
 use App\Enums\DecisionSource;
-use App\Mcp\Support\AmbiguousToolCall;
 use App\Mcp\Support\NameResolver;
 use App\Models\Decision;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -11,11 +10,10 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
-use Laravel\Mcp\Server\Tool;
 
 #[Name('log_decision')]
 #[Description('Enregistre une décision prise en conversation, avec son contexte et une ancre optionnelle sur une entité ou un objectif.')]
-class LogDecisionTool extends Tool
+class LogDecisionTool extends LoggedTool
 {
     public function __construct(private readonly NameResolver $resolver = new NameResolver) {}
 
@@ -29,16 +27,7 @@ class LogDecisionTool extends Tool
         ];
     }
 
-    public function handle(Request $request): Response
-    {
-        try {
-            return $this->logDecision($request);
-        } catch (AmbiguousToolCall $e) {
-            return Response::text($e->getMessage());
-        }
-    }
-
-    private function logDecision(Request $request): Response
+    protected function execute(Request $request): Response
     {
         $validated = $request->validate([
             'content' => ['required', 'string'],

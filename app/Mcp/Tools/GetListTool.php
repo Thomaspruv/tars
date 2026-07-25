@@ -2,7 +2,6 @@
 
 namespace App\Mcp\Tools;
 
-use App\Mcp\Support\AmbiguousToolCall;
 use App\Mcp\Support\NameResolver;
 use App\Models\Checklist;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -10,11 +9,10 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
-use Laravel\Mcp\Server\Tool;
 
 #[Name('get_list')]
 #[Description('Retourne le contenu d\'une liste par nom approximatif, avec ce qui est déjà coché.')]
-class GetListTool extends Tool
+class GetListTool extends LoggedTool
 {
     public function __construct(private readonly NameResolver $resolver = new NameResolver) {}
 
@@ -25,16 +23,7 @@ class GetListTool extends Tool
         ];
     }
 
-    public function handle(Request $request): Response
-    {
-        try {
-            return $this->getList($request);
-        } catch (AmbiguousToolCall $e) {
-            return Response::text($e->getMessage());
-        }
-    }
-
-    private function getList(Request $request): Response
+    protected function execute(Request $request): Response
     {
         $validated = $request->validate(['list' => ['required', 'string']]);
 

@@ -10,18 +10,17 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
-use Laravel\Mcp\Server\Tool;
 
 #[Name('get_today')]
 #[Description("La vue Aujourd'hui : tâches du jour et en retard, événements des 7 prochains jours, prochaine revue.")]
-class GetTodayTool extends Tool
+class GetTodayTool extends LoggedTool
 {
     public function schema(JsonSchema $schema): array
     {
         return [];
     }
 
-    public function handle(Request $request): Response
+    protected function execute(Request $request): Response
     {
         $tasks = Task::forToday()->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('priority')->get();
         $events = Event::whereBetween('starts_at', [today(), today()->addDays(7)->endOfDay()])->orderBy('starts_at')->get();

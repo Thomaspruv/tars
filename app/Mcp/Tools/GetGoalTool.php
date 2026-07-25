@@ -4,18 +4,16 @@ namespace App\Mcp\Tools;
 
 use App\Enums\MilestoneStatus;
 use App\Enums\TaskStatus;
-use App\Mcp\Support\AmbiguousToolCall;
 use App\Mcp\Support\NameResolver;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
-use Laravel\Mcp\Server\Tool;
 
 #[Name('get_goal')]
 #[Description("Détail d'un objectif par titre approximatif : jalons, tâches ouvertes/faites, dernière activité.")]
-class GetGoalTool extends Tool
+class GetGoalTool extends LoggedTool
 {
     public function __construct(private readonly NameResolver $resolver = new NameResolver) {}
 
@@ -26,16 +24,7 @@ class GetGoalTool extends Tool
         ];
     }
 
-    public function handle(Request $request): Response
-    {
-        try {
-            return $this->getGoal($request);
-        } catch (AmbiguousToolCall $e) {
-            return Response::text($e->getMessage());
-        }
-    }
-
-    private function getGoal(Request $request): Response
+    protected function execute(Request $request): Response
     {
         $validated = $request->validate(['goal' => ['required', 'string']]);
 

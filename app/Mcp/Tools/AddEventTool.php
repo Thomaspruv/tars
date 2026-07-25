@@ -2,7 +2,6 @@
 
 namespace App\Mcp\Tools;
 
-use App\Mcp\Support\AmbiguousToolCall;
 use App\Mcp\Support\NameResolver;
 use App\Models\Event;
 use App\Support\QuickAdd\QuickAddParser;
@@ -11,11 +10,10 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
-use Laravel\Mcp\Server\Tool;
 
 #[Name('add_event')]
 #[Description("Crée un événement. La date accepte le langage naturel français (demain, mardi, 25/12), l'heure au format HH:MM (minuit par défaut).")]
-class AddEventTool extends Tool
+class AddEventTool extends LoggedTool
 {
     public function __construct(private readonly NameResolver $resolver = new NameResolver) {}
 
@@ -30,16 +28,7 @@ class AddEventTool extends Tool
         ];
     }
 
-    public function handle(Request $request): Response
-    {
-        try {
-            return $this->createEvent($request);
-        } catch (AmbiguousToolCall $e) {
-            return Response::text($e->getMessage());
-        }
-    }
-
-    private function createEvent(Request $request): Response
+    protected function execute(Request $request): Response
     {
         $validated = $request->validate([
             'title' => ['required', 'string'],

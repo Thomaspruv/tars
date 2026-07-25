@@ -3,7 +3,6 @@
 namespace App\Mcp\Tools;
 
 use App\Enums\TaskPriority;
-use App\Mcp\Support\AmbiguousToolCall;
 use App\Mcp\Support\NameResolver;
 use App\Models\Task;
 use App\Support\QuickAdd\QuickAddParser;
@@ -13,11 +12,10 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
-use Laravel\Mcp\Server\Tool;
 
 #[Name('add_task')]
 #[Description("Crée une tâche. La date accepte le langage naturel français (demain, vendredi, 25/12). L'entité et l'objectif sont résolus par nom approximatif, jamais par identifiant.")]
-class AddTaskTool extends Tool
+class AddTaskTool extends LoggedTool
 {
     public function __construct(private readonly NameResolver $resolver = new NameResolver) {}
 
@@ -32,16 +30,7 @@ class AddTaskTool extends Tool
         ];
     }
 
-    public function handle(Request $request): Response
-    {
-        try {
-            return $this->createTask($request);
-        } catch (AmbiguousToolCall $e) {
-            return Response::text($e->getMessage());
-        }
-    }
-
-    private function createTask(Request $request): Response
+    protected function execute(Request $request): Response
     {
         $validated = $request->validate([
             'title' => ['required', 'string'],

@@ -12,11 +12,10 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
-use Laravel\Mcp\Server\Tool;
 
 #[Name('get_context')]
 #[Description("Le profil de Thomas (dossier Profil/ du vault) et un résumé de l'état courant (domaines de vie, entités et objectifs actifs). Pensé pour être appelé en début de conversation.")]
-class GetContextTool extends Tool
+class GetContextTool extends LoggedTool
 {
     public function __construct(private readonly BrainSettings $settings) {}
 
@@ -25,7 +24,7 @@ class GetContextTool extends Tool
         return [];
     }
 
-    public function handle(Request $request): Response
+    protected function execute(Request $request): Response
     {
         $lifeAreas = LifeArea::count();
         $entities = Entity::where('status', 'active')->count();
