@@ -1,7 +1,11 @@
 <?php
 
+use App\Models\BrainDocument;
 use App\Models\LifeArea;
+use App\Support\Brain\BrainSettings;
+use App\Support\Brain\GitRepository;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Artisan;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -19,6 +23,32 @@ new #[Title('Réglages')] class extends Component
     public string $name = '';
 
     public string $color = '#53D6E8';
+
+    public string $brainRemoteUrl = '';
+
+    public string $brainBranch = 'main';
+
+    public int $brainSyncFrequency = 15;
+
+    public bool $brainAutoIndex = true;
+
+    public ?string $brainTestMessage = null;
+
+    public ?bool $brainTestSuccessful = null;
+
+    public ?string $brainSyncMessage = null;
+
+    public ?string $brainReindexMessage = null;
+
+    public function mount(): void
+    {
+        $settings = app(BrainSettings::class);
+
+        $this->brainRemoteUrl = (string) $settings->remoteUrl();
+        $this->brainBranch = $settings->branch();
+        $this->brainSyncFrequency = $settings->syncFrequencyMinutes();
+        $this->brainAutoIndex = $settings->autoIndexEnabled();
+    }
 
     #[Computed]
     public function lifeAreas(): Collection
@@ -71,6 +101,75 @@ new #[Title('Réglages')] class extends Component
 
         unset($this->lifeAreas);
     }
+
+    #[Computed]
+    public function brainConfigured(): bool
+    {
+        return app(BrainSettings::class)->isConfigured();
+    }
+
+    /**
+     * @return array{lastSynced: ?\Illuminate\Support\Carbon, lastIndexed: ?\Illuminate\Support\Carbon, documentsCount: int, gitStatus: \App\Enums\GitSyncStatus}
+     */
+    #[Computed]
+    public function brainStatus(): array
+    {
+        $settings = app(BrainSettings::class);
+
+        return [
+            'lastSynced' => $settings->lastSyncedAt(),
+            'lastIndexed' => $settings->lastIndexedAt(),
+            'documentsCount' => BrainDocument::count(),
+            'gitStatus' => app(GitRepository::class)->status($settings->localPath()),
+        ];
+    }
+
+    public function saveBrainSettings(): void
+    {
+        $validated = $this->validate([
+            'brainRemoteUrl' => ['nullable', 'string', 'max:255'],
+            'brainBranch' => ['required', 'string', 'max:255'],
+            'brainSyncFrequency' => ['required', 'integer', 'min:1'],
+            'brainAutoIndex' => ['boolean'],
+        ]);
+
+        app(BrainSettings::class)->updateConfiguration([
+            'remote_url' => $validated['brainRemoteUrl'] ?: null,
+            'branch' => $validated['brainBranch'],
+            'sync_frequency_minutes' => $validated['brainSyncFrequency'],
+            'auto_index' => $validated['brainAutoIndex'],
+        ]);
+
+        unset($this->brainConfigured, $this->brainStatus);
+    }
+
+    public function testBrainConnection(): void
+    {
+        $this->brainTestSuccessful = app(GitRepository::class)->lsRemote($this->brainRemoteUrl);
+        $this->brainTestMessage = $this->brainTestSuccessful
+            ? 'Connexion au dépôt réussie.'
+            : 'Impossible de joindre le dépôt distant.';
+    }
+
+    public function syncBrainNow(): void
+    {
+        $exitCode = Artisan::call('brain:sync');
+
+        $this->brainSyncMessage = $exitCode === 0
+            ? trim(Artisan::output())
+            : 'Échec de la synchronisation — voir les logs.';
+
+        unset($this->brainStatus);
+    }
+
+    public function reindexBrainFull(): void
+    {
+        Artisan::call('brain:index', ['--fresh' => true]);
+
+        $this->brainReindexMessage = trim(Artisan::output());
+
+        unset($this->brainStatus);
+    }
 };
 ?>
 
@@ -103,6 +202,84 @@ new #[Title('Réglages')] class extends Component
             @empty
                 <p class="text-sm text-(--mut)">Aucun domaine de vie pour l'instant.</p>
             @endforelse
+        </div>
+    </div>
+
+    <div class="mt-8">
+        <h2 class="text-base font-semibold text-(--tx)">Cerveau</h2>
+
+        <div class="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <form wire:submit="saveBrainSettings" class="space-y-4 rounded-[14px] border border-(--bd) bg-(--surf) p-5">
+                <div>
+                    <label class="text-xs text-(--mut)">URL du remote git</label>
+                    <input
+                        type="text"
+                        wire:model="brainRemoteUrl"
+                        placeholder="git@example.com:vault.git"
+                        class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)"
+                    />
+                    @error('brainRemoteUrl') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                </div>
+
+                <div>
+                    <label class="text-xs text-(--mut)">Branche</label>
+                    <input type="text" wire:model="brainBranch" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)" />
+                    @error('brainBranch') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                </div>
+
+                <div>
+                    <label class="text-xs text-(--mut)">Fréquence de sync (minutes)</label>
+                    <input type="number" min="1" wire:model="brainSyncFrequency" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)" />
+                    @error('brainSyncFrequency') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                </div>
+
+                <label class="flex items-center gap-2 text-sm text-(--tx)">
+                    <input type="checkbox" wire:model="brainAutoIndex" class="rounded-[4px] border-(--bd2) text-(--ac) focus:ring-0" />
+                    Indexation automatique
+                </label>
+
+                <div class="flex flex-wrap items-center justify-end gap-2 pt-1">
+                    @if ($brainTestMessage)
+                        <p class="mr-auto text-xs {{ $brainTestSuccessful ? 'text-(--ok)' : 'text-(--dgr)' }}">{{ $brainTestMessage }}</p>
+                    @endif
+                    <x-btn type="button" variant="secondary" wire:click="testBrainConnection">Tester la connexion</x-btn>
+                    <x-btn type="submit" variant="primary">Enregistrer</x-btn>
+                </div>
+            </form>
+
+            <div class="space-y-4 rounded-[14px] border border-(--bd) bg-(--surf) p-5">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-(--mut)">Statut</span>
+                    <x-badge-status :status="$this->brainStatus['gitStatus']->value" />
+                </div>
+
+                <dl class="space-y-2 font-mono text-xs text-(--mut)">
+                    <div class="flex justify-between">
+                        <dt>Dernier pull</dt>
+                        <dd class="text-(--tx)">{{ $this->brainStatus['lastSynced']?->translatedFormat('d M · H:i') ?? '—' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt>Dernière indexation</dt>
+                        <dd class="text-(--tx)">{{ $this->brainStatus['lastIndexed']?->translatedFormat('d M · H:i') ?? '—' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt>Documents indexés</dt>
+                        <dd class="text-(--tx)">{{ $this->brainStatus['documentsCount'] }}</dd>
+                    </div>
+                </dl>
+
+                <div class="flex flex-wrap gap-2 pt-1">
+                    <x-btn variant="secondary" wire:click="syncBrainNow">Synchroniser maintenant</x-btn>
+                    <x-btn variant="secondary" wire:click="reindexBrainFull" wire:confirm="Reconstruire tout l'index depuis zéro ?">Réindexer tout</x-btn>
+                </div>
+
+                @if ($brainSyncMessage)
+                    <p class="text-xs text-(--mut)">{{ $brainSyncMessage }}</p>
+                @endif
+                @if ($brainReindexMessage)
+                    <p class="text-xs text-(--mut)">{{ $brainReindexMessage }}</p>
+                @endif
+            </div>
         </div>
     </div>
 

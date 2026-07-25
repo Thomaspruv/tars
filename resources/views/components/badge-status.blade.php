@@ -10,6 +10,10 @@
         'abandoned' => ['bg-(--surf2) text-(--mut)', 'Abandonné'],
         'archived' => ['bg-(--surf2) text-(--mut)', 'Archivé'],
         'late' => ['bg-(--warnbg) text-(--warn)', 'En retard'],
+        'synced' => ['bg-(--okbg) text-(--ok)', 'À jour'],
+        'behind' => ['bg-(--warnbg) text-(--warn)', 'En retard sur le remote'],
+        'conflict' => ['bg-(--dgrbg) text-(--dgr)', 'Conflit'],
+        'unknown' => ['bg-(--surf2) text-(--mut)', 'Inconnu'],
     ];
 
     [$style, $defaultLabel] = $map[$value] ?? ['bg-(--surf2) text-(--mut)', ucfirst((string) $value)];
