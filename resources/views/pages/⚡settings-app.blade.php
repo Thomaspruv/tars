@@ -1,10 +1,14 @@
 <?php
 
+use App\Enums\GitSyncStatus;
 use App\Models\BrainDocument;
 use App\Models\LifeArea;
+use App\Models\McpCall;
 use App\Support\Brain\BrainSettings;
 use App\Support\Brain\GitRepository;
+use App\Support\Mcp\McpSettings;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -40,6 +44,14 @@ new #[Title('Réglages')] class extends Component
 
     public ?string $brainReindexMessage = null;
 
+    public bool $mcpEnabled = false;
+
+    public ?string $mcpNewToken = null;
+
+    public string $mcpFilterTool = '';
+
+    public string $mcpFilterStatus = '';
+
     public function mount(): void
     {
         $settings = app(BrainSettings::class);
@@ -48,6 +60,8 @@ new #[Title('Réglages')] class extends Component
         $this->brainBranch = $settings->branch();
         $this->brainSyncFrequency = $settings->syncFrequencyMinutes();
         $this->brainAutoIndex = $settings->autoIndexEnabled();
+
+        $this->mcpEnabled = app(McpSettings::class)->isEnabled();
     }
 
     #[Computed]
@@ -109,7 +123,7 @@ new #[Title('Réglages')] class extends Component
     }
 
     /**
-     * @return array{lastSynced: ?\Illuminate\Support\Carbon, lastIndexed: ?\Illuminate\Support\Carbon, documentsCount: int, gitStatus: \App\Enums\GitSyncStatus}
+     * @return array{lastSynced: ?Carbon, lastIndexed: ?Carbon, documentsCount: int, gitStatus: GitSyncStatus}
      */
     #[Computed]
     public function brainStatus(): array
@@ -169,6 +183,65 @@ new #[Title('Réglages')] class extends Component
         $this->brainReindexMessage = trim(Artisan::output());
 
         unset($this->brainStatus);
+    }
+
+    #[Computed]
+    public function mcpEndpointUrl(): string
+    {
+        return app(McpSettings::class)->endpointUrl();
+    }
+
+    #[Computed]
+    public function mcpHasToken(): bool
+    {
+        return app(McpSettings::class)->hasToken();
+    }
+
+    /**
+     * @return array{lastCallAt: ?Carbon, callsLast7Days: int}
+     */
+    #[Computed]
+    public function mcpStatus(): array
+    {
+        return [
+            'lastCallAt' => McpCall::latest('id')->value('created_at'),
+            'callsLast7Days' => McpCall::where('created_at', '>=', now()->subDays(7))->count(),
+        ];
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, string>
+     */
+    #[Computed]
+    public function mcpTools(): \Illuminate\Support\Collection
+    {
+        return McpCall::query()->distinct()->orderBy('tool')->pluck('tool');
+    }
+
+    /**
+     * @return Collection<int, McpCall>
+     */
+    #[Computed]
+    public function mcpCalls(): Collection
+    {
+        return McpCall::query()
+            ->when($this->mcpFilterTool !== '', fn ($query) => $query->where('tool', $this->mcpFilterTool))
+            ->when($this->mcpFilterStatus !== '', fn ($query) => $query->where('status', $this->mcpFilterStatus))
+            ->latest('id')
+            ->limit(50)
+            ->get();
+    }
+
+    public function updatedMcpEnabled(bool $value): void
+    {
+        app(McpSettings::class)->setEnabled($value);
+    }
+
+    public function generateMcpToken(): void
+    {
+        $this->mcpNewToken = app(McpSettings::class)->generateToken();
+
+        unset($this->mcpHasToken);
     }
 };
 ?>
@@ -279,6 +352,107 @@ new #[Title('Réglages')] class extends Component
                 @if ($brainReindexMessage)
                     <p class="text-xs text-(--mut)">{{ $brainReindexMessage }}</p>
                 @endif
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-8">
+        <h2 class="text-base font-semibold text-(--tx)">Connexions — MCP / Hermes</h2>
+
+        <div class="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div class="space-y-4 rounded-[14px] border border-(--bd) bg-(--surf) p-5">
+                <label class="flex items-center gap-2 text-sm text-(--tx)">
+                    <input type="checkbox" wire:model.live="mcpEnabled" class="rounded-[4px] border-(--bd2) text-(--ac) focus:ring-0" />
+                    Activer le serveur MCP
+                </label>
+
+                <div>
+                    <label class="text-xs text-(--mut)">URL de l'endpoint</label>
+                    <input
+                        type="text"
+                        readonly
+                        onclick="this.select()"
+                        value="{{ $this->mcpEndpointUrl }}"
+                        class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)"
+                    />
+                </div>
+
+                <div>
+                    <label class="text-xs text-(--mut)">Token</label>
+                    @if ($mcpNewToken)
+                        <input
+                            type="text"
+                            readonly
+                            onclick="this.select()"
+                            value="{{ $mcpNewToken }}"
+                            class="mt-1 w-full rounded-[8px] border border-(--ac) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)"
+                        />
+                        <p class="mt-1 text-xs text-(--warn)">Ce token ne sera plus jamais affiché en clair — copie-le maintenant.</p>
+                    @else
+                        <input
+                            type="text"
+                            readonly
+                            value="{{ $this->mcpHasToken ? '••••••••••••••••' : 'Aucun token généré' }}"
+                            class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--mut)"
+                        />
+                    @endif
+                </div>
+
+                <div class="flex justify-end pt-1">
+                    @php
+                        $mcpConfirmMessage = $this->mcpHasToken
+                            ? "Régénérer le token révoque immédiatement l'ancien. Continuer ?"
+                            : 'Générer un nouveau token ?';
+                    @endphp
+                    <x-btn variant="secondary" wire:click="generateMcpToken" wire:confirm="{{ $mcpConfirmMessage }}">
+                        {{ $this->mcpHasToken ? 'Régénérer le token' : 'Générer un token' }}
+                    </x-btn>
+                </div>
+            </div>
+
+            <div class="space-y-4 rounded-[14px] border border-(--bd) bg-(--surf) p-5">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-(--mut)">Statut</span>
+                    <span class="inline-flex items-center gap-1.5 font-mono text-[10.5px] text-(--mut)">
+                        <span class="size-1.5 rounded-full {{ $this->mcpStatus['lastCallAt'] ? 'bg-(--ok)' : 'bg-(--bd2)' }}"></span>
+                        {{ $this->mcpStatus['lastCallAt'] ? 'Dernier appel '.$this->mcpStatus['lastCallAt']->diffForHumans() : 'Aucun appel' }}
+                    </span>
+                </div>
+
+                <dl class="space-y-2 font-mono text-xs text-(--mut)">
+                    <div class="flex justify-between">
+                        <dt>Appels (7 jours)</dt>
+                        <dd class="text-(--tx)">{{ $this->mcpStatus['callsLast7Days'] }}</dd>
+                    </div>
+                </dl>
+
+                <div class="flex flex-wrap gap-2 pt-1">
+                    <select wire:model.live="mcpFilterTool" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                        <option value="">Tous les outils</option>
+                        @foreach ($this->mcpTools as $tool)
+                            <option value="{{ $tool }}">{{ $tool }}</option>
+                        @endforeach
+                    </select>
+                    <select wire:model.live="mcpFilterStatus" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                        <option value="">Tous les statuts</option>
+                        @foreach (\App\Enums\McpCallStatus::cases() as $status)
+                            <option value="{{ $status->value }}">{{ $status->value }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="max-h-72 space-y-1 overflow-y-auto">
+                    @forelse ($this->mcpCalls as $call)
+                        <div class="flex items-center gap-2 rounded-[8px] px-2 py-1.5 hover:bg-(--surf2)" wire:key="mcp-call-{{ $call->id }}">
+                            <span class="font-mono text-[10.5px] text-(--tx)">{{ $call->tool }}</span>
+                            <x-badge-status :status="$call->status->value" />
+                            <span class="font-mono text-[10.5px] text-(--mut)">{{ $call->duration_ms }}ms</span>
+                            <span class="ml-auto truncate text-xs text-(--mut)">{{ Str::limit($call->result_summary ?? $call->error_message, 60) }}</span>
+                        </div>
+                    @empty
+                        <p class="p-4 text-center text-sm text-(--mut)">Aucun appel pour l'instant.</p>
+                    @endforelse
+                </div>
             </div>
         </div>
     </div>

@@ -14,6 +14,9 @@
         'behind' => ['bg-(--warnbg) text-(--warn)', 'En retard sur le remote'],
         'conflict' => ['bg-(--dgrbg) text-(--dgr)', 'Conflit'],
         'unknown' => ['bg-(--surf2) text-(--mut)', 'Inconnu'],
+        'success' => ['bg-(--okbg) text-(--ok)', 'Réussi'],
+        'error' => ['bg-(--dgrbg) text-(--dgr)', 'Erreur'],
+        'ambiguous' => ['bg-(--warnbg) text-(--warn)', 'Ambigu'],
     ];
 
     [$style, $defaultLabel] = $map[$value] ?? ['bg-(--surf2) text-(--mut)', ucfirst((string) $value)];
