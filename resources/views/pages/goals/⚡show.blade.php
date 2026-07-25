@@ -5,6 +5,7 @@ use App\Enums\MilestoneStatus;
 use App\Models\Goal;
 use App\Models\Milestone;
 use App\Models\Task;
+use App\Support\Brain\BrainSettings;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -33,6 +34,18 @@ new #[Title('Objectif')] class extends Component
     public function tasks(): Collection
     {
         return $this->goal->tasks()->with('entity')->orderByRaw('status = "done"')->orderBy('due_date')->get();
+    }
+
+    #[Computed]
+    public function brainConfigured(): bool
+    {
+        return app(BrainSettings::class)->isConfigured();
+    }
+
+    #[Computed]
+    public function brainDocuments(): Collection
+    {
+        return $this->goal->brainDocuments()->latest('mtime')->get();
     }
 
     #[Computed]
@@ -222,6 +235,10 @@ new #[Title('Objectif')] class extends Component
                     Aucune revue n'a encore mentionné cet objectif.
                 </p>
             </div>
+
+            @if ($this->brainConfigured)
+                <x-brain-notes :documents="$this->brainDocuments" />
+            @endif
         </div>
     </div>
 

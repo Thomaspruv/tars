@@ -3,6 +3,7 @@
 use App\Enums\GoalStatus;
 use App\Enums\MilestoneStatus;
 use App\Enums\TaskStatus;
+use App\Models\BrainDocument;
 use App\Models\Goal;
 use App\Models\Milestone;
 use App\Models\Task;
@@ -93,4 +94,24 @@ test('it deletes the goal', function () {
         ->assertRedirect(route('goals.index'));
 
     expect(Goal::find($goal->id))->toBeNull();
+});
+
+test('it shows anchored vault documents when the vault is configured', function () {
+    config(['brain.remote_url' => 'git@example.com:vault.git']);
+    $this->actingAs(User::factory()->create());
+
+    $goal = Goal::factory()->create();
+    $document = BrainDocument::factory()->create(['title' => 'Plan entraînement semi']);
+    $goal->brainDocuments()->attach($document);
+
+    $this->get(route('goals.show', $goal))->assertSee('Plan entraînement semi');
+});
+
+test('the vault notes section is hidden when the vault is not configured', function () {
+    config(['brain.remote_url' => null]);
+    $this->actingAs(User::factory()->create());
+
+    $goal = Goal::factory()->create();
+
+    $this->get(route('goals.show', $goal))->assertDontSee('Notes du vault');
 });

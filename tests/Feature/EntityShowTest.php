@@ -2,6 +2,7 @@
 
 use App\Enums\EntityStatus;
 use App\Enums\TaskStatus;
+use App\Models\BrainDocument;
 use App\Models\Entity;
 use App\Models\Goal;
 use App\Models\Task;
@@ -77,4 +78,24 @@ test('it adds a note to the entity', function () {
         ->call('addNote');
 
     expect($entity->notes()->where('content', 'Contrat signé le 12')->exists())->toBeTrue();
+});
+
+test('it shows anchored vault documents when the vault is configured', function () {
+    config(['brain.remote_url' => 'git@example.com:vault.git']);
+    $this->actingAs(User::factory()->create());
+
+    $entity = Entity::factory()->create();
+    $document = BrainDocument::factory()->create(['title' => 'Réunion SARL Alpha']);
+    $entity->brainDocuments()->attach($document);
+
+    $this->get(route('entities.show', $entity))->assertSee('Réunion SARL Alpha');
+});
+
+test('the vault notes section is hidden when the vault is not configured', function () {
+    config(['brain.remote_url' => null]);
+    $this->actingAs(User::factory()->create());
+
+    $entity = Entity::factory()->create();
+
+    $this->get(route('entities.show', $entity))->assertDontSee('Notes du vault');
 });

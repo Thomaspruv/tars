@@ -3,6 +3,7 @@
 use App\Enums\NoteSource;
 use App\Models\Entity;
 use App\Models\Task;
+use App\Support\Brain\BrainSettings;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -41,6 +42,18 @@ new #[Title('Entité')] class extends Component
     public function notes(): Collection
     {
         return $this->entity->notes()->latest()->get();
+    }
+
+    #[Computed]
+    public function brainConfigured(): bool
+    {
+        return app(BrainSettings::class)->isConfigured();
+    }
+
+    #[Computed]
+    public function brainDocuments(): Collection
+    {
+        return $this->entity->brainDocuments()->latest('mtime')->get();
     }
 
     public function toggleTask(int $taskId): void
@@ -173,6 +186,10 @@ new #[Title('Entité')] class extends Component
                     <x-btn variant="secondary" type="submit" class="!px-3 !py-1.5 text-xs">Ajouter</x-btn>
                 </form>
             </div>
+
+            @if ($this->brainConfigured)
+                <x-brain-notes :documents="$this->brainDocuments" />
+            @endif
         </div>
     </div>
 
