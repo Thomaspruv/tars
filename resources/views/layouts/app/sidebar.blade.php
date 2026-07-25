@@ -12,6 +12,7 @@ $navItems = [
     ['route' => 'goals.index', 'label' => 'Objectifs', 'icon' => 'flag', 'alsoRouteIs' => 'goals.show'],
     ['route' => 'entities.index', 'label' => 'Entités', 'icon' => 'building-office-2', 'alsoRouteIs' => 'entities.show'],
     ['route' => 'lists.index', 'label' => 'Listes', 'icon' => 'list-bullet'],
+    ['route' => 'brain.index', 'label' => 'Cerveau', 'icon' => 'document-text'],
     ['route' => 'tasks.index', 'label' => 'Tâches', 'icon' => 'check-circle'],
     ['route' => 'review.index', 'label' => 'Revue', 'icon' => 'clipboard-document-check'],
 ];
