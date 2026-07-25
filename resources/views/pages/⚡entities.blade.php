@@ -15,8 +15,6 @@ new #[Title('Entités')] class extends Component
 
     public string $type = 'company';
 
-    public string $context = 'perso';
-
     public ?int $lifeAreaId = null;
 
     public string $notes = '';
@@ -52,7 +50,6 @@ new #[Title('Entités')] class extends Component
     {
         $this->reset(['name', 'notes']);
         $this->type = 'company';
-        $this->context = 'perso';
         $this->lifeAreaId = $this->allLifeAreas->first()?->id;
         $this->showCreateModal = true;
     }
@@ -62,7 +59,6 @@ new #[Title('Entités')] class extends Component
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', 'in:company,property,vehicle,other'],
-            'context' => ['required', 'in:perso,pro'],
             'lifeAreaId' => ['required', 'exists:life_areas,id'],
             'notes' => ['nullable', 'string'],
         ]);
@@ -71,7 +67,6 @@ new #[Title('Entités')] class extends Component
             'life_area_id' => $validated['lifeAreaId'],
             'name' => $validated['name'],
             'type' => $validated['type'],
-            'context' => $validated['context'],
             'notes' => $validated['notes'],
         ]);
 
@@ -114,23 +109,14 @@ new #[Title('Entités')] class extends Component
                 @error('name') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="text-xs text-(--mut)">Type</label>
-                    <select wire:model="type" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)">
-                        <option value="company">Entreprise</option>
-                        <option value="property">Bien</option>
-                        <option value="vehicle">Véhicule</option>
-                        <option value="other">Autre</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="text-xs text-(--mut)">Contexte</label>
-                    <select wire:model="context" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)">
-                        <option value="perso">Perso</option>
-                        <option value="pro">Pro</option>
-                    </select>
-                </div>
+            <div>
+                <label class="text-xs text-(--mut)">Type</label>
+                <select wire:model="type" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)">
+                    <option value="company">Entreprise</option>
+                    <option value="property">Bien</option>
+                    <option value="vehicle">Véhicule</option>
+                    <option value="other">Autre</option>
+                </select>
             </div>
 
             <div>

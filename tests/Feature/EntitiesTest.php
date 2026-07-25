@@ -29,7 +29,6 @@ test('it creates an entity', function () {
         ->call('openCreateModal')
         ->set('name', 'Appart Lyon')
         ->set('type', 'property')
-        ->set('context', 'perso')
         ->set('lifeAreaId', $area->id)
         ->call('createEntity')
         ->assertSet('showCreateModal', false);

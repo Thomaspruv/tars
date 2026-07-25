@@ -35,6 +35,18 @@ class Entity extends Model
         'status' => 'active',
     ];
 
+    protected static function booted(): void
+    {
+        static::saving(function (Entity $entity): void {
+            $entity->context = self::deduceContext($entity->type);
+        });
+    }
+
+    public static function deduceContext(EntityType $type): EntityContext
+    {
+        return $type === EntityType::Company ? EntityContext::Pro : EntityContext::Perso;
+    }
+
     protected function casts(): array
     {
         return [
