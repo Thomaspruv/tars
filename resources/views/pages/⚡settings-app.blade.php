@@ -1,9 +1,11 @@
 <?php
 
 use App\Enums\GitSyncStatus;
+use App\Models\AiProvider;
 use App\Models\BrainDocument;
 use App\Models\LifeArea;
 use App\Models\McpCall;
+use App\Support\Agents\AgentRunner;
 use App\Support\Brain\BrainSettings;
 use App\Support\Brain\GitRepository;
 use App\Support\Mcp\McpSettings;
@@ -51,6 +53,21 @@ new #[Title('Réglages')] class extends Component
     public string $mcpFilterTool = '';
 
     public string $mcpFilterStatus = '';
+
+    public bool $showProviderModal = false;
+
+    public ?int $editingProviderId = null;
+
+    public string $providerName = '';
+
+    public string $providerApiKey = '';
+
+    public string $providerBaseUrl = '';
+
+    public bool $providerIsActive = true;
+
+    /** @var array<int, array{success: bool, message: string}> */
+    public array $providerTestResults = [];
 
     public function mount(): void
     {
@@ -114,6 +131,78 @@ new #[Title('Réglages')] class extends Component
         LifeArea::findOrFail($lifeAreaId)->delete();
 
         unset($this->lifeAreas);
+    }
+
+    #[Computed]
+    public function aiProviders(): Collection
+    {
+        return AiProvider::orderBy('name')->get();
+    }
+
+    public function openCreateProviderModal(): void
+    {
+        $this->reset(['providerName', 'providerApiKey', 'providerBaseUrl', 'editingProviderId']);
+        $this->providerIsActive = true;
+        $this->showProviderModal = true;
+    }
+
+    public function openEditProviderModal(int $providerId): void
+    {
+        $provider = AiProvider::findOrFail($providerId);
+
+        $this->editingProviderId = $provider->id;
+        $this->providerName = $provider->name;
+        $this->providerApiKey = '';
+        $this->providerBaseUrl = (string) $provider->base_url;
+        $this->providerIsActive = $provider->is_active;
+        $this->showProviderModal = true;
+    }
+
+    public function saveProvider(): void
+    {
+        $validated = $this->validate([
+            'providerName' => ['required', 'string', 'max:255'],
+            'providerApiKey' => [$this->editingProviderId ? 'nullable' : 'required', 'string'],
+            'providerBaseUrl' => ['nullable', 'string', 'max:255'],
+            'providerIsActive' => ['boolean'],
+        ]);
+
+        $attributes = [
+            'name' => $validated['providerName'],
+            'base_url' => $validated['providerBaseUrl'] ?: null,
+            'is_active' => $validated['providerIsActive'],
+        ];
+
+        if (filled($validated['providerApiKey'])) {
+            $attributes['api_key'] = $validated['providerApiKey'];
+        }
+
+        if ($this->editingProviderId) {
+            AiProvider::findOrFail($this->editingProviderId)->update($attributes);
+        } else {
+            AiProvider::create([...$attributes, 'api_key' => $validated['providerApiKey']]);
+        }
+
+        $this->showProviderModal = false;
+        unset($this->aiProviders);
+    }
+
+    public function deleteProvider(int $providerId): void
+    {
+        AiProvider::findOrFail($providerId)->delete();
+
+        unset($this->aiProviders);
+    }
+
+    public function testProviderConnection(int $providerId): void
+    {
+        $provider = AiProvider::findOrFail($providerId);
+        $success = app(AgentRunner::class)->testConnection($provider);
+
+        $this->providerTestResults[$providerId] = [
+            'success' => $success,
+            'message' => $success ? 'Connexion réussie.' : 'Échec de la connexion.',
+        ];
     }
 
     #[Computed]
@@ -210,10 +299,10 @@ new #[Title('Réglages')] class extends Component
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, string>
+     * @return Illuminate\Support\Collection<int, string>
      */
     #[Computed]
-    public function mcpTools(): \Illuminate\Support\Collection
+    public function mcpTools(): Illuminate\Support\Collection
     {
         return McpCall::query()->distinct()->orderBy('tool')->pluck('tool');
     }
@@ -468,6 +557,96 @@ new #[Title('Réglages')] class extends Component
             </dl>
         </div>
     </div>
+
+    <div class="mt-8">
+        <div class="flex items-center justify-between">
+            <h2 class="text-base font-semibold text-(--tx)">Fournisseurs IA</h2>
+            <x-btn variant="primary" wire:click="openCreateProviderModal">+ Nouveau fournisseur</x-btn>
+        </div>
+
+        <div class="mt-4 divide-y divide-(--bd) rounded-[14px] border border-(--bd) bg-(--surf)">
+            @forelse ($this->aiProviders as $provider)
+                <div class="flex items-center gap-3 px-4 py-3" wire:key="provider-{{ $provider->id }}">
+                    <div class="flex-1">
+                        <p class="text-sm font-medium text-(--tx)">{{ $provider->name }}</p>
+                        @if ($provider->base_url)
+                            <p class="font-mono text-[10.5px] text-(--mut)">{{ $provider->base_url }}</p>
+                        @endif
+                    </div>
+                    <x-badge-status :status="$provider->is_active ? 'active' : 'paused'" />
+                    @if (isset($this->providerTestResults[$provider->id]))
+                        <span class="text-xs {{ $this->providerTestResults[$provider->id]['success'] ? 'text-(--ok)' : 'text-(--dgr)' }}">
+                            {{ $this->providerTestResults[$provider->id]['message'] }}
+                        </span>
+                    @endif
+                    <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="testProviderConnection({{ $provider->id }})">
+                        Tester la connexion
+                    </x-btn>
+                    <button type="button" wire:click="openEditProviderModal({{ $provider->id }})" class="text-(--mut) hover:text-(--tx)">
+                        <flux:icon name="pencil" class="size-3.5" />
+                    </button>
+                    <button
+                        type="button"
+                        wire:click="deleteProvider({{ $provider->id }})"
+                        wire:confirm="Supprimer ce fournisseur ?"
+                        class="text-(--mut) hover:text-(--dgr)"
+                    >
+                        <flux:icon name="x-mark" class="size-3.5" />
+                    </button>
+                </div>
+            @empty
+                <p class="p-5 text-center text-sm text-(--mut)">Aucun fournisseur pour l'instant.</p>
+            @endforelse
+        </div>
+    </div>
+
+    <flux:modal wire:model.self="showProviderModal" class="md:w-[420px]">
+        <div class="space-y-5">
+            <flux:heading size="lg">{{ $editingProviderId ? 'Modifier le fournisseur' : 'Nouveau fournisseur' }}</flux:heading>
+
+            <div>
+                <label class="text-xs text-(--mut)">Nom</label>
+                <input
+                    type="text"
+                    wire:model="providerName"
+                    placeholder="anthropic, openai, deepseek…"
+                    class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)"
+                />
+                @error('providerName') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+            </div>
+
+            <div>
+                <label class="text-xs text-(--mut)">Clé API</label>
+                <input
+                    type="password"
+                    wire:model="providerApiKey"
+                    placeholder="{{ $editingProviderId ? 'Laisser vide pour conserver la clé actuelle' : '' }}"
+                    class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)"
+                />
+                @error('providerApiKey') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+            </div>
+
+            <div>
+                <label class="text-xs text-(--mut)">Base URL (optionnel, endpoints compatibles OpenAI)</label>
+                <input
+                    type="text"
+                    wire:model="providerBaseUrl"
+                    placeholder="https://api.exemple.com/v1"
+                    class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)"
+                />
+            </div>
+
+            <label class="flex items-center gap-2 text-sm text-(--tx)">
+                <input type="checkbox" wire:model="providerIsActive" class="rounded-[4px] border-(--bd2) text-(--ac) focus:ring-0" />
+                Actif
+            </label>
+
+            <div class="flex justify-end gap-2">
+                <x-btn variant="ghost" wire:click="$set('showProviderModal', false)">Annuler</x-btn>
+                <x-btn variant="primary" wire:click="saveProvider">Enregistrer</x-btn>
+            </div>
+        </div>
+    </flux:modal>
 
     <flux:modal wire:model.self="showFormModal" class="md:w-[380px]">
         <div class="space-y-5">
