@@ -9,6 +9,7 @@ use App\Support\Agents\AgentRunner;
 use App\Support\Brain\BrainSettings;
 use App\Support\Brain\GitRepository;
 use App\Support\Mcp\McpSettings;
+use App\Support\Review\ReviewSettings;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -69,6 +70,8 @@ new #[Title('Réglages')] class extends Component
     /** @var array<int, array{success: bool, message: string}> */
     public array $providerTestResults = [];
 
+    public string $reviewWeeklyTime = '17:00';
+
     public function mount(): void
     {
         $settings = app(BrainSettings::class);
@@ -79,6 +82,17 @@ new #[Title('Réglages')] class extends Component
         $this->brainAutoIndex = $settings->autoIndexEnabled();
 
         $this->mcpEnabled = app(McpSettings::class)->isEnabled();
+
+        $this->reviewWeeklyTime = app(ReviewSettings::class)->weeklyTime();
+    }
+
+    public function saveReviewSettings(): void
+    {
+        $validated = $this->validate([
+            'reviewWeeklyTime' => ['required', 'date_format:H:i'],
+        ]);
+
+        app(ReviewSettings::class)->updateWeeklyTime($validated['reviewWeeklyTime']);
     }
 
     #[Computed]
@@ -598,6 +612,21 @@ new #[Title('Réglages')] class extends Component
                 <p class="p-5 text-center text-sm text-(--mut)">Aucun fournisseur pour l'instant.</p>
             @endforelse
         </div>
+    </div>
+
+    <div class="mt-8">
+        <h2 class="text-base font-semibold text-(--tx)">Revue</h2>
+
+        <div class="mt-4 flex items-center gap-3 rounded-[14px] border border-(--bd) bg-(--surf) p-4">
+            <label class="text-sm text-(--tx)">Heure de la revue hebdomadaire (dimanche)</label>
+            <input
+                type="time"
+                wire:model="reviewWeeklyTime"
+                class="rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-1.5 font-mono text-sm text-(--tx)"
+            />
+            <x-btn variant="secondary" class="ml-auto !px-3 !py-1.5 text-xs" wire:click="saveReviewSettings">Enregistrer</x-btn>
+        </div>
+        @error('reviewWeeklyTime') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
     </div>
 
     <flux:modal wire:model.self="showProviderModal" class="md:w-[420px]">

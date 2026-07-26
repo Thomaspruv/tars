@@ -4,6 +4,7 @@ use App\Enums\TaskStatus;
 use App\Models\Checklist;
 use App\Models\ChecklistItem;
 use App\Models\Event;
+use App\Models\Review;
 use App\Models\Task;
 use App\Models\User;
 use Livewire\Livewire;
@@ -75,4 +76,20 @@ test('it shows pinned lists and toggles list items', function () {
     Livewire::test('pages::today')->call('toggleListItem', $item->id);
 
     expect($item->fresh()->checked_at)->not->toBeNull();
+});
+
+test('shows a banner when an uncompleted review exists', function () {
+    $this->actingAs(User::factory()->create());
+
+    Review::factory()->create(['completed_at' => null]);
+
+    $this->get(route('today'))->assertSee('prête à lire', false);
+});
+
+test('does not show the pending review banner once completed', function () {
+    $this->actingAs(User::factory()->create());
+
+    Review::factory()->create(['completed_at' => now()]);
+
+    $this->get(route('today'))->assertDontSee('prête à lire', false);
 });

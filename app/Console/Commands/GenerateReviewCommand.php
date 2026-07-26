@@ -2,63 +2,104 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\AgentName;
-use App\Enums\AgentRunStatus;
 use App\Enums\AgentRunTrigger;
 use App\Enums\ReviewType;
-use App\Models\AgentConfig;
 use App\Models\Review;
-use App\Support\Agents\AgentRunner;
+use App\Support\Review\ReviewerAgent;
+use App\Support\Review\ReviewSettings;
+use Carbon\CarbonInterface;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
-#[Signature('review:generate {--scheduled : Only used by the scheduler, not yet gated by day/time}')]
+#[Signature('review:generate {--scheduled : Only fire at the configured day/time, and skip if already generated today}')]
 #[Description("Génère la revue via l'agent reviewer")]
 class GenerateReviewCommand extends Command
 {
-    /**
-     * Minimal end-to-end path for now: a fixed weekly period and a bare
-     * prompt. Step 4 replaces the prompt/context here with the real
-     * ReviewContextBuilder + resources/prompts/reviewer.md and adds the
-     * scheduled day/time gating and the monthly variant.
-     */
-    public function handle(AgentRunner $runner): int
+    public function handle(ReviewerAgent $reviewerAgent, ReviewSettings $settings): int
     {
-        $config = AgentConfig::where('agent_name', AgentName::Reviewer->value)
-            ->where('enabled', true)
-            ->first();
+        $scheduled = (bool) $this->option('scheduled');
 
-        if (! $config) {
-            $this->warn("Le reviewer n'est pas configuré.");
+        if ($scheduled) {
+            $due = $this->dueScheduledRun($settings);
+
+            if ($due === null) {
+                return self::SUCCESS;
+            }
+
+            [$type, $periodStart, $periodEnd] = $due;
+            $trigger = AgentRunTrigger::Scheduled;
+        } else {
+            $type = ReviewType::Weekly;
+            [$periodStart, $periodEnd] = $this->weeklyPeriod();
+            $trigger = AgentRunTrigger::Manual;
+        }
+
+        if (! $reviewerAgent->isConfigured()) {
+            if (! $scheduled) {
+                $this->warn("Le reviewer n'est pas configuré.");
+            }
 
             return self::SUCCESS;
         }
 
-        $trigger = $this->option('scheduled') ? AgentRunTrigger::Scheduled : AgentRunTrigger::Manual;
+        $review = $reviewerAgent->generate($type, $periodStart, $periodEnd, $trigger);
 
-        $run = $runner->run(
-            $config,
-            "Tu es reviewer, l'agent qui génère la revue hebdomadaire de TARS.",
-            [['role' => 'user', 'content' => 'Génère la revue de la semaine.']],
-            $trigger,
-        );
-
-        if ($run->status !== AgentRunStatus::Success) {
+        if (! $review) {
             $this->error('Échec de la génération de la revue.');
 
             return self::FAILURE;
         }
 
-        Review::create([
-            'type' => ReviewType::Weekly,
-            'period_start' => now()->subDays(7),
-            'period_end' => now(),
-            'generated_content' => $run->output,
-        ]);
-
         $this->info('Revue générée.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @return array{0: ReviewType, 1: CarbonInterface, 2: CarbonInterface}|null
+     */
+    private function dueScheduledRun(ReviewSettings $settings): ?array
+    {
+        $now = now();
+
+        if ($now->day === 1 && $now->format('H:i') >= $settings->weeklyTime()) {
+            $alreadyGenerated = Review::where('type', ReviewType::Monthly)
+                ->whereDate('created_at', today())
+                ->exists();
+
+            if (! $alreadyGenerated) {
+                $periodStart = $now->copy()->subMonthNoOverflow()->startOfMonth();
+                $periodEnd = $now->copy()->subMonthNoOverflow()->endOfMonth();
+
+                return [ReviewType::Monthly, $periodStart, $periodEnd];
+            }
+        }
+
+        if ($now->isSunday() && $now->format('H:i') >= $settings->weeklyTime()) {
+            $alreadyGenerated = Review::where('type', ReviewType::Weekly)
+                ->whereDate('created_at', today())
+                ->exists();
+
+            if (! $alreadyGenerated) {
+                [$periodStart, $periodEnd] = $this->weeklyPeriod();
+
+                return [ReviewType::Weekly, $periodStart, $periodEnd];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{0: CarbonInterface, 1: CarbonInterface}
+     */
+    private function weeklyPeriod(): array
+    {
+        $lastWeekly = Review::where('type', ReviewType::Weekly)->latest('period_end')->first();
+
+        $periodStart = $lastWeekly ? $lastWeekly->period_end->copy()->addDay() : now()->copy()->subDays(7);
+
+        return [$periodStart, now()->copy()];
     }
 }

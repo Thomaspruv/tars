@@ -2,6 +2,7 @@
 
 use App\Models\AiProvider;
 use App\Models\User;
+use App\Support\Review\ReviewSettings;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
@@ -97,4 +98,24 @@ test('reports a failed connection test', function () {
     Livewire::test('pages::settings-app')
         ->call('testProviderConnection', $provider->id)
         ->assertSee('Échec de la connexion.');
+});
+
+test('saves the weekly review time', function () {
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages::settings-app')
+        ->set('reviewWeeklyTime', '19:30')
+        ->call('saveReviewSettings')
+        ->assertHasNoErrors();
+
+    expect((new ReviewSettings)->weeklyTime())->toBe('19:30');
+});
+
+test('rejects an invalid weekly review time', function () {
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages::settings-app')
+        ->set('reviewWeeklyTime', 'not-a-time')
+        ->call('saveReviewSettings')
+        ->assertHasErrors(['reviewWeeklyTime']);
 });

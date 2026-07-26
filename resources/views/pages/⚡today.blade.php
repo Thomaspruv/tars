@@ -4,7 +4,9 @@ use App\Enums\TaskStatus;
 use App\Models\Checklist;
 use App\Models\ChecklistItem;
 use App\Models\Event;
+use App\Models\Review;
 use App\Models\Task;
+use App\Support\Review\ReviewSettings;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -43,10 +45,18 @@ new #[Title('Aujourd\'hui')] class extends Component
     }
 
     #[Computed]
+    public function pendingReview(): ?Review
+    {
+        return Review::whereNull('completed_at')->orderByDesc('period_end')->first();
+    }
+
+    #[Computed]
     public function daysUntilReview(): int
     {
+        $weeklyTime = app(ReviewSettings::class)->weeklyTime();
         $today = today();
-        $nextReview = $today->isSunday() && now()->hour < 17 ? $today->copy() : $today->copy()->next(Carbon::SUNDAY);
+        $todayIsDue = $today->isSunday() && now()->format('H:i') >= $weeklyTime;
+        $nextReview = $todayIsDue ? $today->copy() : $today->copy()->next(Carbon::SUNDAY);
 
         return $today->diffInDays($nextReview);
     }
@@ -69,15 +79,22 @@ new #[Title('Aujourd\'hui')] class extends Component
 ?>
 
 <div>
-    <div class="rounded-[14px] border border-(--bd) p-5" style="background: linear-gradient(135deg, rgba(83,214,232,.1), rgba(124,108,240,.08))">
+    <div class="rounded-[14px] border border-(--bd) p-5 {{ $this->pendingReview ? 'animate-pulse-soft' : '' }}" style="background: linear-gradient(135deg, rgba(83,214,232,.1), rgba(124,108,240,.08))">
         <p class="font-mono text-[10.5px] font-semibold tracking-[.08em] text-(--ai) uppercase">Revue</p>
-        <p class="mt-1 text-sm text-(--tx)">
-            @if ($this->daysUntilReview === 0)
-                Prochaine revue <span class="font-semibold text-(--ac)">aujourd'hui</span>
-            @else
-                Prochaine revue dans <span class="font-mono font-semibold text-(--ac)">{{ $this->daysUntilReview }}</span> {{ Str::plural('jour', $this->daysUntilReview) }}
-            @endif
-        </p>
+        @if ($this->pendingReview)
+            <p class="mt-1 text-sm text-(--tx)">
+                Ta revue est <span class="font-semibold text-(--ac)">prête à lire</span>
+                — <a href="{{ route('review.index') }}" wire:navigate class="text-(--ac) underline underline-offset-2">l'ouvrir</a>
+            </p>
+        @else
+            <p class="mt-1 text-sm text-(--tx)">
+                @if ($this->daysUntilReview === 0)
+                    Prochaine revue <span class="font-semibold text-(--ac)">aujourd'hui</span>
+                @else
+                    Prochaine revue dans <span class="font-mono font-semibold text-(--ac)">{{ $this->daysUntilReview }}</span> {{ Str::plural('jour', $this->daysUntilReview) }}
+                @endif
+            </p>
+        @endif
     </div>
 
     <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1.5fr_1fr]">

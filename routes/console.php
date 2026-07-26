@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\GenerateReviewCommand;
 use App\Console\Commands\IndexBrainCommand;
 use App\Console\Commands\SyncBrainCommand;
 use Illuminate\Foundation\Inspiring;
@@ -12,3 +13,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command(IndexBrainCommand::class, ['--scheduled'])->everyFifteenMinutes();
 Schedule::command(SyncBrainCommand::class, ['--scheduled'])->everyMinute()->withoutOverlapping();
+Schedule::command(GenerateReviewCommand::class, ['--scheduled'])->everyMinute()->withoutOverlapping();
