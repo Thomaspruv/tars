@@ -72,6 +72,10 @@ new #[Title('Réglages')] class extends Component
 
     public string $reviewWeeklyTime = '17:00';
 
+    public string $reviewNotificationEmail = '';
+
+    public bool $reviewNotificationsEnabled = false;
+
     public function mount(): void
     {
         $settings = app(BrainSettings::class);
@@ -83,16 +87,23 @@ new #[Title('Réglages')] class extends Component
 
         $this->mcpEnabled = app(McpSettings::class)->isEnabled();
 
-        $this->reviewWeeklyTime = app(ReviewSettings::class)->weeklyTime();
+        $reviewSettings = app(ReviewSettings::class);
+        $this->reviewWeeklyTime = $reviewSettings->weeklyTime();
+        $this->reviewNotificationEmail = (string) $reviewSettings->notificationEmail();
+        $this->reviewNotificationsEnabled = $reviewSettings->notificationsEnabled();
     }
 
     public function saveReviewSettings(): void
     {
         $validated = $this->validate([
             'reviewWeeklyTime' => ['required', 'date_format:H:i'],
+            'reviewNotificationEmail' => ['nullable', 'email'],
+            'reviewNotificationsEnabled' => ['boolean'],
         ]);
 
-        app(ReviewSettings::class)->updateWeeklyTime($validated['reviewWeeklyTime']);
+        $settings = app(ReviewSettings::class);
+        $settings->updateWeeklyTime($validated['reviewWeeklyTime']);
+        $settings->updateNotifications($validated['reviewNotificationEmail'] ?: null, $validated['reviewNotificationsEnabled']);
     }
 
     #[Computed]
@@ -617,16 +628,37 @@ new #[Title('Réglages')] class extends Component
     <div class="mt-8">
         <h2 class="text-base font-semibold text-(--tx)">Revue</h2>
 
-        <div class="mt-4 flex items-center gap-3 rounded-[14px] border border-(--bd) bg-(--surf) p-4">
-            <label class="text-sm text-(--tx)">Heure de la revue hebdomadaire (dimanche)</label>
-            <input
-                type="time"
-                wire:model="reviewWeeklyTime"
-                class="rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-1.5 font-mono text-sm text-(--tx)"
-            />
-            <x-btn variant="secondary" class="ml-auto !px-3 !py-1.5 text-xs" wire:click="saveReviewSettings">Enregistrer</x-btn>
+        <div class="mt-4 space-y-3 rounded-[14px] border border-(--bd) bg-(--surf) p-4">
+            <div class="flex items-center gap-3">
+                <label class="text-sm text-(--tx)">Heure de la revue hebdomadaire (dimanche)</label>
+                <input
+                    type="time"
+                    wire:model="reviewWeeklyTime"
+                    class="rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-1.5 font-mono text-sm text-(--tx)"
+                />
+            </div>
+            @error('reviewWeeklyTime') <p class="text-xs text-(--dgr)">{{ $message }}</p> @enderror
+
+            <div class="flex items-center gap-3">
+                <label class="w-64 text-sm text-(--tx)">Email de notification</label>
+                <input
+                    type="email"
+                    wire:model="reviewNotificationEmail"
+                    placeholder="toi@exemple.com"
+                    class="flex-1 rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-1.5 text-sm text-(--tx)"
+                />
+            </div>
+            @error('reviewNotificationEmail') <p class="text-xs text-(--dgr)">{{ $message }}</p> @enderror
+
+            <label class="flex items-center gap-2 text-sm text-(--tx)">
+                <input type="checkbox" wire:model="reviewNotificationsEnabled" class="rounded-[4px] border-(--bd2) text-(--ac) focus:ring-0" />
+                Recevoir un email quand une revue est générée
+            </label>
+
+            <div class="flex justify-end">
+                <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="saveReviewSettings">Enregistrer</x-btn>
+            </div>
         </div>
-        @error('reviewWeeklyTime') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
     </div>
 
     <flux:modal wire:model.self="showProviderModal" class="md:w-[420px]">

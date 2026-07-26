@@ -6,17 +6,20 @@ use App\Enums\AgentName;
 use App\Enums\AgentRunStatus;
 use App\Enums\AgentRunTrigger;
 use App\Enums\ReviewType;
+use App\Mail\ReviewGenerated;
 use App\Models\AgentConfig;
 use App\Models\Review;
 use App\Support\Agents\AgentRunner;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Mail;
 
 class ReviewerAgent
 {
     public function __construct(
         private readonly AgentRunner $runner,
         private readonly ReviewContextBuilder $contextBuilder,
+        private readonly ReviewSettings $settings,
     ) {}
 
     public function isConfigured(): bool
@@ -43,13 +46,26 @@ class ReviewerAgent
 
         [$markdown, $proposedDecisions] = $this->parseOutput((string) $run->output);
 
-        return Review::create([
+        $review = Review::create([
             'type' => $type,
             'period_start' => $periodStart,
             'period_end' => $periodEnd,
             'generated_content' => $markdown,
             'proposed_decisions' => $proposedDecisions,
         ]);
+
+        $this->notify($review);
+
+        return $review;
+    }
+
+    private function notify(Review $review): void
+    {
+        $email = $this->settings->notificationEmail();
+
+        if ($this->settings->notificationsEnabled() && $email) {
+            Mail::to($email)->send(new ReviewGenerated($review));
+        }
     }
 
     private function reviewerConfig(): ?AgentConfig

@@ -3,11 +3,14 @@
 use App\Enums\AgentRunStatus;
 use App\Enums\AgentRunTrigger;
 use App\Enums\ReviewType;
+use App\Mail\ReviewGenerated;
 use App\Models\AgentConfig;
 use App\Models\AgentRun;
 use App\Models\Review;
 use App\Support\Agents\AgentRunner;
 use App\Support\Review\ReviewerAgent;
+use App\Support\Review\ReviewSettings;
+use Illuminate\Support\Facades\Mail;
 
 test('returns null and creates no review when the agent is not configured', function () {
     $review = app(ReviewerAgent::class)->generate(ReviewType::Weekly, now()->subDays(7), now(), AgentRunTrigger::Manual);
@@ -76,4 +79,49 @@ test('stores an empty decisions list when the output has no json block', functio
     $review = app(ReviewerAgent::class)->generate(ReviewType::Weekly, now()->subDays(7), now(), AgentRunTrigger::Manual);
 
     expect($review->proposed_decisions)->toBe([]);
+});
+
+test('sends the notification mail when enabled with an address', function () {
+    Mail::fake();
+
+    AgentConfig::factory()->create(['agent_name' => 'reviewer', 'enabled' => true]);
+    (new ReviewSettings)->updateNotifications('moi@exemple.com', true);
+
+    $this->mock(AgentRunner::class, function ($mock): void {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->make(['status' => AgentRunStatus::Success, 'output' => '## Le pouls']));
+    });
+
+    $review = app(ReviewerAgent::class)->generate(ReviewType::Weekly, now()->subDays(7), now(), AgentRunTrigger::Manual);
+
+    Mail::assertSent(ReviewGenerated::class, fn ($mail) => $mail->hasTo('moi@exemple.com') && $mail->review->is($review));
+});
+
+test('does not send the notification mail when disabled', function () {
+    Mail::fake();
+
+    AgentConfig::factory()->create(['agent_name' => 'reviewer', 'enabled' => true]);
+    (new ReviewSettings)->updateNotifications('moi@exemple.com', false);
+
+    $this->mock(AgentRunner::class, function ($mock): void {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->make(['status' => AgentRunStatus::Success, 'output' => '## Le pouls']));
+    });
+
+    app(ReviewerAgent::class)->generate(ReviewType::Weekly, now()->subDays(7), now(), AgentRunTrigger::Manual);
+
+    Mail::assertNothingSent();
+});
+
+test('does not send the notification mail when no address is configured', function () {
+    Mail::fake();
+
+    AgentConfig::factory()->create(['agent_name' => 'reviewer', 'enabled' => true]);
+    (new ReviewSettings)->updateNotifications(null, true);
+
+    $this->mock(AgentRunner::class, function ($mock): void {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->make(['status' => AgentRunStatus::Success, 'output' => '## Le pouls']));
+    });
+
+    app(ReviewerAgent::class)->generate(ReviewType::Weekly, now()->subDays(7), now(), AgentRunTrigger::Manual);
+
+    Mail::assertNothingSent();
 });
