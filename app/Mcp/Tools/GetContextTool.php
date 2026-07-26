@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Models\BrainDocument;
+use App\Models\Checklist;
 use App\Models\Entity;
 use App\Models\Goal;
 use App\Models\LifeArea;
@@ -29,8 +30,12 @@ class GetContextTool extends LoggedTool
         $lifeAreas = LifeArea::count();
         $entities = Entity::where('status', 'active')->count();
         $goals = Goal::where('status', 'active')->count();
+        $lists = Checklist::pluck('name');
 
         $summary = "{$lifeAreas} domaine(s) de vie, {$entities} entité(s) active(s), {$goals} objectif(s) actif(s).";
+        $summary .= $lists->isNotEmpty()
+            ? ' Listes existantes : '.$lists->implode(', ').'.'
+            : ' Aucune liste existante.';
 
         if (! $this->settings->isConfigured()) {
             return Response::text($summary);

@@ -37,7 +37,7 @@ class GetTodayTool extends LoggedTool
             ? 'Aucun événement à venir.'
             : $events->map(fn (Event $e): string => $e->title.' — '.$e->starts_at->translatedFormat('d M H:i'))->implode(' ; ');
 
-        $reviewLine = $daysUntilReview === 0 ? 'Revue prévue aujourd\'hui.' : "Prochaine revue dans {$daysUntilReview} jour(s).";
+        $reviewLine = $daysUntilReview === 0 ? "La revue est prévue aujourd'hui." : "Prochaine revue dans {$daysUntilReview} jour(s).";
 
         return Response::text("Tâches : {$taskLines}\nÉvénements : {$eventLines}\n{$reviewLine}");
     }

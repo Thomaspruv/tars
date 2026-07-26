@@ -3,6 +3,7 @@
 use App\Mcp\Servers\TarsServer;
 use App\Mcp\Tools\GetContextTool;
 use App\Models\BrainDocument;
+use App\Models\Checklist;
 use App\Models\Entity;
 use App\Models\Goal;
 use App\Models\LifeArea;
@@ -28,4 +29,20 @@ test('returns only the state summary when the vault is not configured', function
     TarsServer::tool(GetContextTool::class)
         ->assertOk()
         ->assertSee('domaine(s) de vie');
+});
+
+test('includes existing list names in the summary', function () {
+    Checklist::factory()->create(['name' => 'Courses']);
+    Checklist::factory()->create(['name' => 'Travaux SDB']);
+
+    TarsServer::tool(GetContextTool::class)
+        ->assertOk()
+        ->assertSee('Courses')
+        ->assertSee('Travaux SDB');
+});
+
+test('mentions when there are no lists', function () {
+    TarsServer::tool(GetContextTool::class)
+        ->assertOk()
+        ->assertSee('Aucune liste existante.');
 });
