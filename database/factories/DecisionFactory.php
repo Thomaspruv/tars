@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\DecisionSource;
 use App\Models\Decision;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -20,7 +21,7 @@ class DecisionFactory extends Factory
         return [
             'content' => fake()->sentence(6),
             'context' => null,
-            'source' => 'conversation',
+            'source' => DecisionSource::Conversation,
             'review_id' => null,
             'goal_id' => null,
             'entity_id' => null,

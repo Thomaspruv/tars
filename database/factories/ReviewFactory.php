@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\ReviewType;
 use App\Models\Review;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -20,7 +21,7 @@ class ReviewFactory extends Factory
         $periodStart = fake()->dateTimeBetween('-1 month', 'now');
 
         return [
-            'type' => 'weekly',
+            'type' => ReviewType::Weekly,
             'period_start' => $periodStart,
             'period_end' => (clone $periodStart)->modify('+6 days'),
             'generated_content' => "# Revue\n\n".fake()->realText(400),

@@ -2,6 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Enums\AgentRunStatus;
+use App\Enums\AgentRunTrigger;
 use App\Models\AgentRun;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -21,8 +23,8 @@ class AgentRunFactory extends Factory
 
         return [
             'agent_name' => fake()->randomElement(['reviewer', 'triage', 'planner', 'researcher', 'assistant']),
-            'trigger' => 'manual',
-            'status' => 'success',
+            'trigger' => AgentRunTrigger::Manual,
+            'status' => AgentRunStatus::Success,
             'provider' => 'deepseek',
             'model' => 'deepseek-chat',
             'input' => [],
