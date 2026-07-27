@@ -113,4 +113,24 @@ class Entity extends Model
     {
         return $this->morphToMany(BrainDocument::class, 'anchorable', 'brain_document_anchors');
     }
+
+    /**
+     * Relations where this entity is the subject (e.g. "this entity is employed_by X").
+     *
+     * @return HasMany<EntityRelation, $this>
+     */
+    public function relations(): HasMany
+    {
+        return $this->hasMany(EntityRelation::class);
+    }
+
+    /**
+     * Relations where this entity is the object (e.g. X is employed_by "this entity").
+     *
+     * @return HasMany<EntityRelation, $this>
+     */
+    public function relatedFrom(): HasMany
+    {
+        return $this->hasMany(EntityRelation::class, 'related_entity_id');
+    }
 }

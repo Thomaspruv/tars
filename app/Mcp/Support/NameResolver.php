@@ -2,9 +2,11 @@
 
 namespace App\Mcp\Support;
 
+use App\Models\BrainDocument;
 use App\Models\Checklist;
 use App\Models\Entity;
 use App\Models\Goal;
+use App\Models\LifeArea;
 use App\Models\Task;
 use App\Support\FuzzyMatcher;
 use Illuminate\Support\Collection;
@@ -19,6 +21,14 @@ class NameResolver
     public function entities(string $needle): Collection
     {
         return $this->matcher->rankedMatches(Entity::all(), $needle, fn (Entity $entity): string => $entity->name);
+    }
+
+    /**
+     * @return Collection<int, LifeArea>
+     */
+    public function lifeAreas(string $needle): Collection
+    {
+        return $this->matcher->rankedMatches(LifeArea::all(), $needle, fn (LifeArea $lifeArea): string => $lifeArea->name);
     }
 
     /**
@@ -43,6 +53,25 @@ class NameResolver
     public function openTasks(string $needle): Collection
     {
         return $this->matcher->rankedMatches(Task::open()->get(), $needle, fn (Task $task): string => $task->title);
+    }
+
+    /**
+     * Unlike openTasks(), matches against every task regardless of status — used for
+     * destructive operations where the caller may want to delete a task that's already done.
+     *
+     * @return Collection<int, Task>
+     */
+    public function tasks(string $needle): Collection
+    {
+        return $this->matcher->rankedMatches(Task::all(), $needle, fn (Task $task): string => $task->title);
+    }
+
+    /**
+     * @return Collection<int, BrainDocument>
+     */
+    public function notes(string $needle): Collection
+    {
+        return $this->matcher->rankedMatches(BrainDocument::all(), $needle, fn (BrainDocument $document): string => (string) $document->title);
     }
 
     /**

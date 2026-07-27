@@ -1,9 +1,11 @@
 <?php
 
+use App\Enums\EntityRelationType;
 use App\Enums\EntityStatus;
 use App\Enums\TaskStatus;
 use App\Models\BrainDocument;
 use App\Models\Entity;
+use App\Models\EntityRelation;
 use App\Models\Goal;
 use App\Models\Task;
 use App\Models\User;
@@ -138,4 +140,20 @@ test('the vault notes section is hidden when the vault is not configured', funct
     $entity = Entity::factory()->create();
 
     $this->get(route('entities.show', $entity))->assertDontSee('Notes du vault');
+});
+
+test('it shows outgoing and incoming entity relations', function () {
+    $this->actingAs(User::factory()->create());
+
+    $person = Entity::factory()->create(['name' => 'Jean Dupont']);
+    $company = Entity::factory()->create(['name' => 'Acme Corp']);
+
+    EntityRelation::create([
+        'entity_id' => $person->id,
+        'related_entity_id' => $company->id,
+        'relation_type' => EntityRelationType::EmployedBy,
+    ]);
+
+    $this->get(route('entities.show', $person))->assertSee('Acme Corp');
+    $this->get(route('entities.show', $company))->assertSee('Jean Dupont')->assertSee('entrant');
 });

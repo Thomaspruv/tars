@@ -30,6 +30,18 @@ new #[Title('Entité')] class extends Component
     }
 
     #[Computed]
+    public function relations(): Collection
+    {
+        return $this->entity->relations()->with('relatedEntity')->get();
+    }
+
+    #[Computed]
+    public function relatedFrom(): Collection
+    {
+        return $this->entity->relatedFrom()->with('entity')->get();
+    }
+
+    #[Computed]
     public function openTasks(): Collection
     {
         return $this->entity->tasks()->open()->orderBy('due_date')->get();
@@ -194,6 +206,26 @@ new #[Title('Entité')] class extends Component
                     <div class="mt-3 space-y-3">
                         @foreach ($entity->goals as $goal)
                             <x-card-goal :goal="$goal" wire:key="goal-{{ $goal->id }}" />
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
+            @if ($this->relations->isNotEmpty() || $this->relatedFrom->isNotEmpty())
+                <div>
+                    <h2 class="text-base font-semibold text-(--tx)">Relations</h2>
+                    <div class="mt-3 space-y-2 text-sm">
+                        @foreach ($this->relations as $relation)
+                            <div class="flex items-center justify-between rounded-[10px] border border-(--bd) bg-(--surf) px-3 py-2" wire:key="relation-{{ $relation->id }}">
+                                <span class="font-mono text-[10.5px] text-(--mut)">{{ $relation->relation_type->label() }}</span>
+                                <a href="{{ route('entities.show', $relation->relatedEntity) }}" wire:navigate class="text-(--ac)">{{ $relation->relatedEntity->name }}</a>
+                            </div>
+                        @endforeach
+                        @foreach ($this->relatedFrom as $relation)
+                            <div class="flex items-center justify-between rounded-[10px] border border-(--bd) bg-(--surf) px-3 py-2" wire:key="related-from-{{ $relation->id }}">
+                                <a href="{{ route('entities.show', $relation->entity) }}" wire:navigate class="text-(--ac)">{{ $relation->entity->name }}</a>
+                                <span class="font-mono text-[10.5px] text-(--mut)">{{ $relation->relation_type->label() }} (entrant)</span>
+                            </div>
                         @endforeach
                     </div>
                 </div>
