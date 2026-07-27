@@ -1,8 +1,11 @@
 <?php
 
+use App\Enums\BrainSuggestionStatus;
+use App\Models\BrainSuggestion;
 use App\Models\InboxItem;
 
 $inboxPendingCount = InboxItem::whereNull('processed_at')->count();
+$curatorPendingCount = BrainSuggestion::where('status', BrainSuggestionStatus::Pending->value)->count();
 
 $theme = request()->cookie('la-theme') === 'light' ? 'light' : 'dark';
 
@@ -46,6 +49,9 @@ $navItems = [
                         <span class="flex-1">{{ $item['label'] }}</span>
                         @if ($item['route'] === 'inbox.index' && $inboxPendingCount > 0)
                             <span class="rounded-full bg-(--warnbg) px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-(--warn)">{{ $inboxPendingCount }}</span>
+                        @endif
+                        @if ($item['route'] === 'brain.index' && $curatorPendingCount > 0)
+                            <span class="rounded-full bg-(--aibg) px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-(--ai)">{{ $curatorPendingCount }}</span>
                         @endif
                     </a>
                 @endforeach

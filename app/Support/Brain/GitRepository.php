@@ -84,6 +84,17 @@ class GitRepository
         Process::path($path)->run(['git', 'commit', '-m', $message])->throw();
     }
 
+    /**
+     * Like commit(), but stages every pending change in the working tree —
+     * needed for actions that touch more than one path at once (a move's
+     * source+destination, a merge's destination+archived source).
+     */
+    public function commitAll(string $path, string $message): void
+    {
+        Process::path($path)->run(['git', 'add', '-A'])->throw();
+        Process::path($path)->run(['git', 'commit', '-m', $message])->throw();
+    }
+
     private function hasConflictMarkers(string $porcelainOutput): bool
     {
         foreach (explode("\n", trim($porcelainOutput)) as $line) {

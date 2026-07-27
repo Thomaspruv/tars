@@ -152,3 +152,13 @@ test('commit stages and commits the given file', function () {
     Process::assertRan(fn ($process) => $process->command === ['git', 'add', 'notes/example.md']);
     Process::assertRan(fn ($process) => $process->command === ['git', 'commit', '-m', 'tars: edit notes/example.md']);
 });
+
+test('commitAll stages every change and commits', function () {
+    File::ensureDirectoryExists($this->path);
+    Process::fake();
+
+    (new GitRepository)->commitAll($this->path, 'tars: curator move notes/example.md');
+
+    Process::assertRan(fn ($process) => $process->command === ['git', 'add', '-A']);
+    Process::assertRan(fn ($process) => $process->command === ['git', 'commit', '-m', 'tars: curator move notes/example.md']);
+});

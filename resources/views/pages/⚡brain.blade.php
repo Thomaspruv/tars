@@ -1,11 +1,14 @@
 <?php
 
+use App\Enums\BrainSuggestionStatus;
 use App\Enums\GitSyncStatus;
 use App\Models\BrainDocument;
+use App\Models\BrainSuggestion;
 use App\Support\Brain\AnchorResolver;
 use App\Support\Brain\BrainSettings;
 use App\Support\Brain\GitRepository;
 use App\Support\Brain\VaultIndexer;
+use App\Support\Curator\SuggestionApplier;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -23,6 +26,9 @@ new #[Title('Cerveau')] class extends Component
     #[Url]
     public string $search = '';
 
+    #[Url]
+    public string $activeTab = 'browse';
+
     public bool $isEditing = false;
 
     public string $editContent = '';
@@ -37,6 +43,75 @@ new #[Title('Cerveau')] class extends Component
     public function configured(): bool
     {
         return app(BrainSettings::class)->isConfigured();
+    }
+
+    #[Computed]
+    public function pendingSuggestions(): Collection
+    {
+        return BrainSuggestion::where('status', BrainSuggestionStatus::Pending->value)
+            ->with('brainDocument')
+            ->get()
+            ->sort(function (BrainSuggestion $a, BrainSuggestion $b): int {
+                $deprioritizedComparison = ($a->deprioritized_at !== null) <=> ($b->deprioritized_at !== null);
+
+                return $deprioritizedComparison !== 0 ? $deprioritizedComparison : $b->created_at <=> $a->created_at;
+            })
+            ->values();
+    }
+
+    #[Computed]
+    public function recentAutoApplied(): Collection
+    {
+        return BrainSuggestion::where('status', BrainSuggestionStatus::AutoApplied->value)
+            ->where('created_at', '>=', now()->subDays(7))
+            ->with('brainDocument')
+            ->orderByDesc('created_at')
+            ->get();
+    }
+
+    public function switchTab(string $tab): void
+    {
+        $this->activeTab = $tab;
+    }
+
+    public function acceptSuggestion(int $suggestionId): void
+    {
+        $suggestion = BrainSuggestion::findOrFail($suggestionId);
+
+        try {
+            app(SuggestionApplier::class)->apply($suggestion);
+            $this->resetErrorBag('acceptSuggestion');
+        } catch (\RuntimeException $e) {
+            $this->addError('acceptSuggestion', $e->getMessage());
+
+            return;
+        }
+
+        unset($this->pendingSuggestions, $this->tree, $this->folders);
+    }
+
+    public function rejectSuggestion(int $suggestionId): void
+    {
+        BrainSuggestion::where('id', $suggestionId)->update(['status' => BrainSuggestionStatus::Rejected->value]);
+
+        unset($this->pendingSuggestions);
+    }
+
+    public function deprioritizeSuggestion(int $suggestionId): void
+    {
+        BrainSuggestion::where('id', $suggestionId)->update(['deprioritized_at' => now()]);
+
+        unset($this->pendingSuggestions);
+    }
+
+    public function cancelAutoApplied(int $suggestionId): void
+    {
+        $suggestion = BrainSuggestion::findOrFail($suggestionId);
+
+        $suggestion->createdRecord?->delete();
+        $suggestion->update(['status' => BrainSuggestionStatus::Rejected->value]);
+
+        unset($this->recentAutoApplied);
     }
 
     #[Computed]
@@ -223,11 +298,95 @@ new #[Title('Cerveau')] class extends Component
 <div>
     <div class="flex items-center justify-between">
         <h1 class="text-[28px] font-bold tracking-[-0.02em] text-(--tx)">Cerveau</h1>
-        @if ($this->configured)
+        @if ($this->configured && $activeTab === 'browse')
             <x-btn variant="primary" wire:click="openCreateModal">+ Nouvelle note</x-btn>
         @endif
     </div>
 
+    <div class="mt-4 flex gap-1 border-b border-(--bd)">
+        <button
+            type="button"
+            wire:click="switchTab('browse')"
+            class="border-b-2 px-3 py-2 text-sm font-medium transition-colors {{ $activeTab === 'browse' ? 'border-(--ac) text-(--ac)' : 'border-transparent text-(--mut) hover:text-(--tx)' }}"
+        >
+            Parcourir
+        </button>
+        <button
+            type="button"
+            wire:click="switchTab('rangement')"
+            class="flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors {{ $activeTab === 'rangement' ? 'border-(--ai) text-(--ai)' : 'border-transparent text-(--mut) hover:text-(--tx)' }}"
+        >
+            Rangement
+            @if ($this->pendingSuggestions->isNotEmpty())
+                <span class="rounded-full bg-(--aibg) px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-(--ai)">{{ $this->pendingSuggestions->count() }}</span>
+            @endif
+        </button>
+    </div>
+
+    @if ($activeTab === 'rangement')
+        <div class="mt-6 space-y-8">
+            @error('acceptSuggestion')
+                <p class="rounded-[8px] border border-(--dgrbg) bg-(--dgrbg) px-3 py-2 text-sm text-(--dgr)">{{ $message }}</p>
+            @enderror
+
+            <div class="space-y-3">
+                @forelse ($this->pendingSuggestions as $suggestion)
+                    <div class="rounded-[14px] border border-(--bd) bg-(--surf) p-4 {{ $suggestion->deprioritized_at ? 'opacity-60' : '' }}" wire:key="suggestion-{{ $suggestion->id }}">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <p class="text-sm text-(--tx)">{{ $suggestion->reason }}</p>
+                                <p class="mt-1 font-mono text-[10.5px] text-(--mut)">{{ $suggestion->brainDocument->path }}</p>
+                            </div>
+                            <x-badge-status :status="$suggestion->confidence->value === 'high' ? 'active' : 'paused'" :label="$suggestion->confidence->value" />
+                        </div>
+
+                        <details class="mt-2">
+                            <summary class="cursor-pointer text-xs text-(--mut) hover:text-(--tx)">Détail</summary>
+                            <dl class="mt-2 space-y-1 rounded-[8px] bg-(--surf2) p-3 text-xs">
+                                <div class="flex gap-2"><dt class="text-(--mut)">Action</dt><dd class="text-(--tx)">{{ $suggestion->action->label() }}</dd></div>
+                                @if ($suggestion->target)
+                                    <div class="flex gap-2"><dt class="text-(--mut)">Cible</dt><dd class="text-(--tx)">{{ $suggestion->target }}</dd></div>
+                                @endif
+                                @if ($suggestion->frontmatter_patch)
+                                    <div class="flex gap-2"><dt class="text-(--mut)">Frontmatter</dt><dd class="text-(--tx)">{{ json_encode($suggestion->frontmatter_patch) }}</dd></div>
+                                @endif
+                                @if ($suggestion->merged_content)
+                                    <div class="flex gap-2"><dt class="shrink-0 text-(--mut)">Contenu fusionné</dt><dd class="whitespace-pre-wrap text-(--tx)">{{ $suggestion->merged_content }}</dd></div>
+                                @endif
+                            </dl>
+                        </details>
+
+                        <div class="mt-3 flex justify-end gap-2">
+                            <x-btn variant="ghost" class="!px-3 !py-1.5 text-xs" wire:click="deprioritizeSuggestion({{ $suggestion->id }})">Plus tard</x-btn>
+                            <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="rejectSuggestion({{ $suggestion->id }})">Refuser</x-btn>
+                            <x-btn variant="primary" class="!px-3 !py-1.5 text-xs" wire:click="acceptSuggestion({{ $suggestion->id }})">Accepter</x-btn>
+                        </div>
+                    </div>
+                @empty
+                    <p class="rounded-[14px] border border-(--bd) bg-(--surf) p-8 text-center text-sm text-(--mut)">Aucune suggestion en attente.</p>
+                @endforelse
+            </div>
+
+            @if ($this->recentAutoApplied->isNotEmpty())
+                <div>
+                    <h2 class="text-sm font-semibold text-(--tx)">Auto-appliqué récemment</h2>
+                    <div class="mt-3 space-y-2">
+                        @foreach ($this->recentAutoApplied as $suggestion)
+                            <div class="flex items-center justify-between gap-4 rounded-[10px] border border-(--ai)/25 bg-(--aibg) px-3 py-2" wire:key="auto-{{ $suggestion->id }}">
+                                <div>
+                                    <p class="text-xs text-(--tx)">◈ {{ $suggestion->reason }}</p>
+                                    <p class="font-mono text-[10.5px] text-(--mut)">{{ $suggestion->brainDocument->path }} — {{ $suggestion->created_at->translatedFormat('d M · H:i') }}</p>
+                                </div>
+                                <x-btn variant="ghost" class="!px-3 !py-1.5 text-xs" wire:click="cancelAutoApplied({{ $suggestion->id }})">Annuler</x-btn>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+        </div>
+    @endif
+
+    @if ($activeTab === 'browse')
     @if (! $this->configured)
         <div class="mt-8 rounded-[14px] border border-(--bd) bg-(--surf) p-8 text-center">
             <p class="text-sm text-(--mut)">Vault non configuré.</p>
@@ -302,6 +461,7 @@ new #[Title('Cerveau')] class extends Component
                 @endif
             </div>
         </div>
+    @endif
     @endif
 
     <flux:modal wire:model.self="showCreateModal" class="md:w-[420px]">
