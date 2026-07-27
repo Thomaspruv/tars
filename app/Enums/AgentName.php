@@ -23,7 +23,7 @@ enum AgentName: string
     {
         return match ($this) {
             self::Reviewer => 'Génère la revue hebdomadaire et mensuelle.',
-            self::Curateur => 'Range et ancre les notes du cerveau, chaque soir.',
+            self::Curateur => 'Traite la todo du sas chaque heure, range le cerveau chaque soir.',
             self::Triage => "Propose le classement des items de l'inbox.",
             self::Planner => 'Répartit les tâches de la semaine à venir.',
         };
@@ -31,6 +31,6 @@ enum AgentName: string
 
     public function isAvailable(): bool
     {
-        return $this === self::Reviewer;
+        return in_array($this, [self::Reviewer, self::Curateur], true);
     }
 }
