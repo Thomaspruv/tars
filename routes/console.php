@@ -1,5 +1,7 @@
 <?php
 
+use App\Console\Commands\CuratorTidyCommand;
+use App\Console\Commands\CuratorTodoCommand;
 use App\Console\Commands\GenerateReviewCommand;
 use App\Console\Commands\IndexBrainCommand;
 use App\Console\Commands\SyncBrainCommand;
@@ -14,3 +16,5 @@ Artisan::command('inspire', function () {
 Schedule::command(IndexBrainCommand::class, ['--scheduled'])->everyFifteenMinutes();
 Schedule::command(SyncBrainCommand::class, ['--scheduled'])->everyMinute()->withoutOverlapping();
 Schedule::command(GenerateReviewCommand::class, ['--scheduled'])->everyMinute()->withoutOverlapping();
+Schedule::command(CuratorTodoCommand::class, ['--scheduled'])->hourly()->withoutOverlapping();
+Schedule::command(CuratorTidyCommand::class, ['--scheduled'])->dailyAt('22:00')->withoutOverlapping();
