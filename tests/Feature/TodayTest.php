@@ -7,7 +7,11 @@ use App\Models\Event;
 use App\Models\Review;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Review\ReviewSettings;
+use Illuminate\Support\Carbon;
 use Livewire\Livewire;
+
+afterEach(fn () => Carbon::setTestNow());
 
 test('guests are redirected to the login page', function () {
     $this->get(route('today'))->assertRedirect(route('login'));
@@ -92,4 +96,26 @@ test('does not show the pending review banner once completed', function () {
     Review::factory()->create(['completed_at' => now()]);
 
     $this->get(route('today'))->assertDontSee('prête à lire', false);
+});
+
+test('shows the review as due today when the configured time has not passed yet', function () {
+    Carbon::setTestNow(Carbon::parse('2024-01-07 10:00:00')); // a Sunday, before the default 17:00
+    $this->actingAs(User::factory()->create());
+
+    expect(Livewire::test('pages::today')->get('daysUntilReview'))->toBe(0);
+});
+
+test('shows the review as due next sunday once the configured time has passed', function () {
+    Carbon::setTestNow(Carbon::parse('2024-01-07 18:00:00')); // a Sunday, after the default 17:00
+    $this->actingAs(User::factory()->create());
+
+    expect(Livewire::test('pages::today')->get('daysUntilReview'))->toBe(7);
+});
+
+test('respects a custom weekly review time', function () {
+    Carbon::setTestNow(Carbon::parse('2024-01-07 19:00:00')); // a Sunday at 19:00
+    (new ReviewSettings)->updateWeeklyTime('20:00');
+    $this->actingAs(User::factory()->create());
+
+    expect(Livewire::test('pages::today')->get('daysUntilReview'))->toBe(0);
 });

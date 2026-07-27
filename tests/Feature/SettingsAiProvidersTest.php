@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AgentConfig;
 use App\Models\AiProvider;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
@@ -75,6 +76,19 @@ test('deletes a provider', function () {
     Livewire::test('pages::settings-app')->call('deleteProvider', $provider->id);
 
     expect(AiProvider::find($provider->id))->toBeNull();
+});
+
+test('blocks deleting a provider still used by an agent config', function () {
+    $this->actingAs(User::factory()->create());
+
+    $provider = AiProvider::factory()->create(['name' => 'anthropic']);
+    AgentConfig::factory()->create(['agent_name' => 'reviewer', 'ai_provider_id' => $provider->id]);
+
+    Livewire::test('pages::settings-app')
+        ->call('deleteProvider', $provider->id)
+        ->assertHasErrors(['deleteProvider']);
+
+    expect(AiProvider::find($provider->id))->not->toBeNull();
 });
 
 test('tests the connection successfully', function () {

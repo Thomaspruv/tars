@@ -55,7 +55,7 @@ new #[Title('Aujourd\'hui')] class extends Component
     {
         $weeklyTime = app(ReviewSettings::class)->weeklyTime();
         $today = today();
-        $todayIsDue = $today->isSunday() && now()->format('H:i') >= $weeklyTime;
+        $todayIsDue = $today->isSunday() && now()->format('H:i') < $weeklyTime;
         $nextReview = $todayIsDue ? $today->copy() : $today->copy()->next(Carbon::SUNDAY);
 
         return $today->diffInDays($nextReview);

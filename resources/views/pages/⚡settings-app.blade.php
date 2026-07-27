@@ -214,7 +214,15 @@ new #[Title('Réglages')] class extends Component
 
     public function deleteProvider(int $providerId): void
     {
-        AiProvider::findOrFail($providerId)->delete();
+        $provider = AiProvider::findOrFail($providerId);
+
+        if ($provider->agentConfigs()->exists()) {
+            $this->addError('deleteProvider', "Impossible de supprimer « {$provider->name} » : au moins un agent l'utilise encore. Change son fournisseur dans l'écran Agents d'abord.");
+
+            return;
+        }
+
+        $provider->delete();
 
         unset($this->aiProviders);
     }
@@ -588,6 +596,8 @@ new #[Title('Réglages')] class extends Component
             <h2 class="text-base font-semibold text-(--tx)">Fournisseurs IA</h2>
             <x-btn variant="primary" wire:click="openCreateProviderModal">+ Nouveau fournisseur</x-btn>
         </div>
+
+        @error('deleteProvider') <p class="mt-2 text-xs text-(--dgr)">{{ $message }}</p> @enderror
 
         <div class="mt-4 divide-y divide-(--bd) rounded-[14px] border border-(--bd) bg-(--surf)">
             @forelse ($this->aiProviders as $provider)

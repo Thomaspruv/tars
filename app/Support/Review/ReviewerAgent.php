@@ -63,8 +63,16 @@ class ReviewerAgent
     {
         $email = $this->settings->notificationEmail();
 
-        if ($this->settings->notificationsEnabled() && $email) {
+        if (! $this->settings->notificationsEnabled() || ! $email) {
+            return;
+        }
+
+        try {
             Mail::to($email)->send(new ReviewGenerated($review));
+        } catch (\Throwable $e) {
+            // The review was already generated and persisted successfully — a
+            // mail transport failure must not make the whole run look failed.
+            report($e);
         }
     }
 
@@ -80,19 +88,24 @@ class ReviewerAgent
      */
     private function parseOutput(string $output): array
     {
-        /** @var list<array<string, mixed>> $decisions */
+        /** @var list<mixed> $decisions */
         $decisions = [];
         $markdown = trim($output);
 
         if (preg_match('/```json\s*(.*?)\s*```/s', $output, $matches)) {
-            /** @var list<array<string, mixed>> $decisions */
-            $decisions = json_decode($matches[1], true) ?? [];
+            $decoded = json_decode($matches[1], true);
+            /** @var list<mixed> $decisions */
+            $decisions = is_array($decoded) ? array_values($decoded) : [];
             $markdown = trim(str_replace($matches[0], '', $output));
         }
 
         $proposedDecisions = [];
 
         foreach (array_slice($decisions, 0, 3) as $decision) {
+            if (! is_array($decision)) {
+                continue;
+            }
+
             $proposedDecisions[] = [
                 'question' => (string) ($decision['question'] ?? ''),
                 'goal' => isset($decision['goal']) ? (string) $decision['goal'] : null,

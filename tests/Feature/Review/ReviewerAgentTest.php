@@ -81,6 +81,28 @@ test('stores an empty decisions list when the output has no json block', functio
     expect($review->proposed_decisions)->toBe([]);
 });
 
+test('does not crash when the json block decodes to a non-array value', function () {
+    AgentConfig::factory()->create(['agent_name' => 'reviewer', 'enabled' => true]);
+
+    $output = <<<'MD'
+    ## Le pouls
+    Tout va bien.
+
+    ```json
+    42
+    ```
+    MD;
+
+    $this->mock(AgentRunner::class, function ($mock) use ($output): void {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->make(['status' => AgentRunStatus::Success, 'output' => $output]));
+    });
+
+    $review = app(ReviewerAgent::class)->generate(ReviewType::Weekly, now()->subDays(7), now(), AgentRunTrigger::Manual);
+
+    expect($review)->not->toBeNull()
+        ->and($review->proposed_decisions)->toBe([]);
+});
+
 test('sends the notification mail when enabled with an address', function () {
     Mail::fake();
 
@@ -124,4 +146,20 @@ test('does not send the notification mail when no address is configured', functi
     app(ReviewerAgent::class)->generate(ReviewType::Weekly, now()->subDays(7), now(), AgentRunTrigger::Manual);
 
     Mail::assertNothingSent();
+});
+
+test('still returns the persisted review when sending the notification mail throws', function () {
+    AgentConfig::factory()->create(['agent_name' => 'reviewer', 'enabled' => true]);
+    (new ReviewSettings)->updateNotifications('moi@exemple.com', true);
+
+    Mail::shouldReceive('to')->once()->andThrow(new RuntimeException('SMTP indisponible'));
+
+    $this->mock(AgentRunner::class, function ($mock): void {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->make(['status' => AgentRunStatus::Success, 'output' => '## Le pouls']));
+    });
+
+    $review = app(ReviewerAgent::class)->generate(ReviewType::Weekly, now()->subDays(7), now(), AgentRunTrigger::Manual);
+
+    expect($review)->not->toBeNull()
+        ->and(Review::count())->toBe(1);
 });
