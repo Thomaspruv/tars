@@ -12,13 +12,22 @@ use Livewire\Component;
 
 new #[Title('Agents')] class extends Component
 {
-    public string $reviewerProviderId = '';
+    private const array RUN_COMMANDS = [
+        'reviewer' => 'review:generate',
+        'curateur' => 'curator:todo',
+    ];
 
-    public string $reviewerModel = '';
+    /** @var array<string, string> */
+    public array $providerId = [];
 
-    public bool $reviewerEnabled = true;
+    /** @var array<string, string> */
+    public array $model = [];
 
-    public ?string $reviewerRunMessage = null;
+    /** @var array<string, bool> */
+    public array $enabled = [];
+
+    /** @var array<string, string> */
+    public array $runMessage = [];
 
     public string $historyFilterAgent = '';
 
@@ -30,12 +39,20 @@ new #[Title('Agents')] class extends Component
 
     public function mount(): void
     {
-        $config = $this->reviewerConfig;
+        foreach ($this->agentNames() as $agentName) {
+            if (! $agentName->isAvailable()) {
+                continue;
+            }
 
-        if ($config) {
-            $this->reviewerProviderId = (string) $config->ai_provider_id;
-            $this->reviewerModel = $config->model;
-            $this->reviewerEnabled = $config->enabled;
+            $this->providerId[$agentName->value] = '';
+            $this->model[$agentName->value] = '';
+            $this->enabled[$agentName->value] = true;
+        }
+
+        foreach (AgentConfig::whereIn('agent_name', array_keys($this->providerId))->get() as $config) {
+            $this->providerId[$config->agent_name] = (string) $config->ai_provider_id;
+            $this->model[$config->agent_name] = $config->model;
+            $this->enabled[$config->agent_name] = $config->enabled;
         }
     }
 
@@ -53,48 +70,50 @@ new #[Title('Agents')] class extends Component
         return AiProvider::where('is_active', true)->orderBy('name')->get();
     }
 
-    #[Computed]
-    public function reviewerConfig(): ?AgentConfig
+    public function agentConfig(string $agentName): ?AgentConfig
     {
-        return AgentConfig::where('agent_name', AgentName::Reviewer->value)->first();
+        return AgentConfig::where('agent_name', $agentName)->first();
     }
 
-    #[Computed]
-    public function reviewerLastRun(): ?AgentRun
+    public function agentLastRun(string $agentName): ?AgentRun
     {
-        return AgentRun::where('agent_name', AgentName::Reviewer->value)->latest('id')->first();
+        return AgentRun::where('agent_name', $agentName)->latest('id')->first();
     }
 
-    public function saveReviewerConfig(): void
+    public function saveAgentConfig(string $agentName): void
     {
         $validated = $this->validate([
-            'reviewerProviderId' => ['required', 'exists:ai_providers,id'],
-            'reviewerModel' => ['required', 'string', 'max:255'],
-            'reviewerEnabled' => ['boolean'],
+            "providerId.{$agentName}" => ['required', 'exists:ai_providers,id'],
+            "model.{$agentName}" => ['required', 'string', 'max:255'],
+            "enabled.{$agentName}" => ['boolean'],
         ]);
 
         AgentConfig::updateOrCreate(
-            ['agent_name' => AgentName::Reviewer->value],
+            ['agent_name' => $agentName],
             [
-                'ai_provider_id' => $validated['reviewerProviderId'],
-                'model' => $validated['reviewerModel'],
-                'enabled' => $validated['reviewerEnabled'],
+                'ai_provider_id' => $validated['providerId'][$agentName],
+                'model' => $validated['model'][$agentName],
+                'enabled' => $validated['enabled'][$agentName],
             ]
         );
-
-        unset($this->reviewerConfig);
     }
 
-    public function runReviewerNow(): void
+    public function runAgentNow(string $agentName): void
     {
-        $exitCode = Artisan::call('review:generate');
+        $command = self::RUN_COMMANDS[$agentName] ?? null;
 
-        $this->reviewerRunMessage = trim(Artisan::output()) ?: null;
+        if (! $command) {
+            return;
+        }
 
-        unset($this->reviewerLastRun, $this->runHistory, $this->historyAgents, $this->tokensThisMonth);
+        $exitCode = Artisan::call($command);
+
+        $this->runMessage[$agentName] = trim(Artisan::output()) ?: '';
+
+        unset($this->runHistory, $this->historyAgents, $this->tokensThisMonth);
 
         if ($exitCode !== 0) {
-            $this->addError('reviewerRun', $this->reviewerRunMessage ?? 'Échec du lancement.');
+            $this->addError("run.{$agentName}", $this->runMessage[$agentName] ?: 'Échec du lancement.');
         }
     }
 
@@ -151,6 +170,10 @@ new #[Title('Agents')] class extends Component
     <div class="mt-6 grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))">
         @foreach ($this->agentNames() as $agentName)
             @if ($agentName->isAvailable())
+                @php
+                    $name = $agentName->value;
+                    $lastRun = $this->agentLastRun($name);
+                @endphp
                 <div class="rounded-[14px] border border-(--ai)/25 bg-(--surf) p-5">
                     <div class="flex items-center gap-2.5">
                         <span class="flex size-9 items-center justify-center rounded-[10px] bg-(--aibg) text-(--ai)">◈</span>
@@ -159,13 +182,13 @@ new #[Title('Agents')] class extends Component
                             <p class="text-xs text-(--mut)">{{ $agentName->description() }}</p>
                         </div>
                         <label class="ml-auto flex items-center gap-2 text-xs text-(--mut)">
-                            <input type="checkbox" wire:model="reviewerEnabled" wire:change="saveReviewerConfig" class="rounded-[4px] border-(--bd2) text-(--ai) focus:ring-0" />
+                            <input type="checkbox" wire:model="enabled.{{ $name }}" wire:change="saveAgentConfig('{{ $name }}')" class="rounded-[4px] border-(--bd2) text-(--ai) focus:ring-0" />
                             Activé
                         </label>
                     </div>
 
                     <div class="mt-4 grid grid-cols-2 gap-2">
-                        <select wire:model="reviewerProviderId" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                        <select wire:model="providerId.{{ $name }}" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
                             <option value="">Fournisseur…</option>
                             @foreach ($this->activeProviders as $provider)
                                 <option value="{{ $provider->id }}">{{ $provider->name }}</option>
@@ -173,42 +196,42 @@ new #[Title('Agents')] class extends Component
                         </select>
                         <input
                             type="text"
-                            wire:model="reviewerModel"
+                            wire:model="model.{{ $name }}"
                             placeholder="modèle"
                             class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)"
                         />
                     </div>
-                    @error('reviewerProviderId') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
-                    @error('reviewerModel') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                    @error("providerId.{$name}") <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                    @error("model.{$name}") <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
 
                     <div class="mt-3 flex justify-end">
-                        <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="saveReviewerConfig">Enregistrer</x-btn>
+                        <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="saveAgentConfig('{{ $name }}')">Enregistrer</x-btn>
                     </div>
 
                     <div class="mt-4 rounded-[10px] bg-(--surf2) px-3 py-2 font-mono text-[11px] text-(--mut)">
-                        @if ($this->reviewerLastRun)
-                            <x-badge-status :status="$this->reviewerLastRun->status->value" />
-                            {{ $this->reviewerLastRun->started_at->translatedFormat('d M · H:i') }}
-                            @if ($this->reviewerLastRun->finished_at)
-                                · {{ $this->reviewerLastRun->started_at->diffInSeconds($this->reviewerLastRun->finished_at) }}s
+                        @if ($lastRun)
+                            <x-badge-status :status="$lastRun->status->value" />
+                            {{ $lastRun->started_at->translatedFormat('d M · H:i') }}
+                            @if ($lastRun->finished_at)
+                                · {{ $lastRun->started_at->diffInSeconds($lastRun->finished_at) }}s
                             @endif
-                            @if ($this->reviewerLastRun->tokens_in || $this->reviewerLastRun->tokens_out)
-                                · {{ number_format(($this->reviewerLastRun->tokens_in ?? 0) + ($this->reviewerLastRun->tokens_out ?? 0)) }} tk
+                            @if ($lastRun->tokens_in || $lastRun->tokens_out)
+                                · {{ number_format(($lastRun->tokens_in ?? 0) + ($lastRun->tokens_out ?? 0)) }} tk
                             @endif
                         @else
                             Aucun run pour l'instant.
                         @endif
                     </div>
 
-                    @error('reviewerRun') <p class="mt-2 text-xs text-(--dgr)">{{ $message }}</p> @enderror
-                    @if ($reviewerRunMessage && ! $errors->has('reviewerRun'))
-                        <p class="mt-2 text-xs text-(--ok)">{{ $reviewerRunMessage }}</p>
+                    @error("run.{$name}") <p class="mt-2 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                    @if (! empty($runMessage[$name]) && ! $errors->has("run.{$name}"))
+                        <p class="mt-2 text-xs text-(--ok)">{{ $runMessage[$name] }}</p>
                     @endif
 
                     <div class="mt-3 flex justify-end">
-                        <x-btn variant="ai" wire:click="runReviewerNow" wire:loading.attr="disabled" wire:target="runReviewerNow">
-                            <span wire:loading wire:target="runReviewerNow">Génération…</span>
-                            <span wire:loading.remove wire:target="runReviewerNow">Lancer maintenant</span>
+                        <x-btn variant="ai" wire:click="runAgentNow('{{ $name }}')" wire:loading.attr="disabled" wire:target="runAgentNow('{{ $name }}')">
+                            <span wire:loading wire:target="runAgentNow('{{ $name }}')">En cours…</span>
+                            <span wire:loading.remove wire:target="runAgentNow('{{ $name }}')">Lancer maintenant</span>
                         </x-btn>
                     </div>
                 </div>

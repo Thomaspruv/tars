@@ -6,12 +6,14 @@ use App\Models\AgentRun;
 use App\Models\AiProvider;
 use App\Models\User;
 use App\Support\Agents\AgentRunner;
+use App\Support\Curator\CuratorAgent;
 use Livewire\Livewire;
 
-test('shows a greyed out card for unavailable agents', function () {
+test('shows an interactive card for reviewer and curateur, and a greyed out card for triage and planner', function () {
     $this->actingAs(User::factory()->create());
 
     Livewire::test('pages::agents')
+        ->assertSee('reviewer')
         ->assertSee('curateur')
         ->assertSee('triage')
         ->assertSee('planner')
@@ -24,10 +26,10 @@ test('saves the reviewer agent configuration', function () {
     $provider = AiProvider::factory()->create(['is_active' => true]);
 
     Livewire::test('pages::agents')
-        ->set('reviewerProviderId', (string) $provider->id)
-        ->set('reviewerModel', 'claude-opus')
-        ->set('reviewerEnabled', true)
-        ->call('saveReviewerConfig')
+        ->set('providerId.reviewer', (string) $provider->id)
+        ->set('model.reviewer', 'claude-opus')
+        ->set('enabled.reviewer', true)
+        ->call('saveAgentConfig', 'reviewer')
         ->assertHasNoErrors();
 
     $config = AgentConfig::where('agent_name', 'reviewer')->firstOrFail();
@@ -36,31 +38,59 @@ test('saves the reviewer agent configuration', function () {
         ->and($config->enabled)->toBeTrue();
 });
 
-test('requires a provider and model to save the reviewer configuration', function () {
+test('saves the curateur agent configuration independently from reviewer', function () {
+    $this->actingAs(User::factory()->create());
+
+    $provider = AiProvider::factory()->create(['is_active' => true]);
+
+    Livewire::test('pages::agents')
+        ->set('providerId.curateur', (string) $provider->id)
+        ->set('model.curateur', 'claude-haiku')
+        ->set('enabled.curateur', true)
+        ->call('saveAgentConfig', 'curateur')
+        ->assertHasNoErrors();
+
+    $config = AgentConfig::where('agent_name', 'curateur')->firstOrFail();
+    expect($config->ai_provider_id)->toBe($provider->id)
+        ->and($config->model)->toBe('claude-haiku')
+        ->and(AgentConfig::where('agent_name', 'reviewer')->exists())->toBeFalse();
+});
+
+test('requires a provider and model to save an agent configuration', function () {
     $this->actingAs(User::factory()->create());
 
     Livewire::test('pages::agents')
-        ->set('reviewerProviderId', '')
-        ->set('reviewerModel', '')
-        ->call('saveReviewerConfig')
-        ->assertHasErrors(['reviewerProviderId', 'reviewerModel']);
+        ->set('providerId.reviewer', '')
+        ->set('model.reviewer', '')
+        ->call('saveAgentConfig', 'reviewer')
+        ->assertHasErrors(['providerId.reviewer', 'model.reviewer']);
 });
 
-test('hydrates the reviewer form from an existing configuration', function () {
+test('hydrates each agent form from its own existing configuration', function () {
     $this->actingAs(User::factory()->create());
 
-    $provider = AiProvider::factory()->create();
+    $reviewerProvider = AiProvider::factory()->create();
+    $curatorProvider = AiProvider::factory()->create();
     AgentConfig::factory()->create([
         'agent_name' => 'reviewer',
-        'ai_provider_id' => $provider->id,
-        'model' => 'claude-haiku',
+        'ai_provider_id' => $reviewerProvider->id,
+        'model' => 'claude-opus',
         'enabled' => false,
+    ]);
+    AgentConfig::factory()->create([
+        'agent_name' => 'curateur',
+        'ai_provider_id' => $curatorProvider->id,
+        'model' => 'claude-haiku',
+        'enabled' => true,
     ]);
 
     Livewire::test('pages::agents')
-        ->assertSet('reviewerProviderId', (string) $provider->id)
-        ->assertSet('reviewerModel', 'claude-haiku')
-        ->assertSet('reviewerEnabled', false);
+        ->assertSet('providerId.reviewer', (string) $reviewerProvider->id)
+        ->assertSet('model.reviewer', 'claude-opus')
+        ->assertSet('enabled.reviewer', false)
+        ->assertSet('providerId.curateur', (string) $curatorProvider->id)
+        ->assertSet('model.curateur', 'claude-haiku')
+        ->assertSet('enabled.curateur', true);
 });
 
 test('runs the reviewer agent now via the review:generate command', function () {
@@ -77,7 +107,24 @@ test('runs the reviewer agent now via the review:generate command', function () 
         ]));
     });
 
-    Livewire::test('pages::agents')->call('runReviewerNow');
+    Livewire::test('pages::agents')->call('runAgentNow', 'reviewer');
+});
+
+test('runs the curateur agent now via the curator:todo command', function () {
+    $this->actingAs(User::factory()->create());
+
+    $provider = AiProvider::factory()->create();
+    AgentConfig::factory()->create(['agent_name' => 'curateur', 'ai_provider_id' => $provider->id]);
+
+    $this->mock(CuratorAgent::class, function ($mock) {
+        $mock->shouldReceive('isConfigured')->once()->andReturn(true);
+        $mock->shouldReceive('process')->once()->andReturn(AgentRun::factory()->create([
+            'agent_name' => 'curateur',
+            'status' => AgentRunStatus::Success,
+        ]));
+    });
+
+    Livewire::test('pages::agents')->call('runAgentNow', 'curateur');
 });
 
 test('shows the reviewer last run info', function () {
