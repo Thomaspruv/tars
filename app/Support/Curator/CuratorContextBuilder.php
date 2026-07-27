@@ -50,9 +50,22 @@ class CuratorContextBuilder
 
         return BrainDocument::where('path', 'not like', 'Profil/%')
             ->get()
+            ->filter(fn (BrainDocument $document): bool => self::isManagedPath($document->path))
             ->filter(fn (BrainDocument $document): bool => str_starts_with($document->path, 'TARS/')
                 || ($document->entities()->count() === 0 && $document->goals()->count() === 0))
             ->values();
+    }
+
+    /**
+     * Only the 5 documented vault folders are ever the curator's business —
+     * anything else (Hermes's own memory territory, whatever it's actually
+     * named, or a stray file outside the documented structure) is excluded.
+     */
+    public static function isManagedPath(string $path): bool
+    {
+        $topFolder = explode('/', $path)[0];
+
+        return in_array($topFolder, self::MANAGED_FOLDERS, true);
     }
 
     private function buildReferential(): string

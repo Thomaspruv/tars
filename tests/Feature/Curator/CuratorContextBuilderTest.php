@@ -38,6 +38,14 @@ test('tidy mission selects the whole sas plus unanchored notes, excluding Profil
         ->and($ids)->not->toContain($anchored->id);
 });
 
+test('tidy mission excludes unmanaged folders even when unanchored', function () {
+    BrainDocument::factory()->create(['path' => 'ActiveContext/session.md']);
+
+    $notes = (new CuratorContextBuilder)->notesToProcess('tidy');
+
+    expect($notes)->toBeEmpty();
+});
+
 test('assembles the referential, living map, notes, mcp calls and open tasks sections', function () {
     $lifeArea = LifeArea::factory()->create(['name' => 'Immobilier']);
     Entity::factory()->create(['name' => 'Appart Lilas', 'life_area_id' => $lifeArea->id]);
