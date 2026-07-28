@@ -26,13 +26,4 @@ enum BrainSuggestionAction: string
             self::CreateGoal => 'Créer un objectif',
         };
     }
-
-    /**
-     * Only these actions may ever be auto-applied — everything else always
-     * requires a human decision in the Rangement tab.
-     */
-    public function isAutoApplicable(): bool
-    {
-        return in_array($this, [self::CreateTask, self::CreateListItem], true);
-    }
 }

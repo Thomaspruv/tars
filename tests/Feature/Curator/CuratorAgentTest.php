@@ -9,6 +9,8 @@ use App\Models\BrainDocument;
 use App\Models\BrainSuggestion;
 use App\Models\Checklist;
 use App\Models\ChecklistItem;
+use App\Models\Goal;
+use App\Models\LifeArea;
 use App\Models\Task;
 use App\Support\Agents\AgentRunner;
 use App\Support\Brain\GitRepository;
@@ -75,6 +77,85 @@ test('creates a pending suggestion for a valid anchor action', function () {
     $suggestion = BrainSuggestion::firstOrFail();
     expect($suggestion->brain_document_id)->toBe($document->id)
         ->and($suggestion->status)->toBe(BrainSuggestionStatus::Pending);
+});
+
+test('auto-applies an anchor action at high confidence', function () {
+    AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
+    File::ensureDirectoryExists($this->vaultPath.'/Notes');
+    File::put($this->vaultPath.'/Notes/plombier.md', "---\ntype: note\n---\n\nLe plombier passe mardi.");
+    $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md', 'frontmatter' => ['type' => 'note']]);
+
+    $this->mock(GitRepository::class, function ($mock): void {
+        $mock->shouldReceive('commit')->once()->with(Mockery::type('string'), 'Notes/plombier.md', Mockery::type('string'));
+    });
+
+    $this->mock(AgentRunner::class, function ($mock) {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
+            'path' => 'Notes/plombier.md',
+            'action' => 'anchor',
+            'frontmatter' => ['entity' => 'Appart Lilas'],
+            'confidence' => 'high',
+            'reason' => 'Note liée au plombier de l\'appart Lilas.',
+        ]])]));
+    });
+
+    app(CuratorAgent::class)->process(AgentRunTrigger::Manual, 'tidy');
+
+    $suggestion = BrainSuggestion::firstOrFail();
+    expect($suggestion->brain_document_id)->toBe($document->id)
+        ->and($suggestion->status)->toBe(BrainSuggestionStatus::AutoApplied)
+        ->and(File::get($this->vaultPath.'/Notes/plombier.md'))->toContain('Appart Lilas');
+});
+
+test('auto-applies a move action at high confidence during the tidy mission', function () {
+    // Unlike create_task/create_list_item/create_goal, a successful move/merge
+    // deletes the source BrainDocument — which cascade-deletes the
+    // BrainSuggestion row itself (brain_document_id is cascadeOnDelete). So
+    // there's no suggestion row left to assert on here; the vault's git
+    // history is the durable record for this action type, not the DB.
+    AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
+    File::ensureDirectoryExists($this->vaultPath.'/Notes');
+    File::put($this->vaultPath.'/Notes/plombier.md', "---\ntype: note\n---\n\nLe plombier passe mardi.");
+    BrainDocument::factory()->create(['path' => 'Notes/plombier.md']);
+
+    $this->mock(GitRepository::class, fn ($mock) => $mock->shouldReceive('commitAll')->once());
+
+    $this->mock(AgentRunner::class, function ($mock) {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
+            'path' => 'Notes/plombier.md',
+            'action' => 'move',
+            'target' => 'Archives/plombier.md',
+            'confidence' => 'high',
+            'reason' => 'Périmé.',
+        ]])]));
+    });
+
+    app(CuratorAgent::class)->process(AgentRunTrigger::Manual, 'tidy');
+
+    expect(File::exists($this->vaultPath.'/Notes/plombier.md'))->toBeFalse()
+        ->and(File::exists($this->vaultPath.'/Archives/plombier.md'))->toBeTrue()
+        ->and(BrainDocument::where('path', 'Archives/plombier.md')->exists())->toBeTrue();
+});
+
+test('falls back to pending when an auto-applicable move is missing a target', function () {
+    AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
+    File::ensureDirectoryExists($this->vaultPath.'/Notes');
+    File::put($this->vaultPath.'/Notes/plombier.md', "---\ntype: note\n---\n\nLe plombier passe mardi.");
+    BrainDocument::factory()->create(['path' => 'Notes/plombier.md']);
+
+    $this->mock(AgentRunner::class, function ($mock) {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
+            'path' => 'Notes/plombier.md',
+            'action' => 'move',
+            'confidence' => 'high',
+            'reason' => 'Périmé.',
+        ]])]));
+    });
+
+    app(CuratorAgent::class)->process(AgentRunTrigger::Manual, 'tidy');
+
+    expect(BrainSuggestion::firstOrFail()->status)->toBe(BrainSuggestionStatus::Pending)
+        ->and(File::exists($this->vaultPath.'/Notes/plombier.md'))->toBeTrue();
 });
 
 test('skips a suggestion referencing an out-of-scope path', function () {
@@ -245,7 +326,58 @@ test('never auto-applies create_task at medium confidence', function () {
     expect(BrainSuggestion::firstOrFail()->status)->toBe(BrainSuggestionStatus::Pending);
 });
 
-test('never auto-applies create_goal even at high confidence', function () {
+test('auto-applies create_goal at high confidence when the life area resolves', function () {
+    AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
+    LifeArea::factory()->create(['name' => 'Perso']);
+    File::put($this->vaultPath.'/TARS/note.md', "---\ntype: a-traiter\n---\n\nNouvel objectif.");
+    BrainDocument::factory()->create(['path' => 'TARS/note.md', 'frontmatter' => ['type' => 'a-traiter']]);
+
+    $this->mock(GitRepository::class, fn ($mock) => $mock->shouldReceive('commit')->once());
+
+    $this->mock(AgentRunner::class, function ($mock) {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
+            'path' => 'TARS/note.md',
+            'action' => 'create_goal',
+            'frontmatter' => ['title' => 'Nouvel objectif', 'life_area' => 'Perso'],
+            'confidence' => 'high',
+            'reason' => 'x',
+        ]])]));
+    });
+
+    app(CuratorAgent::class)->process(AgentRunTrigger::Scheduled, 'todo');
+
+    $suggestion = BrainSuggestion::firstOrFail();
+    expect($suggestion->status)->toBe(BrainSuggestionStatus::AutoApplied)
+        ->and($suggestion->created_type)->toBe(Goal::class)
+        ->and(Goal::where('title', 'Nouvel objectif')->exists())->toBeTrue();
+});
+
+test('falls back to pending when create_goal at high confidence duplicates an existing goal', function () {
+    AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
+    LifeArea::factory()->create(['name' => 'Perso']);
+    Goal::factory()->create(['title' => 'Nouvel objectif']);
+    File::put($this->vaultPath.'/TARS/note.md', "---\ntype: a-traiter\n---\n\nNouvel objectif.");
+    BrainDocument::factory()->create(['path' => 'TARS/note.md', 'frontmatter' => ['type' => 'a-traiter']]);
+
+    $this->mock(GitRepository::class, fn ($mock) => $mock->shouldReceive('commit')->once());
+
+    $this->mock(AgentRunner::class, function ($mock) {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
+            'path' => 'TARS/note.md',
+            'action' => 'create_goal',
+            'frontmatter' => ['title' => 'Nouvel objectif', 'life_area' => 'Perso'],
+            'confidence' => 'high',
+            'reason' => 'x',
+        ]])]));
+    });
+
+    app(CuratorAgent::class)->process(AgentRunTrigger::Scheduled, 'todo');
+
+    expect(BrainSuggestion::firstOrFail()->status)->toBe(BrainSuggestionStatus::Pending)
+        ->and(Goal::where('title', 'Nouvel objectif')->count())->toBe(1);
+});
+
+test('falls back to pending when create_goal at high confidence has no resolvable life area', function () {
     AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
     File::put($this->vaultPath.'/TARS/note.md', "---\ntype: a-traiter\n---\n\nNouvel objectif.");
     BrainDocument::factory()->create(['path' => 'TARS/note.md', 'frontmatter' => ['type' => 'a-traiter']]);

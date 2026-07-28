@@ -14,14 +14,12 @@ use App\Models\BrainDocument;
 use App\Models\BrainSuggestion;
 use App\Models\Checklist;
 use App\Models\ChecklistItem;
+use App\Models\Goal;
 use App\Models\Task;
 use App\Support\Agents\AgentRunner;
-use App\Support\Brain\AnchorResolver;
 use App\Support\Brain\BrainSettings;
 use App\Support\Brain\GitRepository;
 use App\Support\FuzzyMatcher;
-use App\Support\QuickAdd\QuickAddParser;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Yaml\Yaml;
@@ -31,7 +29,7 @@ class CuratorAgent
     public function __construct(
         private readonly AgentRunner $runner,
         private readonly CuratorContextBuilder $contextBuilder,
-        private readonly AnchorResolver $anchorResolver,
+        private readonly SuggestionApplier $applier,
         private readonly FuzzyMatcher $fuzzyMatcher,
         private readonly BrainSettings $settings,
         private readonly GitRepository $git,
@@ -71,7 +69,7 @@ class CuratorAgent
         $notesByPath = $notes->keyBy('path');
 
         foreach ($items as $item) {
-            $this->processItem($item, $notesByPath, $mission, $run);
+            $this->processItem($item, $notesByPath, $run);
         }
 
         if ($mission === 'todo') {
@@ -118,7 +116,7 @@ class CuratorAgent
      * @param  array<string, mixed>  $item
      * @param  Collection<string, BrainDocument>  $notesByPath
      */
-    private function processItem(array $item, Collection $notesByPath, string $mission, AgentRun $run): void
+    private function processItem(array $item, Collection $notesByPath, AgentRun $run): void
     {
         if ($item['action'] === 'none') {
             return;
@@ -162,22 +160,63 @@ class CuratorAgent
             'agent_run_id' => $run->id,
         ];
 
-        if ($mission === 'todo' && $action->isAutoApplicable() && $confidence === SuggestionConfidence::High) {
-            $created = $this->tryAutoApply($action, $frontmatterPatch, $target);
+        $suggestion = BrainSuggestion::create([...$data, 'status' => BrainSuggestionStatus::Pending]);
 
-            if ($created) {
-                BrainSuggestion::create([
-                    ...$data,
-                    'status' => BrainSuggestionStatus::AutoApplied,
-                    'created_type' => $created::class,
-                    'created_id' => $created->getKey(),
-                ]);
-
-                return;
+        // Only genuine doubt should ever land in front of Thomas: below "high"
+        // confidence, or a plausible conflict with something that already
+        // exists. Everything else — including vault housekeeping and goal
+        // creation — auto-applies via the same SuggestionApplier the
+        // Rangement tab uses for a manual "Accepter".
+        if ($confidence === SuggestionConfidence::High && $this->hasNoConflict($action, $frontmatterPatch ?? [], $target)) {
+            try {
+                $this->applier->apply($suggestion);
+                $suggestion->update(['status' => BrainSuggestionStatus::AutoApplied]);
+            } catch (\Throwable $e) {
+                report($e);
             }
         }
+    }
 
-        BrainSuggestion::create([...$data, 'status' => BrainSuggestionStatus::Pending]);
+    /**
+     * @param  array<string, mixed>  $frontmatterPatch
+     */
+    private function hasNoConflict(BrainSuggestionAction $action, array $frontmatterPatch, ?string $target): bool
+    {
+        return match ($action) {
+            BrainSuggestionAction::CreateTask => $this->fuzzyMatcher->bestMatch(
+                Task::open()->get(),
+                trim((string) ($frontmatterPatch['title'] ?? '')),
+                fn (Task $task): string => $task->title
+            ) === null,
+            BrainSuggestionAction::CreateListItem => $this->hasNoDuplicateListItem($target, $frontmatterPatch),
+            BrainSuggestionAction::CreateGoal => $this->fuzzyMatcher->bestMatch(
+                Goal::all(),
+                trim((string) ($frontmatterPatch['title'] ?? '')),
+                fn (Goal $goal): string => $goal->title
+            ) === null,
+            default => true,
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $frontmatterPatch
+     */
+    private function hasNoDuplicateListItem(?string $target, array $frontmatterPatch): bool
+    {
+        if (! $target) {
+            return true;
+        }
+
+        $checklist = $this->fuzzyMatcher->bestMatch(Checklist::all(), $target, fn (Checklist $checklist): string => $checklist->name);
+
+        if (! $checklist) {
+            return true;
+        }
+
+        $openItems = $checklist->items()->whereNull('checked_at')->get();
+        $content = trim((string) ($frontmatterPatch['content'] ?? ''));
+
+        return $this->fuzzyMatcher->bestMatch($openItems, $content, fn (ChecklistItem $item): string => $item->content) === null;
     }
 
     private function isOutOfScope(string $path, BrainSuggestionAction $action): bool
@@ -199,75 +238,6 @@ class CuratorAgent
             ->where('status', BrainSuggestionStatus::Rejected->value)
             ->where('created_at', '>=', now()->subDays(30))
             ->exists();
-    }
-
-    /**
-     * @param  array<string, mixed>|null  $frontmatterPatch
-     */
-    private function tryAutoApply(BrainSuggestionAction $action, ?array $frontmatterPatch, ?string $target): ?Model
-    {
-        return match ($action) {
-            BrainSuggestionAction::CreateTask => $this->tryAutoCreateTask($frontmatterPatch),
-            BrainSuggestionAction::CreateListItem => $this->tryAutoCreateListItem($target, $frontmatterPatch),
-            default => null,
-        };
-    }
-
-    /**
-     * @param  array<string, mixed>|null  $frontmatterPatch
-     */
-    private function tryAutoCreateTask(?array $frontmatterPatch): ?Task
-    {
-        $title = trim((string) ($frontmatterPatch['title'] ?? ''));
-
-        if ($title === '' || $this->fuzzyMatcher->bestMatch(Task::open()->get(), $title, fn (Task $task): string => $task->title) !== null) {
-            return null;
-        }
-
-        $date = ! empty($frontmatterPatch['date']) ? (new QuickAddParser)->parse((string) $frontmatterPatch['date'])->date : null;
-        $entity = ! empty($frontmatterPatch['entity']) ? $this->anchorResolver->resolveEntity((string) $frontmatterPatch['entity']) : null;
-        $goal = ! empty($frontmatterPatch['goal']) ? $this->anchorResolver->resolveGoal((string) $frontmatterPatch['goal']) : null;
-
-        return Task::create([
-            'title' => $title,
-            'scheduled_date' => $date,
-            'entity_id' => $entity?->id,
-            'goal_id' => $goal?->id,
-            'status' => 'todo',
-        ]);
-    }
-
-    /**
-     * @param  array<string, mixed>|null  $frontmatterPatch
-     */
-    private function tryAutoCreateListItem(?string $target, ?array $frontmatterPatch): ?ChecklistItem
-    {
-        if (! $target) {
-            return null;
-        }
-
-        $checklist = $this->fuzzyMatcher->bestMatch(Checklist::all(), $target, fn (Checklist $checklist): string => $checklist->name);
-
-        if (! $checklist) {
-            return null;
-        }
-
-        $content = trim((string) ($frontmatterPatch['content'] ?? ''));
-
-        if ($content === '') {
-            return null;
-        }
-
-        $openItems = $checklist->items()->whereNull('checked_at')->get();
-
-        if ($this->fuzzyMatcher->bestMatch($openItems, $content, fn (ChecklistItem $item): string => $item->content) !== null) {
-            return null;
-        }
-
-        return $checklist->items()->create([
-            'content' => $content,
-            'position' => $checklist->items()->count(),
-        ]);
     }
 
     private function markProcessed(BrainDocument $document): void
