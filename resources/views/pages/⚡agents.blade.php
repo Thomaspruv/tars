@@ -255,105 +255,126 @@ new #[Title('Agents')] class extends Component
                     </div>
 
                     @php $knownModels = $this->knownModelsFor($name); @endphp
-                    <div
-                        class="mt-4 grid grid-cols-2 gap-2"
-                        wire:loading.class="opacity-50"
-                        wire:target="saveAgentConfig('{{ $name }}')"
-                    >
-                        <select wire:model.live="providerId.{{ $name }}" wire:loading.attr="disabled" wire:target="saveAgentConfig('{{ $name }}')" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
-                            <option value="">Fournisseur…</option>
-                            @foreach ($this->activeProviders as $provider)
-                                <option value="{{ $provider->id }}">{{ $provider->name }}</option>
-                            @endforeach
-                        </select>
-                        @if (count($knownModels))
-                            <select wire:model="model.{{ $name }}" wire:loading.attr="disabled" wire:target="saveAgentConfig('{{ $name }}')" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
-                                <option value="">modèle…</option>
-                                @foreach ($knownModels as $modelId)
-                                    <option value="{{ $modelId }}">{{ $modelId }}</option>
-                                @endforeach
-                            </select>
-                        @else
-                            <input
-                                type="text"
-                                wire:model="model.{{ $name }}"
-                                wire:loading.attr="disabled"
-                                wire:target="saveAgentConfig('{{ $name }}')"
-                                placeholder="modèle"
-                                class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)"
-                            />
-                        @endif
-                    </div>
-                    @error("providerId.{$name}") <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
-                    @error("model.{$name}") <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                    <div class="mt-5 border-t border-(--bd) pt-4">
+                        <p class="font-mono text-[10px] font-semibold uppercase tracking-wide text-(--mut)">Configuration</p>
 
-                    <div class="mt-3 flex items-center justify-end gap-2">
-                        @if (! empty($justSaved[$name]) && ! $errors->has("providerId.{$name}") && ! $errors->has("model.{$name}"))
-                            <p class="text-xs text-(--ok)" wire:loading.remove wire:target="saveAgentConfig('{{ $name }}')">✓ Enregistré</p>
-                        @endif
-                        <x-btn
-                            variant="secondary"
-                            class="!px-3 !py-1.5 text-xs"
-                            wire:click="saveAgentConfig('{{ $name }}')"
-                            wire:loading.attr="disabled"
+                        <div
+                            class="mt-3 grid grid-cols-2 gap-2"
+                            wire:loading.class="opacity-50"
                             wire:target="saveAgentConfig('{{ $name }}')"
                         >
-                            <span wire:loading wire:target="saveAgentConfig('{{ $name }}')">Enregistrement…</span>
-                            <span wire:loading.remove wire:target="saveAgentConfig('{{ $name }}')">Enregistrer</span>
-                        </x-btn>
+                            <select wire:model.live="providerId.{{ $name }}" wire:loading.attr="disabled" wire:target="saveAgentConfig('{{ $name }}')" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                                <option value="">Fournisseur…</option>
+                                @foreach ($this->activeProviders as $provider)
+                                    <option value="{{ $provider->id }}">{{ $provider->name }}</option>
+                                @endforeach
+                            </select>
+                            @if (count($knownModels))
+                                <select wire:model="model.{{ $name }}" wire:loading.attr="disabled" wire:target="saveAgentConfig('{{ $name }}')" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                                    <option value="">modèle…</option>
+                                    @foreach ($knownModels as $modelId)
+                                        <option value="{{ $modelId }}">{{ $modelId }}</option>
+                                    @endforeach
+                                </select>
+                            @else
+                                <input
+                                    type="text"
+                                    wire:model="model.{{ $name }}"
+                                    wire:loading.attr="disabled"
+                                    wire:target="saveAgentConfig('{{ $name }}')"
+                                    placeholder="modèle"
+                                    class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)"
+                                />
+                            @endif
+                        </div>
+                        @error("providerId.{$name}") <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                        @error("model.{$name}") <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+
+                        <div class="mt-3 flex items-center justify-end gap-2">
+                            @if (! empty($justSaved[$name]) && ! $errors->has("providerId.{$name}") && ! $errors->has("model.{$name}"))
+                                <p class="text-xs text-(--ok)" wire:loading.remove wire:target="saveAgentConfig('{{ $name }}')">✓ Enregistré</p>
+                            @endif
+                            <x-btn
+                                variant="secondary"
+                                class="!px-3 !py-1.5 text-xs"
+                                wire:click="saveAgentConfig('{{ $name }}')"
+                                wire:loading.attr="disabled"
+                                wire:target="saveAgentConfig('{{ $name }}')"
+                            >
+                                <span wire:loading wire:target="saveAgentConfig('{{ $name }}')">Enregistrement…</span>
+                                <span wire:loading.remove wire:target="saveAgentConfig('{{ $name }}')">Enregistrer</span>
+                            </x-btn>
+                        </div>
                     </div>
 
-                    <div class="mt-4 rounded-[10px] bg-(--surf2) px-3 py-2 font-mono text-[11px] text-(--mut)">
-                        @if ($lastRun)
-                            <x-badge-status :status="$lastRun->status->value" />
-                            {{ $lastRun->started_at->translatedFormat('d M · H:i') }}
-                            @if ($lastRun->finished_at)
-                                · {{ $lastRun->started_at->diffInSeconds($lastRun->finished_at) }}s
+                    <div class="mt-5 border-t border-(--bd) pt-4">
+                        <p class="font-mono text-[10px] font-semibold uppercase tracking-wide text-(--mut)">Dernier run</p>
+
+                        <div class="mt-3 rounded-[10px] bg-(--surf2) px-3 py-2 font-mono text-[11px] text-(--mut)">
+                            @if ($lastRun)
+                                <x-badge-status :status="$lastRun->status->value" />
+                                {{ $lastRun->started_at->translatedFormat('d M · H:i') }}
+                                @if ($lastRun->finished_at)
+                                    · {{ $lastRun->started_at->diffInSeconds($lastRun->finished_at) }}s
+                                @endif
+                                @if ($lastRun->tokens_in || $lastRun->tokens_out)
+                                    · {{ number_format(($lastRun->tokens_in ?? 0) + ($lastRun->tokens_out ?? 0)) }} tk
+                                @endif
+                            @else
+                                Aucun run pour l'instant.
                             @endif
-                            @if ($lastRun->tokens_in || $lastRun->tokens_out)
-                                · {{ number_format(($lastRun->tokens_in ?? 0) + ($lastRun->tokens_out ?? 0)) }} tk
-                            @endif
-                        @else
-                            Aucun run pour l'instant.
+                        </div>
+                    </div>
+
+                    <div class="mt-5 border-t border-(--bd) pt-4">
+                        <p class="font-mono text-[10px] font-semibold uppercase tracking-wide text-(--mut)">Lancer</p>
+
+                        @if ($name === 'reviewer')
+                            <div class="mt-3 grid grid-cols-3 gap-2">
+                                <div>
+                                    <label class="text-[10.5px] text-(--mut)">Type</label>
+                                    <select wire:model="reviewType" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                                        <option value="weekly">Hebdo</option>
+                                        <option value="monthly">Mensuelle</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-[10.5px] text-(--mut)">Début</label>
+                                    <input type="date" wire:model="reviewPeriodStart" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)" />
+                                </div>
+                                <div>
+                                    <label class="text-[10.5px] text-(--mut)">Fin</label>
+                                    <input type="date" wire:model="reviewPeriodEnd" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)" />
+                                </div>
+                            </div>
+                            <p class="mt-1.5 text-[10.5px] text-(--mut)">Début et fin laissés vides : période par défaut (depuis la dernière revue hebdo, ou 7 jours).</p>
+                        @endif
+
+                        @error("run.{$name}") <p class="mt-2 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                        @if (! empty($runMessage[$name]) && ! $errors->has("run.{$name}"))
+                            <p class="mt-2 text-xs text-(--ok)">{{ $runMessage[$name] }}</p>
+                        @endif
+
+                        @if ($name === 'reviewer')
+                            <div class="mt-3 flex justify-end">
+                                <x-btn variant="ai" wire:click="runReviewerNow" wire:loading.attr="disabled" wire:target="runReviewerNow">
+                                    <span wire:loading wire:target="runReviewerNow">En cours…</span>
+                                    <span wire:loading.remove wire:target="runReviewerNow">Lancer maintenant</span>
+                                </x-btn>
+                            </div>
+                        @elseif ($name === 'curateur')
+                            <div class="mt-3 flex justify-end gap-2">
+                                <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="runCuratorMission('todo')" wire:loading.attr="disabled" wire:target="runCuratorMission('todo')">
+                                    <span wire:loading wire:target="runCuratorMission('todo')">En cours…</span>
+                                    <span wire:loading.remove wire:target="runCuratorMission('todo')">Lancer la todo</span>
+                                </x-btn>
+                                <x-btn variant="ai" wire:click="runCuratorMission('tidy')" wire:loading.attr="disabled" wire:target="runCuratorMission('tidy')">
+                                    <span wire:loading wire:target="runCuratorMission('tidy')">En cours…</span>
+                                    <span wire:loading.remove wire:target="runCuratorMission('tidy')">Lancer le rangement</span>
+                                </x-btn>
+                            </div>
                         @endif
                     </div>
-
-                    @if ($name === 'reviewer')
-                        <div class="mt-4 grid grid-cols-3 gap-2">
-                            <select wire:model="reviewType" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
-                                <option value="weekly">Hebdo</option>
-                                <option value="monthly">Mensuelle</option>
-                            </select>
-                            <input type="date" wire:model="reviewPeriodStart" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)" />
-                            <input type="date" wire:model="reviewPeriodEnd" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)" />
-                        </div>
-                        <p class="mt-1 text-[10.5px] text-(--mut)">Dates laissées vides : période par défaut (depuis la dernière revue hebdo, ou 7 jours).</p>
-                    @endif
-
-                    @error("run.{$name}") <p class="mt-2 text-xs text-(--dgr)">{{ $message }}</p> @enderror
-                    @if (! empty($runMessage[$name]) && ! $errors->has("run.{$name}"))
-                        <p class="mt-2 text-xs text-(--ok)">{{ $runMessage[$name] }}</p>
-                    @endif
-
-                    @if ($name === 'reviewer')
-                        <div class="mt-3 flex justify-end">
-                            <x-btn variant="ai" wire:click="runReviewerNow" wire:loading.attr="disabled" wire:target="runReviewerNow">
-                                <span wire:loading wire:target="runReviewerNow">En cours…</span>
-                                <span wire:loading.remove wire:target="runReviewerNow">Lancer maintenant</span>
-                            </x-btn>
-                        </div>
-                    @elseif ($name === 'curateur')
-                        <div class="mt-3 flex justify-end gap-2">
-                            <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="runCuratorMission('todo')" wire:loading.attr="disabled" wire:target="runCuratorMission('todo')">
-                                <span wire:loading wire:target="runCuratorMission('todo')">En cours…</span>
-                                <span wire:loading.remove wire:target="runCuratorMission('todo')">Lancer la todo</span>
-                            </x-btn>
-                            <x-btn variant="ai" wire:click="runCuratorMission('tidy')" wire:loading.attr="disabled" wire:target="runCuratorMission('tidy')">
-                                <span wire:loading wire:target="runCuratorMission('tidy')">En cours…</span>
-                                <span wire:loading.remove wire:target="runCuratorMission('tidy')">Lancer le rangement</span>
-                            </x-btn>
-                        </div>
-                    @endif
                 </div>
             @else
                 <div class="rounded-[14px] border border-(--bd) bg-(--surf) p-5 opacity-55">
