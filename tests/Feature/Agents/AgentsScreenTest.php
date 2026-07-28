@@ -204,6 +204,29 @@ test('pulses the badge and auto-refreshes while a run is active', function () {
         ->assertSee('animate-pulse-soft', false);
 });
 
+test('offers a dropdown of known models once a known provider is selected', function () {
+    $this->actingAs(User::factory()->create());
+
+    $provider = AiProvider::factory()->create(['name' => 'deepseek']);
+
+    Livewire::test('pages::agents')
+        ->set('providerId.reviewer', (string) $provider->id)
+        ->assertSee('deepseek-v4-pro')
+        ->assertSee('deepseek-v4-flash');
+});
+
+test('falls back to a free text model field for an unrecognised provider', function () {
+    $this->actingAs(User::factory()->create());
+
+    $provider = AiProvider::factory()->create(['name' => 'my-custom-llm']);
+
+    Livewire::test('pages::agents')
+        ->set('providerId.reviewer', (string) $provider->id)
+        ->assertSeeHtml('placeholder="modèle"')
+        ->assertDontSee('deepseek-v4-pro')
+        ->assertDontSee('claude-sonnet-5');
+});
+
 test('shows the reviewer last run info', function () {
     $this->actingAs(User::factory()->create());
 

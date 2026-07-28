@@ -5,6 +5,7 @@ use App\Jobs\RunAgentCommandJob;
 use App\Models\AgentConfig;
 use App\Models\AgentRun;
 use App\Models\AiProvider;
+use App\Support\Agents\KnownModels;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -84,6 +85,20 @@ new #[Title('Agents')] class extends Component
     public function agentLastRun(string $agentName): ?AgentRun
     {
         return AgentRun::where('agent_name', $agentName)->latest('id')->first();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function knownModelsFor(string $agentName): array
+    {
+        $providerId = $this->providerId[$agentName] ?? '';
+
+        if ($providerId === '') {
+            return [];
+        }
+
+        return KnownModels::forProvider(AiProvider::find($providerId)?->name);
     }
 
     public function saveAgentConfig(string $agentName): void
@@ -224,19 +239,29 @@ new #[Title('Agents')] class extends Component
                         </label>
                     </div>
 
+                    @php $knownModels = $this->knownModelsFor($name); @endphp
                     <div class="mt-4 grid grid-cols-2 gap-2">
-                        <select wire:model="providerId.{{ $name }}" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                        <select wire:model.live="providerId.{{ $name }}" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
                             <option value="">Fournisseur…</option>
                             @foreach ($this->activeProviders as $provider)
                                 <option value="{{ $provider->id }}">{{ $provider->name }}</option>
                             @endforeach
                         </select>
-                        <input
-                            type="text"
-                            wire:model="model.{{ $name }}"
-                            placeholder="modèle"
-                            class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)"
-                        />
+                        @if (count($knownModels))
+                            <select wire:model="model.{{ $name }}" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                                <option value="">modèle…</option>
+                                @foreach ($knownModels as $modelId)
+                                    <option value="{{ $modelId }}">{{ $modelId }}</option>
+                                @endforeach
+                            </select>
+                        @else
+                            <input
+                                type="text"
+                                wire:model="model.{{ $name }}"
+                                placeholder="modèle"
+                                class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)"
+                            />
+                        @endif
                     </div>
                     @error("providerId.{$name}") <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
                     @error("model.{$name}") <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
