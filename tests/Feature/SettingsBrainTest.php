@@ -46,6 +46,24 @@ test('requires a valid sync frequency', function () {
         ->assertHasErrors(['brainSyncFrequency']);
 });
 
+test('confirms the vault configuration save with an inline message', function () {
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages::settings-app')
+        ->set('brainSyncFrequency', 30)
+        ->call('saveBrainSettings')
+        ->assertSee('✓ Enregistré');
+});
+
+test('does not confirm the vault configuration save when validation fails', function () {
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages::settings-app')
+        ->set('brainSyncFrequency', 0)
+        ->call('saveBrainSettings')
+        ->assertDontSee('✓ Enregistré');
+});
+
 test('tests the git connection', function () {
     $this->actingAs(User::factory()->create());
 

@@ -243,28 +243,31 @@ new #[Title('Objectif')] class extends Component
     </div>
 
     <flux:modal wire:model.self="showEditModal" class="md:w-[420px]">
-        <div class="space-y-5">
+        <div class="space-y-5" wire:loading.class="opacity-50" wire:target="saveEdit">
             <flux:heading size="lg">Modifier l'objectif</flux:heading>
 
             <div>
                 <label class="text-xs text-(--mut)">Titre</label>
-                <input type="text" wire:model="editTitle" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)" />
+                <input type="text" wire:model="editTitle" wire:loading.attr="disabled" wire:target="saveEdit" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)" />
                 @error('editTitle') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
             </div>
 
             <div>
                 <label class="text-xs text-(--mut)">Échéance</label>
-                <input type="date" wire:model="editTargetDate" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)" />
+                <input type="date" wire:model="editTargetDate" wire:loading.attr="disabled" wire:target="saveEdit" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)" />
             </div>
 
             <div>
                 <label class="text-xs text-(--mut)">Description</label>
-                <textarea wire:model="editDescription" rows="3" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)"></textarea>
+                <textarea wire:model="editDescription" wire:loading.attr="disabled" wire:target="saveEdit" rows="3" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)"></textarea>
             </div>
 
             <div class="flex justify-end gap-2">
-                <x-btn variant="ghost" wire:click="$set('showEditModal', false)">Annuler</x-btn>
-                <x-btn variant="primary" wire:click="saveEdit">Enregistrer</x-btn>
+                <x-btn variant="ghost" wire:click="$set('showEditModal', false)" wire:loading.attr="disabled" wire:target="saveEdit">Annuler</x-btn>
+                <x-btn variant="primary" wire:click="saveEdit" wire:loading.attr="disabled" wire:target="saveEdit">
+                    <span wire:loading wire:target="saveEdit">Enregistrement…</span>
+                    <span wire:loading.remove wire:target="saveEdit">Enregistrer</span>
+                </x-btn>
             </div>
         </div>
     </flux:modal>

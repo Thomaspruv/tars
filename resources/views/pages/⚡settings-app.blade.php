@@ -76,6 +76,10 @@ new #[Title('Réglages')] class extends Component
 
     public bool $reviewNotificationsEnabled = false;
 
+    public bool $brainSettingsSaved = false;
+
+    public bool $reviewSettingsSaved = false;
+
     public function mount(): void
     {
         $settings = app(BrainSettings::class);
@@ -95,6 +99,8 @@ new #[Title('Réglages')] class extends Component
 
     public function saveReviewSettings(): void
     {
+        $this->reviewSettingsSaved = false;
+
         $validated = $this->validate([
             'reviewWeeklyTime' => ['required', 'date_format:H:i'],
             'reviewNotificationEmail' => ['nullable', 'email'],
@@ -104,6 +110,8 @@ new #[Title('Réglages')] class extends Component
         $settings = app(ReviewSettings::class);
         $settings->updateWeeklyTime($validated['reviewWeeklyTime']);
         $settings->updateNotifications($validated['reviewNotificationEmail'] ?: null, $validated['reviewNotificationsEnabled']);
+
+        $this->reviewSettingsSaved = true;
     }
 
     #[Computed]
@@ -262,6 +270,8 @@ new #[Title('Réglages')] class extends Component
 
     public function saveBrainSettings(): void
     {
+        $this->brainSettingsSaved = false;
+
         $validated = $this->validate([
             'brainRemoteUrl' => ['nullable', 'string', 'max:255'],
             'brainBranch' => ['required', 'string', 'max:255'],
@@ -277,6 +287,8 @@ new #[Title('Réglages')] class extends Component
         ]);
 
         unset($this->brainConfigured, $this->brainStatus);
+
+        $this->brainSettingsSaved = true;
     }
 
     public function testBrainConnection(): void
@@ -404,12 +416,14 @@ new #[Title('Réglages')] class extends Component
         <h2 class="text-base font-semibold text-(--tx)">Cerveau</h2>
 
         <div class="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <form wire:submit="saveBrainSettings" class="space-y-4 rounded-[14px] border border-(--bd) bg-(--surf) p-5">
+            <form wire:submit="saveBrainSettings" class="space-y-4 rounded-[14px] border border-(--bd) bg-(--surf) p-5" wire:loading.class="opacity-50" wire:target="saveBrainSettings">
                 <div>
                     <label class="text-xs text-(--mut)">URL du remote git</label>
                     <input
                         type="text"
                         wire:model="brainRemoteUrl"
+                        wire:loading.attr="disabled"
+                        wire:target="saveBrainSettings"
                         placeholder="git@example.com:vault.git"
                         class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)"
                     />
@@ -418,18 +432,18 @@ new #[Title('Réglages')] class extends Component
 
                 <div>
                     <label class="text-xs text-(--mut)">Branche</label>
-                    <input type="text" wire:model="brainBranch" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)" />
+                    <input type="text" wire:model="brainBranch" wire:loading.attr="disabled" wire:target="saveBrainSettings" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)" />
                     @error('brainBranch') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
                 </div>
 
                 <div>
                     <label class="text-xs text-(--mut)">Fréquence de sync (minutes)</label>
-                    <input type="number" min="1" wire:model="brainSyncFrequency" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)" />
+                    <input type="number" min="1" wire:model="brainSyncFrequency" wire:loading.attr="disabled" wire:target="saveBrainSettings" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)" />
                     @error('brainSyncFrequency') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
                 </div>
 
                 <label class="flex items-center gap-2 text-sm text-(--tx)">
-                    <input type="checkbox" wire:model="brainAutoIndex" class="rounded-[4px] border-(--bd2) text-(--ac) focus:ring-0" />
+                    <input type="checkbox" wire:model="brainAutoIndex" wire:loading.attr="disabled" wire:target="saveBrainSettings" class="rounded-[4px] border-(--bd2) text-(--ac) focus:ring-0" />
                     Indexation automatique
                 </label>
 
@@ -437,8 +451,14 @@ new #[Title('Réglages')] class extends Component
                     @if ($brainTestMessage)
                         <p class="mr-auto text-xs {{ $brainTestSuccessful ? 'text-(--ok)' : 'text-(--dgr)' }}">{{ $brainTestMessage }}</p>
                     @endif
-                    <x-btn type="button" variant="secondary" wire:click="testBrainConnection">Tester la connexion</x-btn>
-                    <x-btn type="submit" variant="primary">Enregistrer</x-btn>
+                    @if ($brainSettingsSaved)
+                        <p class="text-xs text-(--ok)" wire:loading.remove wire:target="saveBrainSettings">✓ Enregistré</p>
+                    @endif
+                    <x-btn type="button" variant="secondary" wire:click="testBrainConnection" wire:loading.attr="disabled" wire:target="saveBrainSettings">Tester la connexion</x-btn>
+                    <x-btn type="submit" variant="primary" wire:loading.attr="disabled" wire:target="saveBrainSettings">
+                        <span wire:loading wire:target="saveBrainSettings">Enregistrement…</span>
+                        <span wire:loading.remove wire:target="saveBrainSettings">Enregistrer</span>
+                    </x-btn>
                 </div>
             </form>
 
@@ -638,12 +658,14 @@ new #[Title('Réglages')] class extends Component
     <div class="mt-8">
         <h2 class="text-base font-semibold text-(--tx)">Revue</h2>
 
-        <div class="mt-4 space-y-3 rounded-[14px] border border-(--bd) bg-(--surf) p-4">
+        <div class="mt-4 space-y-3 rounded-[14px] border border-(--bd) bg-(--surf) p-4" wire:loading.class="opacity-50" wire:target="saveReviewSettings">
             <div class="flex items-center gap-3">
                 <label class="text-sm text-(--tx)">Heure de la revue hebdomadaire (dimanche)</label>
                 <input
                     type="time"
                     wire:model="reviewWeeklyTime"
+                    wire:loading.attr="disabled"
+                    wire:target="saveReviewSettings"
                     class="rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-1.5 font-mono text-sm text-(--tx)"
                 />
             </div>
@@ -654,6 +676,8 @@ new #[Title('Réglages')] class extends Component
                 <input
                     type="email"
                     wire:model="reviewNotificationEmail"
+                    wire:loading.attr="disabled"
+                    wire:target="saveReviewSettings"
                     placeholder="toi@exemple.com"
                     class="flex-1 rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-1.5 text-sm text-(--tx)"
                 />
@@ -661,18 +685,24 @@ new #[Title('Réglages')] class extends Component
             @error('reviewNotificationEmail') <p class="text-xs text-(--dgr)">{{ $message }}</p> @enderror
 
             <label class="flex items-center gap-2 text-sm text-(--tx)">
-                <input type="checkbox" wire:model="reviewNotificationsEnabled" class="rounded-[4px] border-(--bd2) text-(--ac) focus:ring-0" />
+                <input type="checkbox" wire:model="reviewNotificationsEnabled" wire:loading.attr="disabled" wire:target="saveReviewSettings" class="rounded-[4px] border-(--bd2) text-(--ac) focus:ring-0" />
                 Recevoir un email quand une revue est générée
             </label>
 
-            <div class="flex justify-end">
-                <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="saveReviewSettings">Enregistrer</x-btn>
+            <div class="flex items-center justify-end gap-2">
+                @if ($reviewSettingsSaved)
+                    <p class="text-xs text-(--ok)" wire:loading.remove wire:target="saveReviewSettings">✓ Enregistré</p>
+                @endif
+                <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="saveReviewSettings" wire:loading.attr="disabled" wire:target="saveReviewSettings">
+                    <span wire:loading wire:target="saveReviewSettings">Enregistrement…</span>
+                    <span wire:loading.remove wire:target="saveReviewSettings">Enregistrer</span>
+                </x-btn>
             </div>
         </div>
     </div>
 
     <flux:modal wire:model.self="showProviderModal" class="md:w-[420px]">
-        <div class="space-y-5">
+        <div class="space-y-5" wire:loading.class="opacity-50" wire:target="saveProvider">
             <flux:heading size="lg">{{ $editingProviderId ? 'Modifier le fournisseur' : 'Nouveau fournisseur' }}</flux:heading>
 
             <div>
@@ -680,6 +710,8 @@ new #[Title('Réglages')] class extends Component
                 <input
                     type="text"
                     wire:model="providerName"
+                    wire:loading.attr="disabled"
+                    wire:target="saveProvider"
                     placeholder="anthropic, openai, deepseek…"
                     class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)"
                 />
@@ -691,6 +723,8 @@ new #[Title('Réglages')] class extends Component
                 <input
                     type="password"
                     wire:model="providerApiKey"
+                    wire:loading.attr="disabled"
+                    wire:target="saveProvider"
                     placeholder="{{ $editingProviderId ? 'Laisser vide pour conserver la clé actuelle' : '' }}"
                     class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)"
                 />
@@ -702,6 +736,8 @@ new #[Title('Réglages')] class extends Component
                 <input
                     type="text"
                     wire:model="providerBaseUrl"
+                    wire:loading.attr="disabled"
+                    wire:target="saveProvider"
                     placeholder="https://api.deepseek.com"
                     class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)"
                 />
@@ -709,24 +745,27 @@ new #[Title('Réglages')] class extends Component
             </div>
 
             <label class="flex items-center gap-2 text-sm text-(--tx)">
-                <input type="checkbox" wire:model="providerIsActive" class="rounded-[4px] border-(--bd2) text-(--ac) focus:ring-0" />
+                <input type="checkbox" wire:model="providerIsActive" wire:loading.attr="disabled" wire:target="saveProvider" class="rounded-[4px] border-(--bd2) text-(--ac) focus:ring-0" />
                 Actif
             </label>
 
             <div class="flex justify-end gap-2">
-                <x-btn variant="ghost" wire:click="$set('showProviderModal', false)">Annuler</x-btn>
-                <x-btn variant="primary" wire:click="saveProvider">Enregistrer</x-btn>
+                <x-btn variant="ghost" wire:click="$set('showProviderModal', false)" wire:loading.attr="disabled" wire:target="saveProvider">Annuler</x-btn>
+                <x-btn variant="primary" wire:click="saveProvider" wire:loading.attr="disabled" wire:target="saveProvider">
+                    <span wire:loading wire:target="saveProvider">Enregistrement…</span>
+                    <span wire:loading.remove wire:target="saveProvider">Enregistrer</span>
+                </x-btn>
             </div>
         </div>
     </flux:modal>
 
     <flux:modal wire:model.self="showFormModal" class="md:w-[380px]">
-        <div class="space-y-5">
+        <div class="space-y-5" wire:loading.class="opacity-50" wire:target="save">
             <flux:heading size="lg">{{ $editingLifeAreaId ? 'Modifier le domaine' : 'Nouveau domaine' }}</flux:heading>
 
             <div>
                 <label class="text-xs text-(--mut)">Nom</label>
-                <input type="text" wire:model="name" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)" />
+                <input type="text" wire:model="name" wire:loading.attr="disabled" wire:target="save" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)" />
                 @error('name') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
             </div>
 
@@ -737,6 +776,8 @@ new #[Title('Réglages')] class extends Component
                         <button
                             type="button"
                             wire:click="$set('color', '{{ $preset }}')"
+                            wire:loading.attr="disabled"
+                            wire:target="save"
                             class="size-7 rounded-full {{ $color === $preset ? 'ring-2 ring-(--tx) ring-offset-2 ring-offset-(--surf)' : '' }}"
                             style="background: {{ $preset }}"
                             aria-label="{{ $preset }}"
@@ -746,8 +787,11 @@ new #[Title('Réglages')] class extends Component
             </div>
 
             <div class="flex justify-end gap-2">
-                <x-btn variant="ghost" wire:click="$set('showFormModal', false)">Annuler</x-btn>
-                <x-btn variant="primary" wire:click="save">Enregistrer</x-btn>
+                <x-btn variant="ghost" wire:click="$set('showFormModal', false)" wire:loading.attr="disabled" wire:target="save">Annuler</x-btn>
+                <x-btn variant="primary" wire:click="save" wire:loading.attr="disabled" wire:target="save">
+                    <span wire:loading wire:target="save">Enregistrement…</span>
+                    <span wire:loading.remove wire:target="save">Enregistrer</span>
+                </x-btn>
             </div>
         </div>
     </flux:modal>

@@ -52,3 +52,21 @@ test('rejects an invalid review notification email', function () {
         ->call('saveReviewSettings')
         ->assertHasErrors(['reviewNotificationEmail']);
 });
+
+test('confirms the review settings save with an inline message', function () {
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages::settings-app')
+        ->set('reviewWeeklyTime', '19:30')
+        ->call('saveReviewSettings')
+        ->assertSee('✓ Enregistré');
+});
+
+test('does not confirm the review settings save when validation fails', function () {
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages::settings-app')
+        ->set('reviewWeeklyTime', 'not-a-time')
+        ->call('saveReviewSettings')
+        ->assertDontSee('✓ Enregistré');
+});
