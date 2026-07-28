@@ -56,6 +56,10 @@ class AgentRunner
                     $data['usage']['completion_tokens'] ?? null,
                 ];
 
+            if (trim((string) $text) === '') {
+                throw new \RuntimeException('Réponse vide ou illisible du fournisseur.');
+            }
+
             $run->update([
                 'status' => AgentRunStatus::Success,
                 'output' => $text,

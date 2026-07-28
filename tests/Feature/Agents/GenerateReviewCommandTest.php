@@ -11,12 +11,22 @@ use Illuminate\Support\Carbon;
 
 afterEach(fn () => Carbon::setTestNow());
 
-test('does nothing when the reviewer agent is not configured', function () {
+test('warns and fails manually when the reviewer agent is not configured', function () {
     $this->mock(AgentRunner::class, function ($mock): void {
         $mock->shouldNotReceive('run');
     });
 
-    $this->artisan('review:generate')->assertExitCode(0);
+    $this->artisan('review:generate')->assertExitCode(1);
+
+    expect(Review::count())->toBe(0);
+});
+
+test('skips silently when scheduled and the reviewer agent is not configured', function () {
+    $this->mock(AgentRunner::class, function ($mock): void {
+        $mock->shouldNotReceive('run');
+    });
+
+    $this->artisan('review:generate --scheduled')->assertExitCode(0);
 
     expect(Review::count())->toBe(0);
 });

@@ -103,6 +103,24 @@ test('resolves an entity by name when answering a decision', function () {
     expect(Decision::firstOrFail()->entity_id)->toBe($entity->id);
 });
 
+test('resolves a goal by a fuzzy match when it was renamed after the review was generated', function () {
+    $this->actingAs(User::factory()->create());
+
+    $goal = Goal::factory()->create(['title' => 'Courir un semi-marathon en octobre']);
+
+    $review = Review::factory()->create([
+        'proposed_decisions' => [
+            ['question' => 'On garde le rythme ?', 'goal' => 'Courir un semi-marathon', 'entity' => null, 'response' => null, 'answered_at' => null],
+        ],
+    ]);
+
+    Livewire::test('pages::review')
+        ->call('selectReview', $review->id)
+        ->call('answerDecision', 0, 'oui');
+
+    expect(Decision::firstOrFail()->goal_id)->toBe($goal->id);
+});
+
 test('saves user notes on blur', function () {
     $this->actingAs(User::factory()->create());
 

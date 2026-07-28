@@ -75,6 +75,31 @@ test('logs a failed run without throwing when the api errors', function () {
         ->and($run->output)->toBeNull();
 });
 
+test('logs a failed run when a 2xx response has no usable text', function () {
+    Http::fake(['*/chat/completions' => Http::response(['choices' => [['message' => ['content' => '']]]], 200)]);
+
+    $provider = AiProvider::factory()->create(['name' => 'openai']);
+    $config = AgentConfig::factory()->create(['ai_provider_id' => $provider->id]);
+
+    $run = (new AgentRunner)->run($config, 'system', [['role' => 'user', 'content' => 'hi']], AgentRunTrigger::Manual);
+
+    expect($run->status)->toBe(AgentRunStatus::Failed)
+        ->and($run->output)->toBeNull()
+        ->and($run->error)->not->toBeNull();
+});
+
+test('logs a failed run when the 2xx response body is unparseable', function () {
+    Http::fake(['*/chat/completions' => Http::response('not json', 200)]);
+
+    $provider = AiProvider::factory()->create(['name' => 'openai']);
+    $config = AgentConfig::factory()->create(['ai_provider_id' => $provider->id]);
+
+    $run = (new AgentRunner)->run($config, 'system', [['role' => 'user', 'content' => 'hi']], AgentRunTrigger::Manual);
+
+    expect($run->status)->toBe(AgentRunStatus::Failed)
+        ->and($run->output)->toBeNull();
+});
+
 test('never stores the api key in agent_runs.input', function () {
     Http::fake(['*/chat/completions' => Http::response([
         'choices' => [['message' => ['content' => 'ok']]],

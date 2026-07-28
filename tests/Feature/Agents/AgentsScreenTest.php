@@ -1,12 +1,12 @@
 <?php
 
 use App\Enums\AgentRunStatus;
+use App\Jobs\RunAgentCommandJob;
 use App\Models\AgentConfig;
 use App\Models\AgentRun;
 use App\Models\AiProvider;
 use App\Models\User;
-use App\Support\Agents\AgentRunner;
-use App\Support\Curator\CuratorAgent;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 
 test('shows an interactive card for reviewer and curateur, and a greyed out card for triage and planner', function () {
@@ -93,38 +93,44 @@ test('hydrates each agent form from its own existing configuration', function ()
         ->assertSet('enabled.curateur', true);
 });
 
-test('runs the reviewer agent now via the review:generate command', function () {
+test('queues the reviewer run instead of blocking on the LLM call', function () {
+    Queue::fake();
     $this->actingAs(User::factory()->create());
 
     $provider = AiProvider::factory()->create();
-    AgentConfig::factory()->create(['agent_name' => 'reviewer', 'ai_provider_id' => $provider->id]);
+    AgentConfig::factory()->create(['agent_name' => 'reviewer', 'ai_provider_id' => $provider->id, 'enabled' => true]);
 
-    $this->mock(AgentRunner::class, function ($mock) {
-        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->make([
-            'agent_name' => 'reviewer',
-            'status' => AgentRunStatus::Success,
-            'output' => 'Revue générée.',
-        ]));
-    });
+    Livewire::test('pages::agents')
+        ->call('runAgentNow', 'reviewer')
+        ->assertHasNoErrors()
+        ->assertSee('file d\'attente');
 
-    Livewire::test('pages::agents')->call('runAgentNow', 'reviewer');
+    Queue::assertPushed(RunAgentCommandJob::class, fn ($job): bool => $job->command === 'review:generate');
 });
 
-test('runs the curateur agent now via the curator:todo command', function () {
+test('queues the curateur run instead of blocking on the LLM call', function () {
+    Queue::fake();
     $this->actingAs(User::factory()->create());
 
     $provider = AiProvider::factory()->create();
-    AgentConfig::factory()->create(['agent_name' => 'curateur', 'ai_provider_id' => $provider->id]);
+    AgentConfig::factory()->create(['agent_name' => 'curateur', 'ai_provider_id' => $provider->id, 'enabled' => true]);
 
-    $this->mock(CuratorAgent::class, function ($mock) {
-        $mock->shouldReceive('isConfigured')->once()->andReturn(true);
-        $mock->shouldReceive('process')->once()->andReturn(AgentRun::factory()->create([
-            'agent_name' => 'curateur',
-            'status' => AgentRunStatus::Success,
-        ]));
-    });
+    Livewire::test('pages::agents')
+        ->call('runAgentNow', 'curateur')
+        ->assertHasNoErrors();
 
-    Livewire::test('pages::agents')->call('runAgentNow', 'curateur');
+    Queue::assertPushed(RunAgentCommandJob::class, fn ($job): bool => $job->command === 'curator:todo');
+});
+
+test('running a disabled/unconfigured reviewer surfaces an error and does not queue anything', function () {
+    Queue::fake();
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages::agents')
+        ->call('runAgentNow', 'reviewer')
+        ->assertHasErrors(['run.reviewer']);
+
+    Queue::assertNotPushed(RunAgentCommandJob::class);
 });
 
 test('shows the reviewer last run info', function () {

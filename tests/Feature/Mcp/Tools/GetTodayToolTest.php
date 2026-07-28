@@ -4,6 +4,10 @@ use App\Mcp\Servers\TarsServer;
 use App\Mcp\Tools\GetTodayTool;
 use App\Models\Event;
 use App\Models\Task;
+use App\Support\Review\ReviewSettings;
+use Illuminate\Support\Carbon;
+
+afterEach(fn () => Carbon::setTestNow());
 
 test("summarizes today's tasks, upcoming events and next review", function () {
     Task::factory()->create(['title' => 'Tâche du jour', 'status' => 'todo', 'scheduled_date' => today()]);
@@ -21,4 +25,17 @@ test('says when nothing is scheduled', function () {
         ->assertOk()
         ->assertSee('Aucune tâche.')
         ->assertSee('Aucun événement à venir.');
+});
+
+test('says the review is today when the configured weekly time has not passed yet', function () {
+    Carbon::setTestNow(Carbon::parse('2024-01-07 10:00:00')); // a Sunday, before the default 17:00
+
+    TarsServer::tool(GetTodayTool::class)->assertOk()->assertSee("prévue aujourd'hui");
+});
+
+test('respects a custom weekly review time', function () {
+    Carbon::setTestNow(Carbon::parse('2024-01-07 19:00:00')); // a Sunday at 19:00
+    (new ReviewSettings)->updateWeeklyTime('20:00');
+
+    TarsServer::tool(GetTodayTool::class)->assertOk()->assertSee("prévue aujourd'hui");
 });

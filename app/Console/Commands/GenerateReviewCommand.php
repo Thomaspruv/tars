@@ -36,11 +36,13 @@ class GenerateReviewCommand extends Command
         }
 
         if (! $reviewerAgent->isConfigured()) {
-            if (! $scheduled) {
-                $this->warn("Le reviewer n'est pas configuré.");
+            if ($scheduled) {
+                return self::SUCCESS;
             }
 
-            return self::SUCCESS;
+            $this->warn("Le reviewer n'est pas configuré.");
+
+            return self::FAILURE;
         }
 
         $review = $reviewerAgent->generate($type, $periodStart, $periodEnd, $trigger);

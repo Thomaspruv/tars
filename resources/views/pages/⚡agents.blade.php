@@ -1,11 +1,11 @@
 <?php
 
 use App\Enums\AgentName;
+use App\Jobs\RunAgentCommandJob;
 use App\Models\AgentConfig;
 use App\Models\AgentRun;
 use App\Models\AiProvider;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\Artisan;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -106,15 +106,19 @@ new #[Title('Agents')] class extends Component
             return;
         }
 
-        $exitCode = Artisan::call($command);
+        // Fail fast synchronously on the cheap "is it configured" check — the
+        // actual LLM call is queued so a slow provider can't block this request
+        // up to AgentRunner's 120s HTTP timeout.
+        if (! AgentConfig::where('agent_name', $agentName)->where('enabled', true)->exists()) {
+            $this->addError("run.{$agentName}", ucfirst($agentName)." n'est pas configuré.");
 
-        $this->runMessage[$agentName] = trim(Artisan::output()) ?: '';
-
-        unset($this->runHistory, $this->historyAgents, $this->tokensThisMonth);
-
-        if ($exitCode !== 0) {
-            $this->addError("run.{$agentName}", $this->runMessage[$agentName] ?: 'Échec du lancement.');
+            return;
         }
+
+        RunAgentCommandJob::dispatch($command);
+
+        $this->runMessage[$agentName] = 'Lancement en cours, mis en file d\'attente…';
+        $this->resetErrorBag("run.{$agentName}");
     }
 
     /**

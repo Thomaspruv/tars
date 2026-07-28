@@ -5,6 +5,7 @@ use App\Models\Decision;
 use App\Models\Entity;
 use App\Models\Goal;
 use App\Models\Review;
+use App\Support\FuzzyMatcher;
 use Illuminate\Database\Eloquent\Collection;
 use League\CommonMark\CommonMarkConverter;
 use Livewire\Attributes\Computed;
@@ -73,13 +74,15 @@ new #[Title('Revue')] class extends Component
         $item = $decisions[$index];
         $labels = ['oui' => 'Oui', 'non' => 'Non', 'plus_tard' => 'Reporté'];
 
+        $matcher = app(FuzzyMatcher::class);
+
         Decision::create([
             'content' => $item['question'],
             'context' => 'Réponse : '.$labels[$response],
             'source' => DecisionSource::Review,
             'review_id' => $review->id,
-            'goal_id' => $item['goal'] ? Goal::where('title', $item['goal'])->value('id') : null,
-            'entity_id' => $item['entity'] ? Entity::where('name', $item['entity'])->value('id') : null,
+            'goal_id' => $item['goal'] ? $matcher->bestMatch(Goal::all(), $item['goal'], fn (Goal $g): string => $g->title)?->id : null,
+            'entity_id' => $item['entity'] ? $matcher->bestMatch(Entity::all(), $item['entity'], fn (Entity $e): string => $e->name)?->id : null,
             'decided_at' => now(),
         ]);
 

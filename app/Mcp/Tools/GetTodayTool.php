@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Models\Event;
 use App\Models\Task;
+use App\Support\Review\ReviewSettings;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Carbon;
 use Laravel\Mcp\Request;
@@ -25,8 +26,10 @@ class GetTodayTool extends LoggedTool
         $tasks = Task::forToday()->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('priority')->get();
         $events = Event::whereBetween('starts_at', [today(), today()->addDays(7)->endOfDay()])->orderBy('starts_at')->get();
 
+        $weeklyTime = app(ReviewSettings::class)->weeklyTime();
         $today = today();
-        $nextReview = $today->isSunday() && now()->hour < 17 ? $today->copy() : $today->copy()->next(Carbon::SUNDAY);
+        $todayIsDue = $today->isSunday() && now()->format('H:i') < $weeklyTime;
+        $nextReview = $todayIsDue ? $today->copy() : $today->copy()->next(Carbon::SUNDAY);
         $daysUntilReview = (int) $today->diffInDays($nextReview);
 
         $taskLines = $tasks->isEmpty()
