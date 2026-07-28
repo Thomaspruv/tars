@@ -698,13 +698,14 @@ new #[Title('Réglages')] class extends Component
             </div>
 
             <div>
-                <label class="text-xs text-(--mut)">Base URL (optionnel, endpoints compatibles OpenAI)</label>
+                <label class="text-xs text-(--mut)">Base URL — requis pour tout fournisseur autre qu'OpenAI ou Anthropic (ex. DeepSeek : https://api.deepseek.com)</label>
                 <input
                     type="text"
                     wire:model="providerBaseUrl"
-                    placeholder="https://api.exemple.com/v1"
+                    placeholder="https://api.deepseek.com"
                     class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)"
                 />
+                <p class="mt-1 text-[10.5px] text-(--mut)">Laissé vide, l'appel part vers l'API OpenAI officielle — la clé d'un autre fournisseur y sera toujours rejetée.</p>
             </div>
 
             <label class="flex items-center gap-2 text-sm text-(--tx)">
