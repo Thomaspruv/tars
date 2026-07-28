@@ -101,14 +101,47 @@ test('queues the reviewer run instead of blocking on the LLM call', function () 
     AgentConfig::factory()->create(['agent_name' => 'reviewer', 'ai_provider_id' => $provider->id, 'enabled' => true]);
 
     Livewire::test('pages::agents')
-        ->call('runAgentNow', 'reviewer')
+        ->call('runReviewerNow')
         ->assertHasNoErrors()
         ->assertSee('file d\'attente');
 
-    Queue::assertPushed(RunAgentCommandJob::class, fn ($job): bool => $job->command === 'review:generate');
+    Queue::assertPushed(RunAgentCommandJob::class, fn ($job): bool => $job->command === 'review:generate' && $job->arguments === ['--type' => 'weekly']);
 });
 
-test('queues the curateur run instead of blocking on the LLM call', function () {
+test('queues the reviewer run with a free period and type when provided', function () {
+    Queue::fake();
+    $this->actingAs(User::factory()->create());
+
+    $provider = AiProvider::factory()->create();
+    AgentConfig::factory()->create(['agent_name' => 'reviewer', 'ai_provider_id' => $provider->id, 'enabled' => true]);
+
+    Livewire::test('pages::agents')
+        ->set('reviewType', 'monthly')
+        ->set('reviewPeriodStart', '2024-01-01')
+        ->set('reviewPeriodEnd', '2024-01-31')
+        ->call('runReviewerNow')
+        ->assertHasNoErrors();
+
+    Queue::assertPushed(RunAgentCommandJob::class, fn ($job): bool => $job->command === 'review:generate'
+        && $job->arguments === ['--type' => 'monthly', '--start' => '2024-01-01', '--end' => '2024-01-31']);
+});
+
+test('requires both period dates or neither when launching the reviewer', function () {
+    Queue::fake();
+    $this->actingAs(User::factory()->create());
+
+    $provider = AiProvider::factory()->create();
+    AgentConfig::factory()->create(['agent_name' => 'reviewer', 'ai_provider_id' => $provider->id, 'enabled' => true]);
+
+    Livewire::test('pages::agents')
+        ->set('reviewPeriodStart', '2024-01-01')
+        ->call('runReviewerNow')
+        ->assertHasErrors(['run.reviewer']);
+
+    Queue::assertNotPushed(RunAgentCommandJob::class);
+});
+
+test('queues the curateur todo run instead of blocking on the LLM call', function () {
     Queue::fake();
     $this->actingAs(User::factory()->create());
 
@@ -116,10 +149,24 @@ test('queues the curateur run instead of blocking on the LLM call', function () 
     AgentConfig::factory()->create(['agent_name' => 'curateur', 'ai_provider_id' => $provider->id, 'enabled' => true]);
 
     Livewire::test('pages::agents')
-        ->call('runAgentNow', 'curateur')
+        ->call('runCuratorMission', 'todo')
         ->assertHasNoErrors();
 
     Queue::assertPushed(RunAgentCommandJob::class, fn ($job): bool => $job->command === 'curator:todo');
+});
+
+test('queues the curateur tidy run instead of blocking on the LLM call', function () {
+    Queue::fake();
+    $this->actingAs(User::factory()->create());
+
+    $provider = AiProvider::factory()->create();
+    AgentConfig::factory()->create(['agent_name' => 'curateur', 'ai_provider_id' => $provider->id, 'enabled' => true]);
+
+    Livewire::test('pages::agents')
+        ->call('runCuratorMission', 'tidy')
+        ->assertHasNoErrors();
+
+    Queue::assertPushed(RunAgentCommandJob::class, fn ($job): bool => $job->command === 'curator:tidy');
 });
 
 test('running a disabled/unconfigured reviewer surfaces an error and does not queue anything', function () {
@@ -127,10 +174,34 @@ test('running a disabled/unconfigured reviewer surfaces an error and does not qu
     $this->actingAs(User::factory()->create());
 
     Livewire::test('pages::agents')
-        ->call('runAgentNow', 'reviewer')
+        ->call('runReviewerNow')
         ->assertHasErrors(['run.reviewer']);
 
     Queue::assertNotPushed(RunAgentCommandJob::class);
+});
+
+test('running a disabled/unconfigured curateur surfaces an error and does not queue anything', function () {
+    Queue::fake();
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages::agents')
+        ->call('runCuratorMission', 'todo')
+        ->assertHasErrors(['run.curateur']);
+
+    Queue::assertNotPushed(RunAgentCommandJob::class);
+});
+
+test('pulses the badge and auto-refreshes while a run is active', function () {
+    $this->actingAs(User::factory()->create());
+
+    AgentRun::factory()->create([
+        'agent_name' => 'reviewer',
+        'status' => AgentRunStatus::Running,
+    ]);
+
+    Livewire::test('pages::agents')
+        ->assertSee('wire:poll.5s', false)
+        ->assertSee('animate-pulse-soft', false);
 });
 
 test('shows the reviewer last run info', function () {

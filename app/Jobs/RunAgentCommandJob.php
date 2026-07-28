@@ -10,10 +10,16 @@ class RunAgentCommandJob implements ShouldQueue
 {
     use Queueable;
 
-    public function __construct(public readonly string $command) {}
+    /**
+     * @param  array<string, mixed>  $arguments
+     */
+    public function __construct(
+        public readonly string $command,
+        public readonly array $arguments = [],
+    ) {}
 
     public function handle(): void
     {
-        Artisan::call($this->command);
+        Artisan::call($this->command, $this->arguments);
     }
 }

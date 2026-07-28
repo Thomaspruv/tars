@@ -11,8 +11,14 @@ use Carbon\CarbonInterface;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 
-#[Signature('review:generate {--scheduled : Only fire at the configured day/time, and skip if already generated today}')]
+#[Signature('review:generate
+    {--scheduled : Only fire at the configured day/time, and skip if already generated today}
+    {--type= : weekly or monthly — manual runs only, defaults to weekly}
+    {--start= : Period start date (Y-m-d) — manual runs only, requires --end}
+    {--end= : Period end date (Y-m-d) — manual runs only, requires --start}'
+)]
 #[Description("Génère la revue via l'agent reviewer")]
 class GenerateReviewCommand extends Command
 {
@@ -30,8 +36,8 @@ class GenerateReviewCommand extends Command
             [$type, $periodStart, $periodEnd] = $due;
             $trigger = AgentRunTrigger::Scheduled;
         } else {
-            $type = ReviewType::Weekly;
-            [$periodStart, $periodEnd] = $this->weeklyPeriod();
+            $type = $this->option('type') === 'monthly' ? ReviewType::Monthly : ReviewType::Weekly;
+            [$periodStart, $periodEnd] = $this->manualPeriod();
             $trigger = AgentRunTrigger::Manual;
         }
 
@@ -103,5 +109,24 @@ class GenerateReviewCommand extends Command
         $periodStart = $lastWeekly ? $lastWeekly->period_end->copy()->addDay() : now()->copy()->subDays(7);
 
         return [$periodStart, now()->copy()];
+    }
+
+    /**
+     * A manual run is free to cover whatever period the caller asks for
+     * (--start/--end) — falls back to the usual "since the last weekly
+     * review, or 7 days back" default when neither is given.
+     *
+     * @return array{0: CarbonInterface, 1: CarbonInterface}
+     */
+    private function manualPeriod(): array
+    {
+        $start = $this->option('start');
+        $end = $this->option('end');
+
+        if ($start && $end) {
+            return [Carbon::parse($start)->startOfDay(), Carbon::parse($end)->endOfDay()];
+        }
+
+        return $this->weeklyPeriod();
     }
 }

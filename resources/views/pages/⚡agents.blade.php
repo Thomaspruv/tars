@@ -12,9 +12,9 @@ use Livewire\Component;
 
 new #[Title('Agents')] class extends Component
 {
-    private const array RUN_COMMANDS = [
-        'reviewer' => 'review:generate',
-        'curateur' => 'curator:todo',
+    private const array CURATOR_MISSIONS = [
+        'todo' => 'curator:todo',
+        'tidy' => 'curator:tidy',
     ];
 
     /** @var array<string, string> */
@@ -36,6 +36,12 @@ new #[Title('Agents')] class extends Component
     public string $historyFilterPeriod = '';
 
     public ?int $selectedRunId = null;
+
+    public string $reviewType = 'weekly';
+
+    public string $reviewPeriodStart = '';
+
+    public string $reviewPeriodEnd = '';
 
     public function mount(): void
     {
@@ -98,27 +104,54 @@ new #[Title('Agents')] class extends Component
         );
     }
 
-    public function runAgentNow(string $agentName): void
+    public function runReviewerNow(): void
     {
-        $command = self::RUN_COMMANDS[$agentName] ?? null;
+        // Fail fast synchronously on the cheap "is it configured" check — the
+        // actual LLM call is queued so a slow provider can't block this request
+        // up to AgentRunner's 120s HTTP timeout.
+        if (! AgentConfig::where('agent_name', 'reviewer')->where('enabled', true)->exists()) {
+            $this->addError('run.reviewer', "Reviewer n'est pas configuré.");
+
+            return;
+        }
+
+        if (($this->reviewPeriodStart === '') !== ($this->reviewPeriodEnd === '')) {
+            $this->addError('run.reviewer', 'Renseigne une date de début et de fin, ou aucune des deux.');
+
+            return;
+        }
+
+        $arguments = ['--type' => $this->reviewType];
+
+        if ($this->reviewPeriodStart !== '' && $this->reviewPeriodEnd !== '') {
+            $arguments['--start'] = $this->reviewPeriodStart;
+            $arguments['--end'] = $this->reviewPeriodEnd;
+        }
+
+        RunAgentCommandJob::dispatch('review:generate', $arguments);
+
+        $this->runMessage['reviewer'] = 'Lancement en cours, mis en file d\'attente…';
+        $this->resetErrorBag('run.reviewer');
+    }
+
+    public function runCuratorMission(string $mission): void
+    {
+        $command = self::CURATOR_MISSIONS[$mission] ?? null;
 
         if (! $command) {
             return;
         }
 
-        // Fail fast synchronously on the cheap "is it configured" check — the
-        // actual LLM call is queued so a slow provider can't block this request
-        // up to AgentRunner's 120s HTTP timeout.
-        if (! AgentConfig::where('agent_name', $agentName)->where('enabled', true)->exists()) {
-            $this->addError("run.{$agentName}", ucfirst($agentName)." n'est pas configuré.");
+        if (! AgentConfig::where('agent_name', 'curateur')->where('enabled', true)->exists()) {
+            $this->addError('run.curateur', "Curateur n'est pas configuré.");
 
             return;
         }
 
         RunAgentCommandJob::dispatch($command);
 
-        $this->runMessage[$agentName] = 'Lancement en cours, mis en file d\'attente…';
-        $this->resetErrorBag("run.{$agentName}");
+        $this->runMessage['curateur'] = 'Lancement en cours, mis en file d\'attente…';
+        $this->resetErrorBag('run.curateur');
     }
 
     /**
@@ -165,7 +198,7 @@ new #[Title('Agents')] class extends Component
 };
 ?>
 
-<div>
+<div wire:poll.5s="$refresh">
     <div class="flex items-center justify-between">
         <h1 class="text-[28px] font-bold tracking-[-0.02em] text-(--tx)">Agents</h1>
         <p class="font-mono text-xs text-(--mut)">{{ number_format($this->tokensThisMonth) }} tokens ce mois-ci</p>
@@ -227,17 +260,42 @@ new #[Title('Agents')] class extends Component
                         @endif
                     </div>
 
+                    @if ($name === 'reviewer')
+                        <div class="mt-4 grid grid-cols-3 gap-2">
+                            <select wire:model="reviewType" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                                <option value="weekly">Hebdo</option>
+                                <option value="monthly">Mensuelle</option>
+                            </select>
+                            <input type="date" wire:model="reviewPeriodStart" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)" />
+                            <input type="date" wire:model="reviewPeriodEnd" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)" />
+                        </div>
+                        <p class="mt-1 text-[10.5px] text-(--mut)">Dates laissées vides : période par défaut (depuis la dernière revue hebdo, ou 7 jours).</p>
+                    @endif
+
                     @error("run.{$name}") <p class="mt-2 text-xs text-(--dgr)">{{ $message }}</p> @enderror
                     @if (! empty($runMessage[$name]) && ! $errors->has("run.{$name}"))
                         <p class="mt-2 text-xs text-(--ok)">{{ $runMessage[$name] }}</p>
                     @endif
 
-                    <div class="mt-3 flex justify-end">
-                        <x-btn variant="ai" wire:click="runAgentNow('{{ $name }}')" wire:loading.attr="disabled" wire:target="runAgentNow('{{ $name }}')">
-                            <span wire:loading wire:target="runAgentNow('{{ $name }}')">En cours…</span>
-                            <span wire:loading.remove wire:target="runAgentNow('{{ $name }}')">Lancer maintenant</span>
-                        </x-btn>
-                    </div>
+                    @if ($name === 'reviewer')
+                        <div class="mt-3 flex justify-end">
+                            <x-btn variant="ai" wire:click="runReviewerNow" wire:loading.attr="disabled" wire:target="runReviewerNow">
+                                <span wire:loading wire:target="runReviewerNow">En cours…</span>
+                                <span wire:loading.remove wire:target="runReviewerNow">Lancer maintenant</span>
+                            </x-btn>
+                        </div>
+                    @elseif ($name === 'curateur')
+                        <div class="mt-3 flex justify-end gap-2">
+                            <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="runCuratorMission('todo')" wire:loading.attr="disabled" wire:target="runCuratorMission('todo')">
+                                <span wire:loading wire:target="runCuratorMission('todo')">En cours…</span>
+                                <span wire:loading.remove wire:target="runCuratorMission('todo')">Lancer la todo</span>
+                            </x-btn>
+                            <x-btn variant="ai" wire:click="runCuratorMission('tidy')" wire:loading.attr="disabled" wire:target="runCuratorMission('tidy')">
+                                <span wire:loading wire:target="runCuratorMission('tidy')">En cours…</span>
+                                <span wire:loading.remove wire:target="runCuratorMission('tidy')">Lancer le rangement</span>
+                            </x-btn>
+                        </div>
+                    @endif
                 </div>
             @else
                 <div class="rounded-[14px] border border-(--bd) bg-(--surf) p-5 opacity-55">

@@ -22,6 +22,10 @@
     ];
 
     [$style, $defaultLabel] = $map[$value] ?? ['bg-(--surf2) text-(--mut)', ucfirst((string) $value)];
+
+    if ($value === 'running') {
+        $style .= ' animate-pulse-soft';
+    }
 @endphp
 
 <span {{ $attributes->merge(['class' => 'inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium '.$style]) }}>

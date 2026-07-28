@@ -104,6 +104,35 @@ test('scheduled runs skip the weekly review when one was already generated today
     expect(Review::count())->toBe(1);
 });
 
+test('a manual run can request the monthly type explicitly', function () {
+    AgentConfig::factory()->create(['agent_name' => 'reviewer', 'enabled' => true]);
+
+    $this->mock(AgentRunner::class, function ($mock): void {
+        $mock->shouldReceive('run')
+            ->once()
+            ->andReturn(AgentRun::factory()->make(['status' => AgentRunStatus::Success, 'output' => 'ok']));
+    });
+
+    $this->artisan('review:generate --type=monthly')->assertExitCode(0);
+
+    expect(Review::first()->type)->toBe(ReviewType::Monthly);
+});
+
+test('a manual run can request a free period via --start and --end', function () {
+    AgentConfig::factory()->create(['agent_name' => 'reviewer', 'enabled' => true]);
+
+    $this->mock(AgentRunner::class, function ($mock): void {
+        $mock->shouldReceive('run')
+            ->once()
+            ->andReturn(AgentRun::factory()->make(['status' => AgentRunStatus::Success, 'output' => 'ok']));
+    });
+
+    $this->artisan('review:generate --start=2024-01-01 --end=2024-01-15')->assertExitCode(0);
+
+    expect(Review::first()->period_start->toDateString())->toBe('2024-01-01')
+        ->and(Review::first()->period_end->toDateString())->toBe('2024-01-15');
+});
+
 test('scheduled runs generate the monthly review on the first of the month at the configured time', function () {
     Carbon::setTestNow(Carbon::parse('2024-02-01 18:00:00'));
     AgentConfig::factory()->create(['agent_name' => 'reviewer', 'enabled' => true]);
