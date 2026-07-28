@@ -11,6 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // A prior deploy failed on the identifier-length bug fixed below —
+        // Laravel compiles a composite unique() into a *separate* ALTER TABLE
+        // after the CREATE TABLE, so that failure left the bare table behind
+        // without recording this migration as run. Drop it first so this
+        // migration is safe to re-run from that broken state.
+        Schema::dropIfExists('entity_relations');
+
         Schema::create('entity_relations', function (Blueprint $table) {
             $table->id();
             $table->foreignId('entity_id')->constrained()->cascadeOnDelete();
