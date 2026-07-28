@@ -66,6 +66,28 @@ test('requires a provider and model to save an agent configuration', function ()
         ->assertHasErrors(['providerId.reviewer', 'model.reviewer']);
 });
 
+test('confirms the save with an inline message', function () {
+    $this->actingAs(User::factory()->create());
+
+    $provider = AiProvider::factory()->create(['is_active' => true]);
+
+    Livewire::test('pages::agents')
+        ->set('providerId.reviewer', (string) $provider->id)
+        ->set('model.reviewer', 'claude-opus')
+        ->call('saveAgentConfig', 'reviewer')
+        ->assertSee('Enregistré');
+});
+
+test('does not confirm the save when validation fails', function () {
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages::agents')
+        ->set('providerId.reviewer', '')
+        ->set('model.reviewer', '')
+        ->call('saveAgentConfig', 'reviewer')
+        ->assertDontSee('✓ Enregistré');
+});
+
 test('hydrates each agent form from its own existing configuration', function () {
     $this->actingAs(User::factory()->create());
 

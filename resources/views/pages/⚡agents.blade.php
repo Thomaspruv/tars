@@ -30,6 +30,9 @@ new #[Title('Agents')] class extends Component
     /** @var array<string, string> */
     public array $runMessage = [];
 
+    /** @var array<string, bool> */
+    public array $justSaved = [];
+
     public string $historyFilterAgent = '';
 
     public string $historyFilterStatus = '';
@@ -103,6 +106,8 @@ new #[Title('Agents')] class extends Component
 
     public function saveAgentConfig(string $agentName): void
     {
+        $this->justSaved[$agentName] = false;
+
         $validated = $this->validate([
             "providerId.{$agentName}" => ['required', 'exists:ai_providers,id'],
             "model.{$agentName}" => ['required', 'string', 'max:255'],
@@ -117,6 +122,8 @@ new #[Title('Agents')] class extends Component
                 'enabled' => $validated['enabled'][$agentName],
             ]
         );
+
+        $this->justSaved[$agentName] = true;
     }
 
     public function runReviewerNow(): void
@@ -234,21 +241,33 @@ new #[Title('Agents')] class extends Component
                             <p class="text-xs text-(--mut)">{{ $agentName->description() }}</p>
                         </div>
                         <label class="ml-auto flex items-center gap-2 text-xs text-(--mut)">
-                            <input type="checkbox" wire:model="enabled.{{ $name }}" wire:change="saveAgentConfig('{{ $name }}')" class="rounded-[4px] border-(--bd2) text-(--ai) focus:ring-0" />
+                            <input
+                                type="checkbox"
+                                wire:model="enabled.{{ $name }}"
+                                wire:change="saveAgentConfig('{{ $name }}')"
+                                wire:loading.attr="disabled"
+                                wire:loading.class="opacity-50"
+                                wire:target="saveAgentConfig('{{ $name }}')"
+                                class="rounded-[4px] border-(--bd2) text-(--ai) focus:ring-0"
+                            />
                             Activé
                         </label>
                     </div>
 
                     @php $knownModels = $this->knownModelsFor($name); @endphp
-                    <div class="mt-4 grid grid-cols-2 gap-2">
-                        <select wire:model.live="providerId.{{ $name }}" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                    <div
+                        class="mt-4 grid grid-cols-2 gap-2"
+                        wire:loading.class="opacity-50"
+                        wire:target="saveAgentConfig('{{ $name }}')"
+                    >
+                        <select wire:model.live="providerId.{{ $name }}" wire:loading.attr="disabled" wire:target="saveAgentConfig('{{ $name }}')" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
                             <option value="">Fournisseur…</option>
                             @foreach ($this->activeProviders as $provider)
                                 <option value="{{ $provider->id }}">{{ $provider->name }}</option>
                             @endforeach
                         </select>
                         @if (count($knownModels))
-                            <select wire:model="model.{{ $name }}" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                            <select wire:model="model.{{ $name }}" wire:loading.attr="disabled" wire:target="saveAgentConfig('{{ $name }}')" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
                                 <option value="">modèle…</option>
                                 @foreach ($knownModels as $modelId)
                                     <option value="{{ $modelId }}">{{ $modelId }}</option>
@@ -258,6 +277,8 @@ new #[Title('Agents')] class extends Component
                             <input
                                 type="text"
                                 wire:model="model.{{ $name }}"
+                                wire:loading.attr="disabled"
+                                wire:target="saveAgentConfig('{{ $name }}')"
                                 placeholder="modèle"
                                 class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)"
                             />
@@ -266,8 +287,20 @@ new #[Title('Agents')] class extends Component
                     @error("providerId.{$name}") <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
                     @error("model.{$name}") <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
 
-                    <div class="mt-3 flex justify-end">
-                        <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="saveAgentConfig('{{ $name }}')">Enregistrer</x-btn>
+                    <div class="mt-3 flex items-center justify-end gap-2">
+                        @if (! empty($justSaved[$name]) && ! $errors->has("providerId.{$name}") && ! $errors->has("model.{$name}"))
+                            <p class="text-xs text-(--ok)" wire:loading.remove wire:target="saveAgentConfig('{{ $name }}')">✓ Enregistré</p>
+                        @endif
+                        <x-btn
+                            variant="secondary"
+                            class="!px-3 !py-1.5 text-xs"
+                            wire:click="saveAgentConfig('{{ $name }}')"
+                            wire:loading.attr="disabled"
+                            wire:target="saveAgentConfig('{{ $name }}')"
+                        >
+                            <span wire:loading wire:target="saveAgentConfig('{{ $name }}')">Enregistrement…</span>
+                            <span wire:loading.remove wire:target="saveAgentConfig('{{ $name }}')">Enregistrer</span>
+                        </x-btn>
                     </div>
 
                     <div class="mt-4 rounded-[10px] bg-(--surf2) px-3 py-2 font-mono text-[11px] text-(--mut)">
