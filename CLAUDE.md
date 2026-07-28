@@ -37,6 +37,8 @@ The section below `<laravel-boost-guidelines>` is auto-managed by `laravel/boost
 
 **Testing**: Pest only auto-applies `RefreshDatabase` to `tests/Feature` (see `tests/Pest.php`); `tests/Unit` (e.g. `RecurrenceCalculatorTest`) runs against plain `PHPUnit\Framework\TestCase` with no database.
 
+**Local dev and tests run on SQLite (`DB_CONNECTION=sqlite`); production runs on MySQL.** SQLite doesn't enforce MySQL's 64-character identifier limit, so a migration can pass `composer test` and work fine locally while still failing to deploy with `Identifier name '...' is too long` the moment it hits MySQL — this bit us once with an auto-generated multi-column unique-index name on `entity_relations` (`entity_relations_entity_id_related_entity_id_relation_type_unique`, 65 chars). When adding a `unique([...])` or multi-column index across more than two columns, or on a table with a long name, pass an explicit short name as the second argument (e.g. `$table->unique([...], 'entity_relations_unique')`, matching the existing `brain_document_anchors_unique` precedent) instead of relying on Laravel's auto-generated `{table}_{col1}_{col2}_..._unique` name. If in doubt, count the characters or test the migration against a real MySQL instance before considering it done — SQLite passing is not sufficient proof for this specific failure mode.
+
 <laravel-boost-guidelines>
 === foundation rules ===
 

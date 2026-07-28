@@ -19,7 +19,7 @@ return new class extends Migration
             $table->text('note')->nullable();
             $table->timestamps();
 
-            $table->unique(['entity_id', 'related_entity_id', 'relation_type']);
+            $table->unique(['entity_id', 'related_entity_id', 'relation_type'], 'entity_relations_unique');
         });
     }
 
