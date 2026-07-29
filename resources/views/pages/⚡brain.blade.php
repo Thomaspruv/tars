@@ -296,12 +296,13 @@ new #[Title('Cerveau')] class extends Component
 ?>
 
 <div>
-    <div class="flex items-center justify-between">
-        <h1 class="text-[28px] font-bold tracking-[-0.02em] text-(--tx)">Cerveau</h1>
+    <x-screen-header treatment="work" title="Cerveau">
         @if ($this->configured && $activeTab === 'browse')
-            <x-btn variant="primary" wire:click="openCreateModal">+ Nouvelle note</x-btn>
+            <x-slot:actions>
+                <x-btn variant="primary" wire:click="openCreateModal">+ Nouvelle note</x-btn>
+            </x-slot:actions>
         @endif
-    </div>
+    </x-screen-header>
 
     <div class="mt-4 flex gap-1 border-b border-(--bd)">
         <button
@@ -331,13 +332,13 @@ new #[Title('Cerveau')] class extends Component
 
             <div class="space-y-3">
                 @forelse ($this->pendingSuggestions as $suggestion)
-                    <div class="rounded-[14px] border border-(--bd) bg-(--surf) p-4 {{ $suggestion->deprioritized_at ? 'opacity-60' : '' }}" wire:key="suggestion-{{ $suggestion->id }}">
+                    <div class="rounded-[12px] border border-(--bd) bg-(--surf) p-4 {{ $suggestion->deprioritized_at ? 'opacity-60' : '' }}" wire:key="suggestion-{{ $suggestion->id }}">
                         <div class="flex items-start justify-between gap-4">
                             <div>
                                 <p class="text-sm text-(--tx)">{{ $suggestion->reason }}</p>
                                 <p class="mt-1 font-mono text-[10.5px] text-(--mut)">{{ $suggestion->brainDocument->path }}</p>
                             </div>
-                            <x-badge-status :status="$suggestion->confidence->value === 'high' ? 'active' : 'paused'" :label="$suggestion->confidence->value" />
+                            <x-badge type="status" :value="$suggestion->confidence->value === 'high' ? 'active' : 'paused'" :label="$suggestion->confidence->value" />
                         </div>
 
                         <details class="mt-2">
@@ -363,7 +364,7 @@ new #[Title('Cerveau')] class extends Component
                         </div>
                     </div>
                 @empty
-                    <p class="rounded-[14px] border border-(--bd) bg-(--surf) p-8 text-center text-sm text-(--mut)">Aucune suggestion en attente.</p>
+                    <p class="rounded-[12px] border border-(--bd) bg-(--surf) p-8 text-center text-sm text-(--mut)">Aucune suggestion en attente.</p>
                 @endforelse
             </div>
 
@@ -388,7 +389,7 @@ new #[Title('Cerveau')] class extends Component
 
     @if ($activeTab === 'browse')
     @if (! $this->configured)
-        <div class="mt-8 rounded-[14px] border border-(--bd) bg-(--surf) p-8 text-center">
+        <div class="mt-8 rounded-[12px] border border-(--bd) bg-(--surf) p-8 text-center">
             <p class="text-sm text-(--mut)">Vault non configuré.</p>
             <a href="{{ route('settings.index') }}" wire:navigate class="mt-2 inline-block text-sm text-(--ac) hover:text-(--achov)">
                 Configurer le vault dans les Réglages →
@@ -425,7 +426,7 @@ new #[Title('Cerveau')] class extends Component
 
             <div>
                 @if (! $this->selectedDocument)
-                    <div class="rounded-[14px] border border-(--bd) bg-(--surf) p-8 text-center">
+                    <div class="rounded-[12px] border border-(--bd) bg-(--surf) p-8 text-center">
                         <p class="text-sm text-(--mut)">Sélectionne une note dans l'arborescence ou la recherche.</p>
                     </div>
                 @else

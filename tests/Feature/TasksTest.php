@@ -68,7 +68,9 @@ test('it computes the orphan ratio', function () {
     Task::factory()->create(['goal_id' => null]);
 
     Livewire::test('pages::tasks')
-        ->assertSee('2/3 sans objectif · 67%');
+        ->assertSee('2/3')
+        ->assertSee('sans objectif')
+        ->assertSee('67%');
 });
 
 test('it toggles a task', function () {

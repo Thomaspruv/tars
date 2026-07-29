@@ -109,44 +109,30 @@ new #[Title('Revue')] class extends Component
 
 <div class="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_260px]">
     <div>
-        <div class="flex items-center justify-between">
-            <h1 class="text-[28px] font-bold tracking-[-0.02em] text-(--tx)">Revue</h1>
-            @if ($this->currentReview)
-                <span class="inline-flex items-center gap-1.5 rounded-full bg-(--aibg) px-2.5 py-1 font-mono text-[11px] text-(--ai)">
-                    ◈ générée {{ $this->currentReview->created_at->translatedFormat('D. H:i') }}
-                </span>
-            @endif
-        </div>
+        <x-screen-header
+            treatment="ai"
+            title="Revue"
+            :kicker="$this->currentReview ? 'générée '.$this->currentReview->created_at->translatedFormat('D. H:i') : null"
+        />
 
         @if (! $this->currentReview)
-            <p class="mt-6 rounded-[14px] border border-(--bd) bg-(--surf) p-8 text-center text-sm text-(--mut)">
+            <p class="mt-6 rounded-[12px] border border-(--bd) bg-(--surf) p-8 text-center text-sm text-(--mut)">
                 Aucune revue pour l'instant. Configure l'agent <span class="font-mono text-(--ai)">reviewer</span> dans l'écran Agents puis lance-la manuellement.
             </p>
         @else
-            <div class="brain-content mt-6 rounded-[14px] border border-(--bd) bg-(--surf) p-6">
+            <div class="brain-content mt-6 rounded-[12px] border border-(--bd) bg-(--surf) p-6">
                 {!! $this->renderedMarkdown !!}
             </div>
 
             @if (! empty($this->currentReview->proposed_decisions))
                 <div class="mt-6 space-y-3">
                     @foreach ($this->currentReview->proposed_decisions as $index => $decision)
-                        <div
-                            class="rounded-[10px] border-l-2 bg-(--surf) p-4 {{ $decision['response'] ? 'border-(--ok) opacity-60' : 'border-(--ac)' }}"
+                        <x-card-decision
+                            :decision="$decision"
+                            :index="$index"
+                            :total="count($this->currentReview->proposed_decisions)"
                             wire:key="decision-{{ $index }}"
-                        >
-                            <p class="font-mono text-[10.5px] font-semibold tracking-[.08em] text-(--ac) uppercase">Décision {{ $index + 1 }}/{{ count($this->currentReview->proposed_decisions) }}</p>
-                            <p class="mt-1 text-[14.5px] text-(--tx)">{{ $decision['question'] }}</p>
-
-                            @if ($decision['response'])
-                                <p class="mt-2 text-xs text-(--ok)">✓ {{ ['oui' => 'Oui', 'non' => 'Non', 'plus_tard' => 'Reporté'][$decision['response']] ?? $decision['response'] }} — enregistré au journal de décisions</p>
-                            @else
-                                <div class="mt-3 flex gap-2">
-                                    <x-btn variant="primary" class="!px-3 !py-1.5 text-xs" wire:click="answerDecision({{ $index }}, 'oui')">Oui</x-btn>
-                                    <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="answerDecision({{ $index }}, 'non')">Non</x-btn>
-                                    <x-btn variant="ghost" class="!px-3 !py-1.5 text-xs" wire:click="answerDecision({{ $index }}, 'plus_tard')">Plus tard</x-btn>
-                                </div>
-                            @endif
-                        </div>
+                        />
                     @endforeach
                 </div>
             @endif

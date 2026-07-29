@@ -85,13 +85,11 @@ new #[Title('Entités')] class extends Component
 ?>
 
 <div>
-    <div class="flex items-center justify-between">
-        <div>
-            <h1 class="text-[28px] font-bold tracking-[-0.02em] text-(--tx)">Entités</h1>
-            <p class="mt-1 text-sm text-(--mut)">Elles se maintiennent, elles ne progressent pas.</p>
-        </div>
-        <x-btn variant="primary" wire:click="openCreateModal">+ Nouvelle entité</x-btn>
-    </div>
+    <x-screen-header treatment="work" title="Entités" subtitle="Elles se maintiennent, elles ne progressent pas.">
+        <x-slot:actions>
+            <x-btn variant="primary" wire:click="openCreateModal">+ Nouvelle entité</x-btn>
+        </x-slot:actions>
+    </x-screen-header>
 
     <div class="mt-8 grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr))">
         @forelse ($this->entities as $entity)

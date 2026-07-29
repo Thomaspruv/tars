@@ -316,13 +316,13 @@ new #[Title('Réglages')] class extends Component
 ?>
 
 <div>
-    <h1 class="text-[28px] font-bold tracking-[-0.02em] text-(--tx)">Réglages</h1>
+    <x-screen-header treatment="work" title="Réglages" />
 
     <div class="mt-8">
         <h2 class="text-base font-semibold text-(--tx)">Cerveau</h2>
 
         <div class="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <form wire:submit="saveBrainSettings" class="space-y-4 rounded-[14px] border border-(--bd) bg-(--surf) p-5" wire:loading.class="opacity-50" wire:target="saveBrainSettings">
+            <form wire:submit="saveBrainSettings" class="space-y-4 rounded-[12px] border border-(--bd) bg-(--surf) p-5" wire:loading.class="opacity-50" wire:target="saveBrainSettings">
                 <div>
                     <label class="text-xs text-(--mut)">URL du remote git</label>
                     <input
@@ -368,10 +368,10 @@ new #[Title('Réglages')] class extends Component
                 </div>
             </form>
 
-            <div class="space-y-4 rounded-[14px] border border-(--bd) bg-(--surf) p-5">
+            <div class="space-y-4 rounded-[12px] border border-(--bd) bg-(--surf) p-5">
                 <div class="flex items-center justify-between">
                     <span class="text-xs text-(--mut)">Statut</span>
-                    <x-badge-status :status="$this->brainStatus['gitStatus']->value" />
+                    <x-badge type="status" :value="$this->brainStatus['gitStatus']->value" />
                 </div>
 
                 <dl class="space-y-2 font-mono text-xs text-(--mut)">
@@ -408,7 +408,7 @@ new #[Title('Réglages')] class extends Component
         <h2 class="text-base font-semibold text-(--tx)">Connexions — MCP / Hermes</h2>
 
         <div class="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div class="space-y-4 rounded-[14px] border border-(--bd) bg-(--surf) p-5">
+            <div class="space-y-4 rounded-[12px] border border-(--bd) bg-(--surf) p-5">
                 <label class="flex items-center gap-2 text-sm text-(--tx)">
                     <input type="checkbox" wire:model.live="mcpEnabled" class="rounded-[4px] border-(--bd2) text-(--ac) focus:ring-0" />
                     Activer le serveur MCP
@@ -458,7 +458,7 @@ new #[Title('Réglages')] class extends Component
                 </div>
             </div>
 
-            <div class="space-y-4 rounded-[14px] border border-(--bd) bg-(--surf) p-5">
+            <div class="space-y-4 rounded-[12px] border border-(--bd) bg-(--surf) p-5">
                 <div class="flex items-center justify-between">
                     <span class="text-xs text-(--mut)">Statut</span>
                     <span class="inline-flex items-center gap-1.5 font-mono text-[10.5px] text-(--mut)">
@@ -493,7 +493,7 @@ new #[Title('Réglages')] class extends Component
                     @forelse ($this->mcpCalls as $call)
                         <div class="flex items-center gap-2 rounded-[8px] px-2 py-1.5 hover:bg-(--surf2)" wire:key="mcp-call-{{ $call->id }}">
                             <span class="font-mono text-[10.5px] text-(--tx)">{{ $call->tool }}</span>
-                            <x-badge-status :status="$call->status->value" />
+                            <x-badge type="status" :value="$call->status->value" />
                             <span class="font-mono text-[10.5px] text-(--mut)">{{ $call->duration_ms }}ms</span>
                             <span class="ml-auto truncate text-xs text-(--mut)">{{ Str::limit($call->result_summary ?? $call->error_message, 60) }}</span>
                         </div>
@@ -504,7 +504,7 @@ new #[Title('Réglages')] class extends Component
             </div>
         </div>
 
-        <div class="mt-4 rounded-[14px] border border-(--bd) bg-(--surf) p-5">
+        <div class="mt-4 rounded-[12px] border border-(--bd) bg-(--surf) p-5">
             <h3 class="text-xs font-semibold text-(--mut)">Configuration côté Hermes</h3>
             <dl class="mt-3 space-y-1.5 font-mono text-xs text-(--tx)">
                 <div>URL : {{ $this->mcpEndpointUrl }}</div>
@@ -525,7 +525,7 @@ new #[Title('Réglages')] class extends Component
 
         @error('deleteProvider') <p class="mt-2 text-xs text-(--dgr)">{{ $message }}</p> @enderror
 
-        <div class="mt-4 divide-y divide-(--bd) rounded-[14px] border border-(--bd) bg-(--surf)">
+        <div class="mt-4 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
             @forelse ($this->aiProviders as $provider)
                 <div class="flex items-center gap-3 px-4 py-3" wire:key="provider-{{ $provider->id }}">
                     <div class="flex-1">
@@ -534,7 +534,7 @@ new #[Title('Réglages')] class extends Component
                             <p class="font-mono text-[10.5px] text-(--mut)">{{ $provider->base_url }}</p>
                         @endif
                     </div>
-                    <x-badge-status :status="$provider->is_active ? 'active' : 'paused'" />
+                    <x-badge type="status" :value="$provider->is_active ? 'active' : 'paused'" />
                     @if (isset($this->providerTestResults[$provider->id]))
                         <span class="text-xs {{ $this->providerTestResults[$provider->id]['success'] ? 'text-(--ok)' : 'text-(--dgr)' }}">
                             {{ $this->providerTestResults[$provider->id]['message'] }}
@@ -564,7 +564,7 @@ new #[Title('Réglages')] class extends Component
     <div class="mt-8">
         <h2 class="text-base font-semibold text-(--tx)">Revue</h2>
 
-        <div class="mt-4 space-y-3 rounded-[14px] border border-(--bd) bg-(--surf) p-4" wire:loading.class="opacity-50" wire:target="saveReviewSettings">
+        <div class="mt-4 space-y-3 rounded-[12px] border border-(--bd) bg-(--surf) p-4" wire:loading.class="opacity-50" wire:target="saveReviewSettings">
             <div class="flex items-center gap-3">
                 <label class="text-sm text-(--tx)">Heure de la revue hebdomadaire (dimanche)</label>
                 <input

@@ -82,10 +82,11 @@ new #[Title('Objectifs')] class extends Component
 ?>
 
 <div>
-    <div class="flex items-center justify-between">
-        <h1 class="text-[28px] font-bold tracking-[-0.02em] text-(--tx)">Objectifs</h1>
-        <x-btn variant="primary" wire:click="openCreateModal">+ Nouvel objectif</x-btn>
-    </div>
+    <x-screen-header treatment="work" title="Objectifs">
+        <x-slot:actions>
+            <x-btn variant="primary" wire:click="openCreateModal">+ Nouvel objectif</x-btn>
+        </x-slot:actions>
+    </x-screen-header>
 
     <div class="mt-8">
         <div class="grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))">

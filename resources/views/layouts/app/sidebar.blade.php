@@ -29,7 +29,7 @@ $navItems = [
         <flux:sidebar sticky collapsible="mobile" class="w-[216px] border-e border-(--bd) bg-(--surf)">
             <flux:sidebar.header>
                 <a href="{{ route('today') }}" wire:navigate class="flex items-center gap-2.5">
-                    <x-app-logo-icon class="size-8 drop-shadow-(--glow)" />
+                    <x-app-logo-icon class="size-8" />
                     <span class="font-mono font-semibold tracking-tight text-(--tx)">TARS</span>
                 </a>
                 <flux:sidebar.collapse class="lg:hidden" />

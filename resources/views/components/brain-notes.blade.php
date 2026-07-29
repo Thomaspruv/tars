@@ -22,7 +22,7 @@
                 @endif
             </a>
         @empty
-            <p class="rounded-[14px] border border-(--bd) bg-(--surf) p-5 text-center text-sm text-(--mut)">Aucune note du vault.</p>
+            <p class="rounded-[12px] border border-(--bd) bg-(--surf) p-5 text-center text-sm text-(--mut)">Aucune note du vault.</p>
         @endforelse
     </div>
 </div>

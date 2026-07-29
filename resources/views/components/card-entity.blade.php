@@ -12,23 +12,19 @@
 <a
     href="{{ route('entities.show', $entity) }}"
     wire:navigate
-    {{ $attributes->merge(['class' => 'block rounded-[14px] border border-(--bd) bg-(--surf) p-5 transition-colors hover:border-(--bd2)']) }}
+    {{ $attributes->merge(['class' => 'block rounded-[12px] border border-(--bd) bg-(--surf) p-[18px] shadow-(--card-shadow) transition-colors duration-150 ease-out hover:border-(--bd2)']) }}
 >
     <div class="flex items-center gap-3">
-        <span class="flex size-[38px] shrink-0 items-center justify-center rounded-[10px] bg-(--surf2) text-lg">
-            @if ($emoji)
-                {{ $emoji }}
-            @else
-                <flux:icon :name="$type === 'vehicle' ? 'truck' : 'cube'" class="size-5 text-(--mut)" />
-            @endif
+        <span class="flex size-[34px] shrink-0 items-center justify-center rounded-[9px] bg-(--surf2) text-lg">
+            {{ $emoji }}
         </span>
         <div>
-            <p class="text-[15px] font-semibold text-(--tx)">{{ $entity->name }}</p>
-            <p class="text-xs text-(--mut)">{{ $typeLabels[$type] ?? ucfirst($type) }}</p>
+            <p class="text-[14.5px] font-medium text-(--tx)">{{ $entity->name }}</p>
+            <p class="text-[11.5px] text-(--mut)">{{ $typeLabels[$type] ?? ucfirst($type) }}</p>
         </div>
     </div>
 
-    <dl class="mt-4 space-y-2 text-xs">
+    <dl class="mt-3 space-y-2 border-t border-(--bd) pt-3 text-[12.5px]">
         <div class="flex items-center justify-between">
             <dt class="text-(--mut)">Tâches ouvertes</dt>
             <dd class="font-mono text-(--tx)">{{ $openTasksCount ?? 0 }}</dd>
@@ -43,7 +39,7 @@
             <dt class="text-(--mut)">Objectif lié</dt>
             <dd>
                 @if ($linkedGoal)
-                    <x-badge-goal :tag="$linkedGoal->tag" />
+                    <x-badge type="goal" :tag="$linkedGoal->tag" />
                 @else
                     <span class="text-(--mut)">—</span>
                 @endif

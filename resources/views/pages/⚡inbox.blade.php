@@ -60,14 +60,15 @@ new #[Title('Inbox')] class extends Component
 ?>
 
 <div>
-    <div class="flex items-center justify-between">
-        <h1 class="text-[28px] font-bold tracking-[-0.02em] text-(--tx)">Inbox</h1>
-        <span class="font-mono text-sm font-semibold {{ $this->pendingItems->isEmpty() ? 'text-(--ok)' : 'text-(--warn)' }}">
-            {{ $this->pendingItems->count() }}
-        </span>
-    </div>
+    <x-screen-header treatment="work" title="Inbox">
+        <x-slot:actions>
+            <span class="font-mono text-sm font-semibold {{ $this->pendingItems->isEmpty() ? 'text-(--ok)' : 'text-(--warn)' }}">
+                {{ $this->pendingItems->count() }}
+            </span>
+        </x-slot:actions>
+    </x-screen-header>
 
-    <div class="mt-6 divide-y divide-(--bd) rounded-[14px] border border-(--bd) bg-(--surf)">
+    <div class="mt-6 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
         @forelse ($this->pendingItems as $item)
             <div class="flex items-center gap-3 px-4 py-3.5" wire:key="inbox-{{ $item->id }}">
                 <p class="min-w-0 flex-1 text-sm text-(--tx)">{{ $item->content }}</p>

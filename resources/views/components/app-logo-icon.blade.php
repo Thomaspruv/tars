@@ -3,8 +3,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" {{ $attributes }}>
     <defs>
         <linearGradient id="{{ $gradientId }}" x1="40" y1="48" x2="216" y2="208" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="#53D6E8" />
-            <stop offset="1" stop-color="#7C6CF0" />
+            <stop offset="0" stop-color="#6E8BFF" />
+            <stop offset="1" stop-color="#A78BFA" />
         </linearGradient>
     </defs>
     <g fill="url(#{{ $gradientId }})">

@@ -221,10 +221,11 @@ new #[Title('Agents')] class extends Component
 ?>
 
 <div wire:poll.5s="$refresh">
-    <div class="flex items-center justify-between">
-        <h1 class="text-[28px] font-bold tracking-[-0.02em] text-(--tx)">Agents</h1>
-        <p class="font-mono text-xs text-(--mut)">{{ number_format($this->tokensThisMonth) }} tokens ce mois-ci</p>
-    </div>
+    <x-screen-header treatment="ai" title="Agents">
+        <x-slot:actions>
+            <p class="font-mono text-xs text-(--mut)">{{ number_format($this->tokensThisMonth) }} tokens ce mois-ci</p>
+        </x-slot:actions>
+    </x-screen-header>
 
     <div class="mt-6 grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))">
         @foreach ($this->agentNames() as $agentName)
@@ -233,22 +234,21 @@ new #[Title('Agents')] class extends Component
                     $name = $agentName->value;
                     $lastRun = $this->agentLastRun($name);
                 @endphp
-                <div class="rounded-[14px] border border-(--ai)/25 bg-(--surf) p-5">
+                <div class="rounded-[12px] border border-(--aibd2) bg-(--surf) p-[18px] shadow-(--card-shadow)">
                     <div class="flex items-center gap-2.5">
-                        <span class="flex size-9 items-center justify-center rounded-[10px] bg-(--aibg) text-(--ai)">◈</span>
+                        <span class="flex size-[30px] items-center justify-center rounded-[8px] bg-(--aibg) text-(--ai)">◈</span>
                         <div>
-                            <p class="font-mono text-sm font-semibold text-(--tx)">{{ $agentName->value }}</p>
-                            <p class="text-xs text-(--mut)">{{ $agentName->description() }}</p>
+                            <p class="font-mono text-[13px] font-semibold text-(--tx)">{{ $agentName->value }}</p>
+                            <p class="text-[11.5px] text-(--mut)">{{ $agentName->description() }}</p>
                         </div>
                         <label class="ml-auto flex items-center gap-2 text-xs text-(--mut)">
-                            <input
-                                type="checkbox"
+                            <x-toggle
+                                agent
                                 wire:model="enabled.{{ $name }}"
                                 wire:change="saveAgentConfig('{{ $name }}')"
                                 wire:loading.attr="disabled"
                                 wire:loading.class="opacity-50"
                                 wire:target="saveAgentConfig('{{ $name }}')"
-                                class="rounded-[4px] border-(--bd2) text-(--ai) focus:ring-0"
                             />
                             Activé
                         </label>
@@ -310,9 +310,9 @@ new #[Title('Agents')] class extends Component
                     <div class="mt-5 border-t border-(--bd) pt-4">
                         <p class="font-mono text-[10px] font-semibold uppercase tracking-wide text-(--mut)">Dernier run</p>
 
-                        <div class="mt-3 rounded-[10px] bg-(--surf2) px-3 py-2 font-mono text-[11px] text-(--mut)">
+                        <div class="mt-3 rounded-[8px] bg-(--surf2) px-3 py-2 font-mono text-[11px] text-(--mut)">
                             @if ($lastRun)
-                                <x-badge-status :status="$lastRun->status->value" />
+                                <x-badge type="agent-run" :value="$lastRun->status->value" />
                                 {{ $lastRun->started_at->translatedFormat('d M · H:i') }}
                                 @if ($lastRun->finished_at)
                                     · {{ $lastRun->started_at->diffInSeconds($lastRun->finished_at) }}s
@@ -357,7 +357,7 @@ new #[Title('Agents')] class extends Component
 
                         @if ($name === 'reviewer')
                             <div class="mt-3 flex justify-end">
-                                <x-btn variant="ai" wire:click="runReviewerNow" wire:loading.attr="disabled" wire:target="runReviewerNow">
+                                <x-btn variant="agent" wire:click="runReviewerNow" wire:loading.attr="disabled" wire:target="runReviewerNow">
                                     <span wire:loading wire:target="runReviewerNow">En cours…</span>
                                     <span wire:loading.remove wire:target="runReviewerNow">Lancer maintenant</span>
                                 </x-btn>
@@ -368,7 +368,7 @@ new #[Title('Agents')] class extends Component
                                     <span wire:loading wire:target="runCuratorMission('todo')">En cours…</span>
                                     <span wire:loading.remove wire:target="runCuratorMission('todo')">Lancer la todo</span>
                                 </x-btn>
-                                <x-btn variant="ai" wire:click="runCuratorMission('tidy')" wire:loading.attr="disabled" wire:target="runCuratorMission('tidy')">
+                                <x-btn variant="agent" wire:click="runCuratorMission('tidy')" wire:loading.attr="disabled" wire:target="runCuratorMission('tidy')">
                                     <span wire:loading wire:target="runCuratorMission('tidy')">En cours…</span>
                                     <span wire:loading.remove wire:target="runCuratorMission('tidy')">Lancer le rangement</span>
                                 </x-btn>
@@ -377,12 +377,12 @@ new #[Title('Agents')] class extends Component
                     </div>
                 </div>
             @else
-                <div class="rounded-[14px] border border-(--bd) bg-(--surf) p-5 opacity-55">
+                <div class="rounded-[12px] border border-(--bd) bg-(--surf) p-[18px] opacity-55">
                     <div class="flex items-center gap-2.5">
-                        <span class="flex size-9 items-center justify-center rounded-[10px] bg-(--surf2) text-(--mut)">◈</span>
+                        <span class="flex size-[30px] items-center justify-center rounded-[8px] bg-(--surf2) text-(--mut)">◈</span>
                         <div>
-                            <p class="font-mono text-sm font-semibold text-(--tx)">{{ $agentName->value }}</p>
-                            <p class="text-xs text-(--mut)">{{ $agentName->description() }}</p>
+                            <p class="font-mono text-[13px] font-semibold text-(--tx)">{{ $agentName->value }}</p>
+                            <p class="text-[11.5px] text-(--mut)">{{ $agentName->description() }}</p>
                         </div>
                     </div>
                     <p class="mt-4 font-mono text-[10.5px] uppercase tracking-wide text-(--mut)">À venir</p>
@@ -414,7 +414,7 @@ new #[Title('Agents')] class extends Component
             </select>
         </div>
 
-        <div class="mt-3 max-h-96 space-y-1 overflow-y-auto rounded-[14px] border border-(--bd) bg-(--surf) p-2">
+        <div class="mt-3 max-h-96 space-y-1 overflow-y-auto rounded-[12px] border border-(--bd) bg-(--surf) p-2">
             @forelse ($this->runHistory as $run)
                 <button
                     type="button"
@@ -423,7 +423,7 @@ new #[Title('Agents')] class extends Component
                     wire:key="run-{{ $run->id }}"
                 >
                     <span class="font-mono text-[10.5px] text-(--tx)">{{ $run->agent_name }}</span>
-                    <x-badge-status :status="$run->status->value" />
+                    <x-badge type="agent-run" :value="$run->status->value" />
                     <span class="font-mono text-[10.5px] text-(--mut)">{{ $run->trigger->value }}</span>
                     <span class="ml-auto font-mono text-[10.5px] text-(--mut)">
                         {{ number_format(($run->tokens_in ?? 0) + ($run->tokens_out ?? 0)) }} tk
@@ -441,7 +441,7 @@ new #[Title('Agents')] class extends Component
             <div class="space-y-4">
                 <div class="flex items-center gap-2">
                     <flux:heading size="lg">{{ $this->selectedRun->agent_name }}</flux:heading>
-                    <x-badge-status :status="$this->selectedRun->status->value" />
+                    <x-badge type="agent-run" :value="$this->selectedRun->status->value" />
                 </div>
 
                 @if ($this->selectedRun->error)

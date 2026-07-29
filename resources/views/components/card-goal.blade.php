@@ -5,15 +5,16 @@
     $milestonesDone = $goal->milestones->where('status', \App\Enums\MilestoneStatus::Done)->count();
     $percent = $milestonesTotal > 0 ? (int) round(($milestonesDone / $milestonesTotal) * 100) : 0;
     $maxActivity = $weeklyActivity ? max([1, ...$weeklyActivity]) : 1;
+    $barCount = $weeklyActivity ? count($weeklyActivity) : 0;
 @endphp
 
 <a
     href="{{ route('goals.show', $goal) }}"
     wire:navigate
-    {{ $attributes->merge(['class' => 'block rounded-[14px] border border-(--bd) bg-(--surf) p-5 transition-colors hover:border-(--ac)/40']) }}
+    {{ $attributes->merge(['class' => 'block rounded-[12px] border border-(--bd) bg-(--surf) p-[18px] shadow-(--card-shadow) transition-colors duration-150 ease-out hover:border-(--ac)/40']) }}
 >
     <div class="flex items-center justify-between gap-3">
-        <x-badge-status :status="$goal->status" />
+        <x-badge type="status" :value="$goal->status" />
         @if ($goal->target_date)
             <time class="font-mono text-xs text-(--mut)" datetime="{{ $goal->target_date->toDateString() }}">
                 {{ $goal->target_date->translatedFormat('M Y') }}
@@ -21,10 +22,10 @@
         @endif
     </div>
 
-    <h3 class="mt-3 text-[15.5px] font-semibold text-(--tx)">{{ $goal->title }}</h3>
+    <h3 class="mt-3 text-[14.5px] font-medium text-(--tx)">{{ $goal->title }}</h3>
 
     @if ($milestonesTotal > 0)
-        <div class="mt-4">
+        <div class="mt-3">
             <div class="flex items-center justify-between text-xs">
                 <span class="text-(--mut)">{{ $milestonesDone }}/{{ $milestonesTotal }} jalons</span>
                 <span class="font-mono font-semibold text-(--ac)">{{ $percent }}%</span>
@@ -36,11 +37,16 @@
     @endif
 
     @if ($weeklyActivity)
-        <div class="mt-4 flex h-6 items-end gap-1">
+        <div class="mt-3 flex h-6 items-end gap-1">
             @foreach ($weeklyActivity as $index => $count)
+                @php
+                    $isLast = $loop->last;
+                    $ramp = $barCount > 1 ? $index / ($barCount - 1) : 1;
+                    $opacity = $isLast ? 1 : .25 + ($ramp * .15);
+                @endphp
                 <div
                     class="flex-1 rounded-t-[2px] bg-(--ac)"
-                    style="height: {{ max(15, (int) round(($count / $maxActivity) * 100)) }}%; opacity: {{ $loop->last ? 1 : 0.35 }}"
+                    style="height: {{ max(15, (int) round(($count / $maxActivity) * 100)) }}%; opacity: {{ $opacity }}"
                 ></div>
             @endforeach
         </div>

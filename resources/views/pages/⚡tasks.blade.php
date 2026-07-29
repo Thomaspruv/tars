@@ -73,12 +73,14 @@ new #[Title('Tâches')] class extends Component
 ?>
 
 <div>
-    <div class="flex items-center justify-between">
-        <h1 class="text-[28px] font-bold tracking-[-0.02em] text-(--tx)">Tâches</h1>
-        <p class="font-mono text-xs text-(--mut)">
-            {{ $this->orphanRatio['orphan'] }}/{{ $this->orphanRatio['total'] }} sans objectif · {{ $this->orphanRatio['percent'] }}%
-        </p>
-    </div>
+    <x-screen-header
+        treatment="work"
+        title="Tâches"
+    >
+        <x-slot:subtitle>
+            <span class="font-mono">{{ $this->orphanRatio['orphan'] }}/{{ $this->orphanRatio['total'] }}</span> sans objectif · <span class="font-mono">{{ $this->orphanRatio['percent'] }}%</span>
+        </x-slot:subtitle>
+    </x-screen-header>
 
     <div class="mt-5 flex flex-wrap items-center gap-2">
         @foreach (['all' => 'Toutes', 'today' => "Aujourd'hui", 'week' => 'Cette semaine', 'overdue' => 'En retard', 'orphan' => 'Sans objectif'] as $value => $label)
@@ -99,7 +101,7 @@ new #[Title('Tâches')] class extends Component
         </select>
     </div>
 
-    <div class="mt-5 divide-y divide-(--bd) rounded-[14px] border border-(--bd) bg-(--surf)">
+    <div class="mt-5 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
         @forelse ($this->tasks as $task)
             <x-task-row :task="$task" wire:key="task-{{ $task->id }}" />
         @empty

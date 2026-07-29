@@ -9,8 +9,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
 
     --color-zinc-50: #fafafa;
     --color-zinc-100: #f5f5f5;
@@ -48,52 +48,63 @@
     }
 }
 
-/* TARS — tokens sémantiques (design system v1) */
+/* TARS — tokens sémantiques (design system v2 : palette Ardoise/Indigo).
+   Sélecteur sur :root/[data-theme] plutôt que body[data-theme] : l'attribut
+   vit sur <html> (voir sidebar.blade.php) pour que le serveur puisse rendre
+   le bon thème directement dans le HTML et éviter un flash pendant les
+   transitions wire:navigate — la persistance reste un cookie `la-theme`,
+   pas localStorage, pour la même raison. */
 :root,
 [data-theme='dark'] {
     color-scheme: dark;
 
-    --bg: #0B0D12;
-    --surf: #131720;
-    --surf2: #1B2029;
-    --bd: rgba(148, 163, 199, .14);
-    --bd2: rgba(148, 163, 199, .25);
-    --tx: #E6E9F2;
-    --mut: #8A93A8;
-    --ac: #53D6E8;
-    --achov: #8AE6F2;
-    --acT: #07090D;
-    --acbg: rgba(83, 214, 232, .12);
-    --ai: #9D8CF5;
-    --aibg: rgba(157, 140, 245, .12);
+    --bg: #08090C;
+    --surf: #0F1116;
+    --surf2: #16181F;
+    --bd: rgba(160, 170, 195, .12);
+    --bd2: rgba(160, 170, 195, .22);
+    --bd3: rgba(160, 170, 195, .4);
+    --tx: #E8EAF0;
+    --mut: #868EA3;
+    --ac: #6E8BFF;
+    --achov: #8DA5FF;
+    --acT: #06070A;
+    --acbg: rgba(110, 139, 255, .13);
+    --ai: #A78BFA;
+    --aibg: rgba(167, 139, 250, .12);
+    --aibd: rgba(167, 139, 250, .42);
+    --aibd2: rgba(167, 139, 250, .28);
     --ok: #4ADE80;
     --okbg: rgba(74, 222, 128, .13);
     --warn: #FBBF24;
     --warnbg: rgba(251, 191, 36, .13);
     --dgr: #F87171;
     --dgrbg: rgba(248, 113, 113, .15);
-    --in: #0B0D12;
-    --glow: 0 0 18px rgba(83, 214, 232, .25);
-    --aiglow: 0 0 18px rgba(157, 140, 245, .28);
-    --gradient-signature: linear-gradient(135deg, #53D6E8, #7C6CF0);
+    --in: #08090C;
+    --aiglow: 0 0 14px rgba(167, 139, 250, .22);
+    --gradient-signature: linear-gradient(135deg, #6E8BFF, #A78BFA);
+    --card-shadow: none;
 }
 
 [data-theme='light'] {
     color-scheme: light;
 
-    --bg: #F4F5F8;
+    --bg: #F7F8FA;
     --surf: #FFFFFF;
-    --surf2: #ECEEF3;
-    --bd: rgba(20, 25, 40, .1);
-    --bd2: rgba(20, 25, 40, .2);
-    --tx: #171B26;
-    --mut: #5D6579;
-    --ac: #0796B2;
-    --achov: #0AB6D8;
+    --surf2: #EFF1F5;
+    --bd: rgba(16, 20, 32, .09);
+    --bd2: rgba(16, 20, 32, .18);
+    --bd3: rgba(16, 20, 32, .32);
+    --tx: #12151C;
+    --mut: #5A6273;
+    --ac: #3A5BD9;
+    --achov: #2F4CBF;
     --acT: #FFFFFF;
-    --acbg: rgba(7, 150, 178, .1);
-    --ai: #7C5CE8;
-    --aibg: rgba(124, 92, 232, .1);
+    --acbg: rgba(58, 91, 217, .1);
+    --ai: #6D4AE0;
+    --aibg: rgba(109, 74, 224, .08);
+    --aibd: rgba(109, 74, 224, .35);
+    --aibd2: rgba(109, 74, 224, .28);
     --ok: #16A34A;
     --okbg: rgba(22, 163, 74, .1);
     --warn: #B45309;
@@ -101,8 +112,9 @@
     --dgr: #DC5555;
     --dgrbg: rgba(220, 85, 85, .12);
     --in: #FFFFFF;
-    --glow: 0 1px 3px rgba(20, 25, 40, .08);
-    --aiglow: 0 1px 3px rgba(20, 25, 40, .08);
+    --aiglow: 0 1px 2px rgba(16, 20, 32, .06);
+    --gradient-signature: linear-gradient(135deg, #3A5BD9, #6D4AE0);
+    --card-shadow: 0 1px 2px rgba(16, 20, 32, .05);
 }
 
 @keyframes pulse-soft {

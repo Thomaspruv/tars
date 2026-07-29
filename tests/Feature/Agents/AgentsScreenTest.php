@@ -259,7 +259,10 @@ test('shows the reviewer last run info', function () {
         'tokens_out' => 50,
     ]);
 
-    Livewire::test('pages::agents')->assertSee('Réussi');
+    // Agent-run badges show the raw status word (design system v2, §5 "Run
+    // d'agent") — mono/machine-produced content stays untranslated, unlike
+    // the French labels used by the pill-shaped "Statut" badge type.
+    Livewire::test('pages::agents')->assertSee('success');
 });
 
 test('filters the run history by agent, status and period', function () {

@@ -144,27 +144,23 @@ new #[Title('Entité')] class extends Component
 ?>
 
 <div>
-    <a href="{{ route('entities.index') }}" wire:navigate class="inline-flex items-center gap-1.5 text-sm text-(--mut) hover:text-(--tx)">
-        <flux:icon name="arrow-left" class="size-4" /> Entités
-    </a>
-
-    <div class="mt-4 flex items-start justify-between gap-4">
-        <div>
-            <h1 class="text-[28px] font-bold tracking-[-0.02em] text-(--tx)">{{ $entity->name }}</h1>
-        </div>
-
-        <div class="flex shrink-0 items-center gap-2">
+    <x-screen-header
+        treatment="record"
+        :title="$entity->name"
+        :back="['label' => 'Entités', 'href' => route('entities.index')]"
+    >
+        <x-slot:actions>
             <x-btn variant="secondary" wire:click="openEditModal">Modifier</x-btn>
             <x-btn variant="danger" wire:click="archive" wire:confirm="Archiver cette entité ?">Archiver</x-btn>
-        </div>
-    </div>
+        </x-slot:actions>
+    </x-screen-header>
 
     <div class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
         <div class="space-y-8">
             @if ($this->filledDetails !== [])
                 <div>
                     <h2 class="text-base font-semibold text-(--tx)">Informations</h2>
-                    <dl class="mt-3 space-y-2 rounded-[14px] border border-(--bd) bg-(--surf) p-4 text-sm">
+                    <dl class="mt-3 space-y-2 rounded-[12px] border border-(--bd) bg-(--surf) p-4 text-sm">
                         @foreach ($this->filledDetails as $pair)
                             <div class="flex items-center justify-between gap-4">
                                 <dt class="text-(--mut)">{{ $pair['label'] }}</dt>
@@ -178,7 +174,7 @@ new #[Title('Entité')] class extends Component
             @if ($this->recurringTasks->isNotEmpty())
                 <div>
                     <h2 class="text-base font-semibold text-(--tx)">Échéances récurrentes</h2>
-                    <div class="mt-3 divide-y divide-(--bd) rounded-[14px] border border-(--bd) bg-(--surf)">
+                    <div class="mt-3 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
                         @foreach ($this->recurringTasks as $task)
                             <x-task-row :task="$task" wire:key="recurring-{{ $task->id }}" />
                         @endforeach
@@ -188,7 +184,7 @@ new #[Title('Entité')] class extends Component
 
             <div>
                 <h2 class="text-base font-semibold text-(--tx)">Tâches ouvertes</h2>
-                <div class="mt-3 divide-y divide-(--bd) rounded-[14px] border border-(--bd) bg-(--surf)">
+                <div class="mt-3 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
                     @forelse ($this->openTasks as $task)
                         <x-task-row :task="$task" wire:key="task-{{ $task->id }}" />
                     @empty
@@ -242,7 +238,7 @@ new #[Title('Entité')] class extends Component
                             <p class="mt-1 font-mono text-[10.5px] text-(--mut)">{{ $note->created_at->translatedFormat('d M · H:i') }}</p>
                         </div>
                     @empty
-                        <p class="rounded-[14px] border border-(--bd) bg-(--surf) p-5 text-center text-sm text-(--mut)">Aucune note.</p>
+                        <p class="rounded-[12px] border border-(--bd) bg-(--surf) p-5 text-center text-sm text-(--mut)">Aucune note.</p>
                     @endforelse
                 </div>
                 <form wire:submit="addNote" class="mt-2 flex gap-2">

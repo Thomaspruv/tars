@@ -104,19 +104,20 @@ new #[Title('Listes')] class extends Component
 ?>
 
 <div>
-    <div class="flex items-center justify-between">
-        <h1 class="text-[28px] font-bold tracking-[-0.02em] text-(--tx)">Listes</h1>
-        <x-btn variant="primary" wire:click="openCreateModal">+ Nouvelle liste</x-btn>
-    </div>
+    <x-screen-header treatment="work" title="Listes">
+        <x-slot:actions>
+            <x-btn variant="primary" wire:click="openCreateModal">+ Nouvelle liste</x-btn>
+        </x-slot:actions>
+    </x-screen-header>
 
     <div class="mt-8 grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr))">
         @forelse ($this->lists as $list)
-            <div class="rounded-[14px] border border-(--bd) bg-(--surf) p-5" wire:key="list-{{ $list->id }}">
+            <div class="rounded-[12px] border border-(--bd) bg-(--surf) p-5" wire:key="list-{{ $list->id }}">
                 <div class="flex items-center justify-between gap-2">
                     <div class="flex items-center gap-2">
                         <h2 class="text-[15px] font-semibold text-(--tx)">{{ $list->name }}</h2>
                         @if ($list->entity)
-                            <x-badge-entity :entity="$list->entity" />
+                            <x-badge type="entity" :entity="$list->entity" />
                         @endif
                     </div>
                     <div class="flex items-center gap-1">
@@ -142,14 +143,13 @@ new #[Title('Listes')] class extends Component
 
                 <div class="mt-3 space-y-0.5">
                     @foreach ($list->items as $item)
-                        <div class="group flex items-center gap-2.5 rounded-[9px] px-1 py-1.5" wire:key="item-{{ $item->id }}">
-                            <input
-                                type="checkbox"
+                        <div class="group flex items-center gap-[10px] rounded-[8px] px-[10px] py-[8px] hover:bg-(--surf2)" wire:key="item-{{ $item->id }}">
+                            <x-checkbox
+                                shape="round"
                                 wire:click="toggleItem({{ $item->id }})"
                                 @checked($item->checked_at)
-                                class="size-[16px] shrink-0 rounded-full border-(--bd2) text-(--ac) focus:ring-0"
                             />
-                            <span class="flex-1 text-sm {{ $item->checked_at ? 'text-(--mut) line-through opacity-45' : 'text-(--tx)' }}">
+                            <span class="flex-1 text-[13.5px] {{ $item->checked_at ? 'text-(--mut) line-through opacity-45' : 'text-(--tx)' }}">
                                 {{ $item->content }}
                             </span>
                             <button

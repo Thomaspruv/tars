@@ -6,36 +6,36 @@
     $isOverdue = $dueDate && ! $isDone && $dueDate->isPast() && ! $dueDate->isToday();
 @endphp
 
-<div {{ $attributes->merge(['class' => 'flex items-center gap-3 rounded-[10px] px-3.5 py-2.5 hover:bg-(--surf2)']) }}>
+<div {{ $attributes->merge(['class' => 'flex items-center gap-[10px] rounded-[8px] px-[10px] py-[8px] hover:bg-(--surf2)']) }}>
     <button
         type="button"
         wire:click="toggleTask({{ $task->id }})"
         aria-label="{{ $isDone ? 'Marquer non terminée' : 'Marquer terminée' }}"
-        class="relative flex size-[18px] shrink-0 items-center justify-center rounded-[6px] border border-(--bd2) {{ $isDone ? 'bg-(--ac)' : '' }}"
+        class="relative flex size-[16px] shrink-0 items-center justify-center rounded-[5px] border {{ $isDone ? 'border-(--ac) bg-(--ac)' : ($task->is_delegable ? 'border-(--ai)/50' : 'border-(--bd2)') }} focus-visible:outline focus-visible:outline-1 focus-visible:outline-(--ac) focus-visible:outline-offset-2"
     >
         @if ($isDone)
-            <flux:icon name="check" class="size-3 text-(--acT)" />
+            <span aria-hidden="true" class="text-[10px] leading-none text-(--acT)">✓</span>
         @elseif ($task->is_delegable)
-            <span class="text-[10px] text-(--ai)">◈</span>
+            <span aria-hidden="true" class="text-[9px] leading-none text-(--ai)">◈</span>
         @endif
     </button>
 
-    <span class="flex-1 truncate text-sm {{ $isDone ? 'text-(--mut) line-through opacity-45' : 'text-(--tx)' }}">
+    <span class="flex-1 truncate text-[13.5px] {{ $isDone ? 'text-(--mut) line-through opacity-45' : 'text-(--tx)' }}">
         {{ $task->title }}
     </span>
 
-    <x-badge-priority :priority="$task->priority" />
-    <x-badge-entity :entity="$task->entity" />
-    <x-badge-goal :goal="$task->goal" />
-    <x-badge-recur :recurrence="$task->recurrence" />
+    <x-badge type="priority" :value="$task->priority" />
+    <x-badge type="entity" :entity="$task->entity" />
+    <x-badge type="goal" :goal="$task->goal" />
+    <x-badge type="recur" :recurrence="$task->recurrence" />
 
     @if ($task->is_delegable)
-        <span class="rounded-[5px] border border-(--ai)/35 px-1.5 py-0.5 font-mono text-[10.5px] text-(--ai)">délégable</span>
+        <x-badge type="delegable" />
     @endif
 
     @if ($dueDate)
-        <time class="ml-auto shrink-0 font-mono text-xs {{ $isOverdue ? 'text-(--warn)' : 'text-(--mut)' }}" datetime="{{ $dueDate->toDateString() }}">
-            {{ $dueDate->isToday() ? "aujourd'hui" : $dueDate->translatedFormat('d M') }}
+        <time class="ml-auto shrink-0 font-mono text-[11px] {{ $isOverdue ? 'text-(--warn)' : 'text-(--mut)' }}" datetime="{{ $dueDate->toDateString() }}">
+            {{ $isDone ? 'fait' : ($dueDate->isToday() ? "aujourd'hui" : $dueDate->translatedFormat('d M')) }}
         </time>
     @endif
 </div>

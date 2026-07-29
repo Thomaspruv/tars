@@ -79,7 +79,9 @@ new #[Title('Aujourd\'hui')] class extends Component
 ?>
 
 <div>
-    <div class="rounded-[14px] border border-(--bd) p-5 {{ $this->pendingReview ? 'animate-pulse-soft' : '' }}" style="background: linear-gradient(135deg, rgba(83,214,232,.1), rgba(124,108,240,.08))">
+    <x-screen-header treatment="work" title="Aujourd'hui" />
+
+    <div class="mt-6 rounded-[12px] border border-(--aibd2) p-[18px] {{ $this->pendingReview ? 'animate-pulse-soft' : '' }}" style="background: linear-gradient(135deg, rgba(167,139,250,.08), rgba(110,139,255,.05))">
         <p class="font-mono text-[10.5px] font-semibold tracking-[.08em] text-(--ai) uppercase">Revue</p>
         @if ($this->pendingReview)
             <p class="mt-1 text-sm text-(--tx)">
@@ -106,7 +108,7 @@ new #[Title('Aujourd\'hui')] class extends Component
                 </span>
             </div>
 
-            <div class="mt-3 divide-y divide-(--bd) rounded-[14px] border border-(--bd) bg-(--surf)">
+            <div class="mt-3 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
                 @forelse ($this->tasksToday as $task)
                     <x-task-row :task="$task" wire:key="task-{{ $task->id }}" />
                 @empty
@@ -118,7 +120,7 @@ new #[Title('Aujourd\'hui')] class extends Component
         <div class="space-y-6">
             <div>
                 <h2 class="text-base font-semibold text-(--tx)">Événements — 7 jours</h2>
-                <div class="mt-3 divide-y divide-(--bd) rounded-[14px] border border-(--bd) bg-(--surf)">
+                <div class="mt-3 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
                     @forelse ($this->upcomingEvents as $event)
                         <div class="flex items-center gap-3 px-4 py-3" wire:key="event-{{ $event->id }}">
                             <time class="w-14 shrink-0 font-mono text-xs {{ $event->starts_at->isToday() ? 'text-(--warn)' : 'text-(--mut)' }}" datetime="{{ $event->starts_at->toDateString() }}">
@@ -127,8 +129,8 @@ new #[Title('Aujourd\'hui')] class extends Component
                             <div class="min-w-0 flex-1">
                                 <p class="truncate text-sm text-(--tx)">{{ $event->title }}</p>
                             </div>
-                            <x-badge-entity :entity="$event->entity" />
-                            <x-badge-goal :goal="$event->goal" />
+                            <x-badge type="entity" :entity="$event->entity" />
+                            <x-badge type="goal" :goal="$event->goal" />
                         </div>
                     @empty
                         <p class="p-5 text-center text-sm text-(--mut)">Aucun événement à venir.</p>
@@ -139,17 +141,18 @@ new #[Title('Aujourd\'hui')] class extends Component
             @foreach ($this->pinnedLists as $list)
                 <div wire:key="list-{{ $list->id }}">
                     <h2 class="text-base font-semibold text-(--tx)">{{ $list->name }}</h2>
-                    <div class="mt-3 divide-y divide-(--bd) rounded-[14px] border border-(--bd) bg-(--surf) p-2">
+                    <div class="mt-3 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf) p-2">
                         @foreach ($list->items as $item)
-                            <label class="flex items-center gap-3 px-2.5 py-2 text-sm {{ $item->checked_at ? 'text-(--mut) line-through opacity-45' : 'text-(--tx)' }}">
-                                <input
-                                    type="checkbox"
+                            <div class="flex items-center gap-[10px] px-[10px] py-[8px] hover:bg-(--surf2)">
+                                <x-checkbox
+                                    shape="round"
                                     wire:click="toggleListItem({{ $item->id }})"
                                     @checked($item->checked_at)
-                                    class="size-[16px] rounded-full border-(--bd2) text-(--ac) focus:ring-0"
                                 />
-                                {{ $item->content }}
-                            </label>
+                                <span class="text-[13.5px] {{ $item->checked_at ? 'text-(--mut) line-through opacity-45' : 'text-(--tx)' }}">
+                                    {{ $item->content }}
+                                </span>
+                            </div>
                         @endforeach
                     </div>
                 </div>

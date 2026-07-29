@@ -138,22 +138,15 @@ new #[Title('Objectif')] class extends Component
 ?>
 
 <div>
-    <a href="{{ route('goals.index') }}" wire:navigate class="inline-flex items-center gap-1.5 text-sm text-(--mut) hover:text-(--tx)">
-        <flux:icon name="arrow-left" class="size-4" /> Objectifs
-    </a>
+    <x-screen-header
+        treatment="record"
+        :title="$goal->title"
+        :subtitle="$goal->description"
+        :back="['label' => 'Objectifs', 'href' => route('goals.index')]"
+    >
+        <x-badge type="status" :value="$goal->status" />
 
-    <div class="mt-4 flex items-start justify-between gap-4">
-        <div>
-            <div class="flex items-center gap-3">
-                <x-badge-status :status="$goal->status" />
-            </div>
-            <h1 class="mt-2 text-[28px] font-bold tracking-[-0.02em] text-(--tx)">{{ $goal->title }}</h1>
-            @if ($goal->description)
-                <p class="mt-2 max-w-xl text-sm text-(--mut)">{{ $goal->description }}</p>
-            @endif
-        </div>
-
-        <div class="flex shrink-0 items-center gap-2">
+        <x-slot:actions>
             <select wire:change="updateStatus($event.target.value)" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
                 @foreach (GoalStatus::cases() as $status)
                     <option value="{{ $status->value }}" @selected($goal->status === $status)>{{ $status->value }}</option>
@@ -161,8 +154,8 @@ new #[Title('Objectif')] class extends Component
             </select>
             <x-btn variant="secondary" wire:click="openEditModal">Modifier</x-btn>
             <x-btn variant="danger" wire:click="delete" wire:confirm="Supprimer cet objectif ?">Supprimer</x-btn>
-        </div>
-    </div>
+        </x-slot:actions>
+    </x-screen-header>
 
     <div class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
         <div class="space-y-8">
@@ -199,7 +192,7 @@ new #[Title('Objectif')] class extends Component
 
             <div>
                 <h2 class="text-base font-semibold text-(--tx)">Tâches liées</h2>
-                <div class="mt-3 divide-y divide-(--bd) rounded-[14px] border border-(--bd) bg-(--surf)">
+                <div class="mt-3 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
                     @forelse ($this->tasks as $task)
                         <x-task-row :task="$task" wire:key="task-{{ $task->id }}" />
                     @empty
@@ -213,7 +206,7 @@ new #[Title('Objectif')] class extends Component
             <div>
                 <h2 class="text-base font-semibold text-(--tx)">Avancement — tâches faites/semaine</h2>
                 @php $max = max([1, ...$this->weeklyActivity]); @endphp
-                <div class="mt-3 flex h-24 items-end gap-2 rounded-[14px] border border-(--bd) bg-(--surf) p-4">
+                <div class="mt-3 flex h-24 items-end gap-2 rounded-[12px] border border-(--bd) bg-(--surf) p-4">
                     @foreach ($this->weeklyActivity as $count)
                         <div class="flex flex-1 flex-col items-center gap-1">
                             <div
@@ -228,7 +221,7 @@ new #[Title('Objectif')] class extends Component
 
             <div>
                 <h2 class="text-base font-semibold text-(--tx)">Extraits de revues</h2>
-                <p class="mt-3 rounded-[14px] border border-(--bd) bg-(--surf) p-5 text-center text-sm text-(--mut)">
+                <p class="mt-3 rounded-[12px] border border-(--bd) bg-(--surf) p-5 text-center text-sm text-(--mut)">
                     Aucune revue n'a encore mentionné cet objectif.
                 </p>
             </div>
