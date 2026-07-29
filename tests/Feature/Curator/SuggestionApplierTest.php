@@ -7,7 +7,6 @@ use App\Models\Checklist;
 use App\Models\ChecklistItem;
 use App\Models\Entity;
 use App\Models\Goal;
-use App\Models\LifeArea;
 use App\Models\Task;
 use App\Support\Brain\GitRepository;
 use App\Support\Curator\SuggestionApplier;
@@ -161,28 +160,29 @@ test('fails a create_list_item suggestion when the list is not found', function 
     expect(fn () => app(SuggestionApplier::class)->apply($suggestion))->toThrow(RuntimeException::class);
 });
 
-test('applies a create_goal suggestion by resolving the life area by name', function () {
-    $lifeArea = LifeArea::factory()->create(['name' => 'Immobilier']);
+test('applies a create_goal suggestion and resolves the entity by name', function () {
+    $entity = Entity::factory()->create(['name' => 'Appart Lilas']);
     $document = BrainDocument::factory()->create(['path' => 'TARS/note.md']);
 
     $suggestion = BrainSuggestion::factory()->create([
         'brain_document_id' => $document->id,
         'action' => 'create_goal',
-        'frontmatter_patch' => ['title' => 'Vendre l\'appart', 'life_area' => 'immo'],
+        'frontmatter_patch' => ['title' => 'Vendre l\'appart', 'entity' => 'Appart Lilas'],
     ]);
 
     app(SuggestionApplier::class)->apply($suggestion);
 
     $goal = Goal::where('title', "Vendre l'appart")->firstOrFail();
-    expect($goal->life_area_id)->toBe($lifeArea->id);
+    expect($goal->entity_id)->toBe($entity->id)
+        ->and($suggestion->fresh()->created_id)->toBe($goal->id);
 });
 
-test('fails a create_goal suggestion when the life area cannot be resolved', function () {
+test('fails a create_goal suggestion with no title', function () {
     $document = BrainDocument::factory()->create(['path' => 'TARS/note.md']);
     $suggestion = BrainSuggestion::factory()->create([
         'brain_document_id' => $document->id,
         'action' => 'create_goal',
-        'frontmatter_patch' => ['title' => 'Nouvel objectif'],
+        'frontmatter_patch' => [],
     ]);
 
     expect(fn () => app(SuggestionApplier::class)->apply($suggestion))->toThrow(RuntimeException::class);

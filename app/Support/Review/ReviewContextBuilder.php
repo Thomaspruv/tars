@@ -53,7 +53,7 @@ class ReviewContextBuilder
     private function buildActiveGoals(): string
     {
         $goals = Goal::where('status', GoalStatus::Active)
-            ->with(['lifeArea', 'milestones', 'tasks', 'notes'])
+            ->with(['milestones', 'tasks', 'notes'])
             ->get();
 
         if ($goals->isEmpty()) {
@@ -74,7 +74,7 @@ class ReviewContextBuilder
 
             $target = $goal->target_date ? $goal->target_date->translatedFormat('d M Y') : 'aucune';
 
-            return "- **{$goal->title}** ({$goal->lifeArea->name}) — jalons {$milestonesDone}/{$milestonesTotal}, cible : {$target}, dernière activité il y a {$weeksSinceActivity} semaine(s)";
+            return "- **{$goal->title}** — jalons {$milestonesDone}/{$milestonesTotal}, cible : {$target}, dernière activité il y a {$weeksSinceActivity} semaine(s)";
         })->implode("\n");
 
         return "## Objectifs actifs\n{$lines}";

@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Entity;
-use App\Models\LifeArea;
 use App\Support\Entity\EntityDetailFields;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
@@ -15,8 +14,6 @@ new #[Title('Entités')] class extends Component
     public string $name = '';
 
     public string $type = 'company';
-
-    public ?int $lifeAreaId = null;
 
     public string $notes = '';
 
@@ -33,12 +30,6 @@ new #[Title('Entités')] class extends Component
             ])
             ->orderBy('name')
             ->get();
-    }
-
-    #[Computed]
-    public function allLifeAreas(): Collection
-    {
-        return LifeArea::orderBy('position')->get();
     }
 
     /**
@@ -68,7 +59,6 @@ new #[Title('Entités')] class extends Component
     {
         $this->reset(['name', 'notes', 'details']);
         $this->type = 'company';
-        $this->lifeAreaId = $this->allLifeAreas->first()?->id;
         $this->showCreateModal = true;
     }
 
@@ -77,13 +67,11 @@ new #[Title('Entités')] class extends Component
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', 'in:company,property,vehicle,other'],
-            'lifeAreaId' => ['required', 'exists:life_areas,id'],
             'notes' => ['nullable', 'string'],
             ...EntityDetailFields::validationRules($this->type, 'details'),
         ]);
 
         Entity::create([
-            'life_area_id' => $validated['lifeAreaId'],
             'name' => $validated['name'],
             'type' => $validated['type'],
             'notes' => $validated['notes'],
@@ -140,16 +128,6 @@ new #[Title('Entités')] class extends Component
             </div>
 
             <x-entity-detail-fields :fields="$this->detailFields" prefix="details" />
-
-            <div>
-                <label class="text-xs text-(--mut)">Domaine de vie</label>
-                <select wire:model="lifeAreaId" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)">
-                    @foreach ($this->allLifeAreas as $lifeArea)
-                        <option value="{{ $lifeArea->id }}">{{ $lifeArea->name }}</option>
-                    @endforeach
-                </select>
-                @error('lifeAreaId') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
-            </div>
 
             <div>
                 <label class="text-xs text-(--mut)">Notes (optionnel)</label>

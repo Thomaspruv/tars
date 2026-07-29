@@ -6,7 +6,6 @@ use App\Models\BrainSuggestion;
 use App\Models\Checklist;
 use App\Models\Entity;
 use App\Models\Goal;
-use App\Models\LifeArea;
 use App\Models\McpCall;
 use App\Models\Task;
 use App\Support\Curator\CuratorContextBuilder;
@@ -47,9 +46,8 @@ test('tidy mission excludes unmanaged folders even when unanchored', function ()
 });
 
 test('assembles the referential, living map, notes, mcp calls and open tasks sections', function () {
-    $lifeArea = LifeArea::factory()->create(['name' => 'Immobilier']);
-    Entity::factory()->create(['name' => 'Appart Lilas', 'life_area_id' => $lifeArea->id]);
-    Goal::factory()->create(['title' => 'Rénover la salle de bain', 'life_area_id' => $lifeArea->id]);
+    Entity::factory()->create(['name' => 'Appart Lilas']);
+    Goal::factory()->create(['title' => 'Rénover la salle de bain']);
     BrainDocument::factory()->create(['path' => 'Notes/plombier.md', 'title' => 'Plombier']);
     BrainDocument::factory()->create(['path' => 'TARS/2026-07-27-note.md', 'frontmatter' => ['type' => 'a-traiter'], 'content' => 'Rappeler Marc jeudi.']);
     Task::factory()->create(['title' => 'Tâche ouverte existante', 'status' => 'todo']);

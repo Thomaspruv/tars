@@ -3,7 +3,6 @@
 namespace Database\Factories;
 
 use App\Models\Entity;
-use App\Models\LifeArea;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -19,7 +18,6 @@ class EntityFactory extends Factory
     public function definition(): array
     {
         return [
-            'life_area_id' => LifeArea::factory(),
             'name' => fake()->company(),
             'type' => fake()->randomElement(['company', 'property', 'vehicle', 'other']),
             'context' => fake()->randomElement(['perso', 'pro']),

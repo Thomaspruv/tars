@@ -121,6 +121,6 @@ Format de sortie JSON pour ces actions (même schéma que la section 2, avec
 ces clés adaptées) :
 { "path": "...", "action": "create_task|create_list_item|create_goal",
   "target": "nom de la liste ciblée, si create_list_item",
-  "frontmatter": { "title": "...", "date": "...", "entity": "...", "goal": "...", "content": "...", "life_area": "..." },
+  "frontmatter": { "title": "...", "date": "...", "entity": "...", "goal": "...", "content": "..." },
   "confidence": "high|medium",
   "reason": "une phrase, en français, lisible par Thomas" }

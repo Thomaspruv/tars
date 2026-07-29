@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Entity;
-use App\Models\LifeArea;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -23,17 +22,14 @@ test('it lists active entities and hides archived ones', function () {
 test('it creates an entity', function () {
     $this->actingAs(User::factory()->create());
 
-    $area = LifeArea::factory()->create();
-
     Livewire::test('pages::entities')
         ->call('openCreateModal')
         ->set('name', 'Appart Lyon')
         ->set('type', 'property')
-        ->set('lifeAreaId', $area->id)
         ->call('createEntity')
         ->assertSet('showCreateModal', false);
 
-    expect(Entity::where('name', 'Appart Lyon')->where('life_area_id', $area->id)->exists())->toBeTrue();
+    expect(Entity::where('name', 'Appart Lyon')->exists())->toBeTrue();
 });
 
 test('it requires a name to create an entity', function () {
@@ -49,13 +45,10 @@ test('it requires a name to create an entity', function () {
 test('it creates an entity with type-specific detail fields', function () {
     $this->actingAs(User::factory()->create());
 
-    $area = LifeArea::factory()->create();
-
     Livewire::test('pages::entities')
         ->call('openCreateModal')
         ->set('name', 'Appart Lyon')
         ->set('type', 'property')
-        ->set('lifeAreaId', $area->id)
         ->set('details.address', '3 rue de la République')
         ->set('details.surface_m2', '54')
         ->set('details.occupation', '')
@@ -73,13 +66,10 @@ test('it creates an entity with type-specific detail fields', function () {
 test('detail fields are all optional', function () {
     $this->actingAs(User::factory()->create());
 
-    $area = LifeArea::factory()->create();
-
     Livewire::test('pages::entities')
         ->call('openCreateModal')
         ->set('name', 'SCI Test')
         ->set('type', 'company')
-        ->set('lifeAreaId', $area->id)
         ->call('createEntity')
         ->assertHasNoErrors();
 

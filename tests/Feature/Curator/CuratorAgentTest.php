@@ -10,7 +10,6 @@ use App\Models\BrainSuggestion;
 use App\Models\Checklist;
 use App\Models\ChecklistItem;
 use App\Models\Goal;
-use App\Models\LifeArea;
 use App\Models\Task;
 use App\Support\Agents\AgentRunner;
 use App\Support\Brain\GitRepository;
@@ -326,58 +325,7 @@ test('never auto-applies create_task at medium confidence', function () {
     expect(BrainSuggestion::firstOrFail()->status)->toBe(BrainSuggestionStatus::Pending);
 });
 
-test('auto-applies create_goal at high confidence when the life area resolves', function () {
-    AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
-    LifeArea::factory()->create(['name' => 'Perso']);
-    File::put($this->vaultPath.'/TARS/note.md', "---\ntype: a-traiter\n---\n\nNouvel objectif.");
-    BrainDocument::factory()->create(['path' => 'TARS/note.md', 'frontmatter' => ['type' => 'a-traiter']]);
-
-    $this->mock(GitRepository::class, fn ($mock) => $mock->shouldReceive('commit')->once());
-
-    $this->mock(AgentRunner::class, function ($mock) {
-        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
-            'path' => 'TARS/note.md',
-            'action' => 'create_goal',
-            'frontmatter' => ['title' => 'Nouvel objectif', 'life_area' => 'Perso'],
-            'confidence' => 'high',
-            'reason' => 'x',
-        ]])]));
-    });
-
-    app(CuratorAgent::class)->process(AgentRunTrigger::Scheduled, 'todo');
-
-    $suggestion = BrainSuggestion::firstOrFail();
-    expect($suggestion->status)->toBe(BrainSuggestionStatus::AutoApplied)
-        ->and($suggestion->created_type)->toBe(Goal::class)
-        ->and(Goal::where('title', 'Nouvel objectif')->exists())->toBeTrue();
-});
-
-test('falls back to pending when create_goal at high confidence duplicates an existing goal', function () {
-    AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
-    LifeArea::factory()->create(['name' => 'Perso']);
-    Goal::factory()->create(['title' => 'Nouvel objectif']);
-    File::put($this->vaultPath.'/TARS/note.md', "---\ntype: a-traiter\n---\n\nNouvel objectif.");
-    BrainDocument::factory()->create(['path' => 'TARS/note.md', 'frontmatter' => ['type' => 'a-traiter']]);
-
-    $this->mock(GitRepository::class, fn ($mock) => $mock->shouldReceive('commit')->once());
-
-    $this->mock(AgentRunner::class, function ($mock) {
-        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
-            'path' => 'TARS/note.md',
-            'action' => 'create_goal',
-            'frontmatter' => ['title' => 'Nouvel objectif', 'life_area' => 'Perso'],
-            'confidence' => 'high',
-            'reason' => 'x',
-        ]])]));
-    });
-
-    app(CuratorAgent::class)->process(AgentRunTrigger::Scheduled, 'todo');
-
-    expect(BrainSuggestion::firstOrFail()->status)->toBe(BrainSuggestionStatus::Pending)
-        ->and(Goal::where('title', 'Nouvel objectif')->count())->toBe(1);
-});
-
-test('falls back to pending when create_goal at high confidence has no resolvable life area', function () {
+test('auto-applies create_goal at high confidence', function () {
     AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
     File::put($this->vaultPath.'/TARS/note.md', "---\ntype: a-traiter\n---\n\nNouvel objectif.");
     BrainDocument::factory()->create(['path' => 'TARS/note.md', 'frontmatter' => ['type' => 'a-traiter']]);
@@ -396,7 +344,34 @@ test('falls back to pending when create_goal at high confidence has no resolvabl
 
     app(CuratorAgent::class)->process(AgentRunTrigger::Scheduled, 'todo');
 
-    expect(BrainSuggestion::firstOrFail()->status)->toBe(BrainSuggestionStatus::Pending);
+    $suggestion = BrainSuggestion::firstOrFail();
+    expect($suggestion->status)->toBe(BrainSuggestionStatus::AutoApplied)
+        ->and($suggestion->created_type)->toBe(Goal::class)
+        ->and(Goal::where('title', 'Nouvel objectif')->exists())->toBeTrue();
+});
+
+test('falls back to pending when create_goal at high confidence duplicates an existing goal', function () {
+    AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
+    Goal::factory()->create(['title' => 'Nouvel objectif']);
+    File::put($this->vaultPath.'/TARS/note.md', "---\ntype: a-traiter\n---\n\nNouvel objectif.");
+    BrainDocument::factory()->create(['path' => 'TARS/note.md', 'frontmatter' => ['type' => 'a-traiter']]);
+
+    $this->mock(GitRepository::class, fn ($mock) => $mock->shouldReceive('commit')->once());
+
+    $this->mock(AgentRunner::class, function ($mock) {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
+            'path' => 'TARS/note.md',
+            'action' => 'create_goal',
+            'frontmatter' => ['title' => 'Nouvel objectif'],
+            'confidence' => 'high',
+            'reason' => 'x',
+        ]])]));
+    });
+
+    app(CuratorAgent::class)->process(AgentRunTrigger::Scheduled, 'todo');
+
+    expect(BrainSuggestion::firstOrFail()->status)->toBe(BrainSuggestionStatus::Pending)
+        ->and(Goal::where('title', 'Nouvel objectif')->count())->toBe(1);
 });
 
 test('auto-applies create_list_item into the matching list', function () {

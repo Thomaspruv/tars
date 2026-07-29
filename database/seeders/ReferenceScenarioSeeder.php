@@ -8,7 +8,6 @@ use App\Models\Entity;
 use App\Models\Event;
 use App\Models\Goal;
 use App\Models\InboxItem;
-use App\Models\LifeArea;
 use App\Models\Task;
 use Illuminate\Database\Seeder;
 
@@ -20,35 +19,25 @@ class ReferenceScenarioSeeder extends Seeder
      */
     public function run(): void
     {
-        $pro = LifeArea::create(['name' => 'Pro', 'color' => '#53D6E8', 'position' => 0]);
-        $immobilier = LifeArea::create(['name' => 'Immobilier', 'color' => '#9D8CF5', 'position' => 1]);
-        $finances = LifeArea::create(['name' => 'Finances', 'color' => '#4ADE80', 'position' => 2]);
-        $sante = LifeArea::create(['name' => 'Santé', 'color' => '#FBBF24', 'position' => 3]);
-        LifeArea::create(['name' => 'Perso', 'color' => '#8A93A8', 'position' => 4]);
-
         $sarlAlpha = Entity::create([
-            'life_area_id' => $pro->id,
             'name' => 'SARL Alpha',
             'type' => 'company',
             'context' => 'pro',
         ]);
 
         $sasBeta = Entity::create([
-            'life_area_id' => $pro->id,
             'name' => 'SAS Beta',
             'type' => 'company',
             'context' => 'pro',
         ]);
 
         $appartLilas = Entity::create([
-            'life_area_id' => $immobilier->id,
             'name' => 'Appart Lilas',
             'type' => 'property',
             'context' => 'perso',
         ]);
 
         $appartLyon = Entity::create([
-            'life_area_id' => $immobilier->id,
             'name' => 'Appart Lyon',
             'type' => 'property',
             'context' => 'perso',
@@ -83,7 +72,6 @@ class ReferenceScenarioSeeder extends Seeder
         }
 
         $goal500k = Goal::create([
-            'life_area_id' => $pro->id,
             'entity_id' => $sarlAlpha->id,
             'title' => '500k CA SARL Alpha',
             'description' => "Atteindre 500k€ de chiffre d'affaires annuel pour la SARL Alpha.",
@@ -100,7 +88,6 @@ class ReferenceScenarioSeeder extends Seeder
         ]);
 
         $goalRenovation = Goal::create([
-            'life_area_id' => $immobilier->id,
             'entity_id' => $appartLilas->id,
             'title' => 'Rénover SDB Lilas',
             'description' => 'Refaire entièrement la salle de bain de l\'appart Lilas.',
@@ -111,7 +98,6 @@ class ReferenceScenarioSeeder extends Seeder
         $goalRenovation->milestones()->create(['title' => 'Commander le carrelage', 'position' => 1]);
 
         $goalSemiMarathon = Goal::create([
-            'life_area_id' => $sante->id,
             'title' => 'Semi-marathon',
             'description' => 'Courir un semi-marathon en moins de 2h.',
             'target_date' => today()->addMonths(6),

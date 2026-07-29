@@ -26,7 +26,7 @@ new #[Title('Entité')] class extends Component
 
     public function mount(): void
     {
-        $this->entity->load(['goals.milestones', 'lifeArea']);
+        $this->entity->load(['goals.milestones']);
     }
 
     #[Computed]
@@ -150,8 +150,7 @@ new #[Title('Entité')] class extends Component
 
     <div class="mt-4 flex items-start justify-between gap-4">
         <div>
-            <p class="text-xs text-(--mut)">{{ $entity->lifeArea?->name }}</p>
-            <h1 class="mt-1 text-[28px] font-bold tracking-[-0.02em] text-(--tx)">{{ $entity->name }}</h1>
+            <h1 class="text-[28px] font-bold tracking-[-0.02em] text-(--tx)">{{ $entity->name }}</h1>
         </div>
 
         <div class="flex shrink-0 items-center gap-2">

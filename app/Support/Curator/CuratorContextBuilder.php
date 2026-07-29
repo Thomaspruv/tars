@@ -9,7 +9,6 @@ use App\Models\BrainSuggestion;
 use App\Models\Checklist;
 use App\Models\Entity;
 use App\Models\Goal;
-use App\Models\LifeArea;
 use App\Models\McpCall;
 use App\Models\Task;
 use Illuminate\Support\Collection;
@@ -70,24 +69,18 @@ class CuratorContextBuilder
 
     private function buildReferential(): string
     {
-        $lifeAreas = LifeArea::pluck('name')->implode(', ');
-
         $entities = Entity::where('status', 'active')
-            ->with('lifeArea')
             ->get()
-            ->map(fn (Entity $entity): string => "- {$entity->name} ({$entity->type->value}, {$entity->lifeArea->name})")
+            ->map(fn (Entity $entity): string => "- {$entity->name} ({$entity->type->value})")
             ->implode("\n");
 
         $goals = Goal::where('status', GoalStatus::Active)
-            ->with('lifeArea')
             ->get()
-            ->map(fn (Goal $goal): string => "- {$goal->title} ({$goal->lifeArea->name})")
+            ->map(fn (Goal $goal): string => "- {$goal->title}")
             ->implode("\n");
 
         return <<<MD
         ## Référentiel d'ancrage
-        Domaines de vie : {$lifeAreas}.
-
         Entités :
         {$entities}
 

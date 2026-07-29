@@ -4,7 +4,6 @@ use App\Enums\InboxConvertedType;
 use App\Models\Event;
 use App\Models\Goal;
 use App\Models\InboxItem;
-use App\Models\LifeArea;
 use App\Models\Task;
 use App\Models\User;
 use Livewire\Livewire;
@@ -54,21 +53,16 @@ test('it converts an inbox item to an event', function () {
     expect($item->fresh()->processed_at)->not->toBeNull();
 });
 
-test('it converts an inbox item to a goal within a chosen life area', function () {
+test('it converts an inbox item to a goal', function () {
     $this->actingAs(User::factory()->create());
 
-    $lifeArea = LifeArea::factory()->create();
     $item = InboxItem::factory()->create(['content' => 'Courir un semi']);
 
-    Livewire::test('pages::inbox')
-        ->call('startConvertToGoal', $item->id)
-        ->set('selectedLifeAreaId', $lifeArea->id)
-        ->call('confirmConvertToGoal', $item->id);
+    Livewire::test('pages::inbox')->call('convertToGoal', $item->id);
 
     $goal = Goal::where('title', 'Courir un semi')->first();
 
     expect($goal)->not->toBeNull();
-    expect($goal->life_area_id)->toBe($lifeArea->id);
     expect($item->fresh()->processed_at)->not->toBeNull();
 });
 

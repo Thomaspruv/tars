@@ -23,10 +23,6 @@
 
     <h3 class="mt-3 text-[15.5px] font-semibold text-(--tx)">{{ $goal->title }}</h3>
 
-    @if ($goal->lifeArea)
-        <p class="mt-1 text-xs text-(--mut)">{{ $goal->lifeArea->name }}</p>
-    @endif
-
     @if ($milestonesTotal > 0)
         <div class="mt-4">
             <div class="flex items-center justify-between text-xs">

@@ -3,7 +3,6 @@
 use App\Enums\GoalStatus;
 use App\Models\Entity;
 use App\Models\Goal;
-use App\Models\LifeArea;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -17,30 +16,19 @@ new #[Title('Objectifs')] class extends Component
 
     public string $description = '';
 
-    public ?int $lifeAreaId = null;
-
     public ?int $entityId = null;
 
     public ?string $targetDate = null;
 
     #[Computed]
-    public function lifeAreas(): Collection
+    public function goals(): Collection
     {
-        return LifeArea::with([
-            'goals' => fn ($query) => $query->orderBy('position')->with([
-                'milestones',
-                'lifeArea',
-                'tasks' => fn ($query) => $query->where('status', 'done')
-                    ->where('completed_at', '>=', now()->subWeeks(6))
-                    ->select('id', 'goal_id', 'completed_at'),
-            ]),
-        ])->orderBy('position')->get();
-    }
-
-    #[Computed]
-    public function allLifeAreas(): Collection
-    {
-        return LifeArea::orderBy('position')->get();
+        return Goal::orderBy('position')->with([
+            'milestones',
+            'tasks' => fn ($query) => $query->where('status', 'done')
+                ->where('completed_at', '>=', now()->subWeeks(6))
+                ->select('id', 'goal_id', 'completed_at'),
+        ])->get();
     }
 
     #[Computed]
@@ -68,7 +56,6 @@ new #[Title('Objectifs')] class extends Component
     public function openCreateModal(): void
     {
         $this->reset(['title', 'description', 'entityId', 'targetDate']);
-        $this->lifeAreaId = $this->allLifeAreas->first()?->id;
         $this->showCreateModal = true;
     }
 
@@ -77,13 +64,11 @@ new #[Title('Objectifs')] class extends Component
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'lifeAreaId' => ['required', 'exists:life_areas,id'],
             'entityId' => ['nullable', 'exists:entities,id'],
             'targetDate' => ['nullable', 'date'],
         ]);
 
         Goal::create([
-            'life_area_id' => $validated['lifeAreaId'],
             'entity_id' => $validated['entityId'],
             'title' => $validated['title'],
             'description' => $validated['description'],
@@ -91,7 +76,7 @@ new #[Title('Objectifs')] class extends Component
         ]);
 
         $this->showCreateModal = false;
-        unset($this->lifeAreas);
+        unset($this->goals);
     }
 };
 ?>
@@ -102,31 +87,19 @@ new #[Title('Objectifs')] class extends Component
         <x-btn variant="primary" wire:click="openCreateModal">+ Nouvel objectif</x-btn>
     </div>
 
-    <div class="mt-8 space-y-10">
-        @forelse ($this->lifeAreas as $lifeArea)
-            @if ($lifeArea->goals->isNotEmpty())
-                <div wire:key="area-{{ $lifeArea->id }}">
-                    <div class="flex items-center gap-2">
-                        <span class="size-2.5 rounded-[3px]" style="background: {{ $lifeArea->color }}"></span>
-                        <h2 class="text-base font-semibold text-(--tx)">{{ $lifeArea->name }}</h2>
-                    </div>
+    <div class="mt-8">
+        <div class="grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))">
+            @foreach ($this->goals as $goal)
+                <x-card-goal
+                    :goal="$goal"
+                    :weekly-activity="$this->weeklyActivityFor($goal)"
+                    :stagnant="$this->isStagnant($goal)"
+                    wire:key="goal-{{ $goal->id }}"
+                />
+            @endforeach
+        </div>
 
-                    <div class="mt-4 grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))">
-                        @foreach ($lifeArea->goals as $goal)
-                            <x-card-goal
-                                :goal="$goal"
-                                :weekly-activity="$this->weeklyActivityFor($goal)"
-                                :stagnant="$this->isStagnant($goal)"
-                                wire:key="goal-{{ $goal->id }}"
-                            />
-                        @endforeach
-                    </div>
-                </div>
-            @endif
-        @empty
-        @endforelse
-
-        @if ($this->lifeAreas->every(fn ($lifeArea) => $lifeArea->goals->isEmpty()))
+        @if ($this->goals->isEmpty())
             <p class="p-8 text-center text-sm text-(--mut)">Aucun objectif pour l'instant.</p>
         @endif
     </div>
@@ -139,16 +112,6 @@ new #[Title('Objectifs')] class extends Component
                 <label class="text-xs text-(--mut)">Titre</label>
                 <input type="text" wire:model="title" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)" />
                 @error('title') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
-            </div>
-
-            <div>
-                <label class="text-xs text-(--mut)">Domaine de vie</label>
-                <select wire:model="lifeAreaId" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)">
-                    @foreach ($this->allLifeAreas as $lifeArea)
-                        <option value="{{ $lifeArea->id }}">{{ $lifeArea->name }}</option>
-                    @endforeach
-                </select>
-                @error('lifeAreaId') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
             </div>
 
             <div>

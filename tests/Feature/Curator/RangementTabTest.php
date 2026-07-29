@@ -62,7 +62,7 @@ test('shows an inline error and leaves the suggestion pending when acceptance fa
     $suggestion = BrainSuggestion::factory()->create([
         'brain_document_id' => $document->id,
         'action' => 'create_goal',
-        'frontmatter_patch' => ['title' => 'Nouvel objectif'],
+        'frontmatter_patch' => [],
     ]);
 
     Livewire::test('pages::brain')

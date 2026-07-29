@@ -17,7 +17,6 @@ use Illuminate\Support\Str;
 
 /**
  * @property int $id
- * @property int $life_area_id
  * @property int|null $entity_id
  * @property string $title
  * @property string|null $description
@@ -29,7 +28,7 @@ use Illuminate\Support\Str;
  * @property Carbon|null $updated_at
  * @property-read string $tag
  */
-#[Fillable(['life_area_id', 'entity_id', 'title', 'description', 'status', 'target_date', 'review_frequency', 'position'])]
+#[Fillable(['entity_id', 'title', 'description', 'status', 'target_date', 'review_frequency', 'position'])]
 class Goal extends Model
 {
     /** @use HasFactory<GoalFactory> */
@@ -58,14 +57,6 @@ class Goal extends Model
         return Attribute::make(
             get: fn (): string => Str::slug($this->title),
         )->shouldCache();
-    }
-
-    /**
-     * @return BelongsTo<LifeArea, $this>
-     */
-    public function lifeArea(): BelongsTo
-    {
-        return $this->belongsTo(LifeArea::class);
     }
 
     /**

@@ -3,7 +3,6 @@
 namespace Database\Factories;
 
 use App\Models\Goal;
-use App\Models\LifeArea;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -19,7 +18,6 @@ class GoalFactory extends Factory
     public function definition(): array
     {
         return [
-            'life_area_id' => LifeArea::factory(),
             'entity_id' => null,
             'title' => fake()->sentence(4),
             'description' => fake()->paragraph(),

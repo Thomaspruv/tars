@@ -8,7 +8,6 @@ use App\Models\BrainSuggestion;
 use App\Models\Checklist;
 use App\Models\ChecklistItem;
 use App\Models\Goal;
-use App\Models\LifeArea;
 use App\Models\Task;
 use App\Support\Brain\AnchorResolver;
 use App\Support\Brain\BrainSettings;
@@ -199,18 +198,9 @@ class SuggestionApplier
             throw new RuntimeException("Titre d'objectif manquant.");
         }
 
-        $lifeArea = ! empty($patch['life_area'])
-            ? $this->fuzzyMatcher->bestMatch(LifeArea::all(), (string) $patch['life_area'], fn (LifeArea $lifeArea): string => $lifeArea->name)
-            : null;
-
-        if (! $lifeArea) {
-            throw new RuntimeException('Domaine de vie introuvable ou non précisé pour cet objectif.');
-        }
-
         $entity = ! empty($patch['entity']) ? $this->anchorResolver->resolveEntity((string) $patch['entity']) : null;
 
         $goal = Goal::create([
-            'life_area_id' => $lifeArea->id,
             'entity_id' => $entity?->id,
             'title' => $title,
         ]);

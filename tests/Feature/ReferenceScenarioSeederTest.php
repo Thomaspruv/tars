@@ -4,16 +4,11 @@ use App\Enums\EntityType;
 use App\Models\Checklist;
 use App\Models\Entity;
 use App\Models\Goal;
-use App\Models\LifeArea;
 use App\Models\Task;
 use Database\Seeders\ReferenceScenarioSeeder;
 
 test('it seeds every element of the reference scenario from SPECS.md §6bis', function () {
     (new ReferenceScenarioSeeder)->run();
-
-    foreach (['Pro', 'Immobilier', 'Finances', 'Santé', 'Perso'] as $name) {
-        expect(LifeArea::where('name', $name)->exists())->toBeTrue("Missing life area [{$name}]");
-    }
 
     $companies = Entity::where('type', EntityType::Company)->pluck('name');
     expect($companies)->toContain('SARL Alpha')->toContain('SAS Beta');

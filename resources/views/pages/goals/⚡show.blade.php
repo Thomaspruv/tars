@@ -27,7 +27,7 @@ new #[Title('Objectif')] class extends Component
 
     public function mount(): void
     {
-        $this->goal->load(['milestones' => fn ($query) => $query->orderBy('position'), 'lifeArea', 'entity']);
+        $this->goal->load(['milestones' => fn ($query) => $query->orderBy('position'), 'entity']);
     }
 
     #[Computed]
@@ -146,9 +146,6 @@ new #[Title('Objectif')] class extends Component
         <div>
             <div class="flex items-center gap-3">
                 <x-badge-status :status="$goal->status" />
-                @if ($goal->lifeArea)
-                    <span class="text-xs text-(--mut)">{{ $goal->lifeArea->name }}</span>
-                @endif
             </div>
             <h1 class="mt-2 text-[28px] font-bold tracking-[-0.02em] text-(--tx)">{{ $goal->title }}</h1>
             @if ($goal->description)

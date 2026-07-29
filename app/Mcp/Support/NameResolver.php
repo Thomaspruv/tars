@@ -6,7 +6,6 @@ use App\Models\BrainDocument;
 use App\Models\Checklist;
 use App\Models\Entity;
 use App\Models\Goal;
-use App\Models\LifeArea;
 use App\Models\Task;
 use App\Support\FuzzyMatcher;
 use Illuminate\Support\Collection;
@@ -21,14 +20,6 @@ class NameResolver
     public function entities(string $needle): Collection
     {
         return $this->matcher->rankedMatches(Entity::all(), $needle, fn (Entity $entity): string => $entity->name);
-    }
-
-    /**
-     * @return Collection<int, LifeArea>
-     */
-    public function lifeAreas(string $needle): Collection
-    {
-        return $this->matcher->rankedMatches(LifeArea::all(), $needle, fn (LifeArea $lifeArea): string => $lifeArea->name);
     }
 
     /**
