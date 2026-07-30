@@ -4,6 +4,7 @@ use App\Enums\TaskStatus;
 use App\Models\Checklist;
 use App\Models\ChecklistItem;
 use App\Models\Event;
+use App\Models\InboxItem;
 use App\Models\Review;
 use App\Models\Task;
 use App\Models\User;
@@ -118,4 +119,50 @@ test('respects a custom weekly review time', function () {
     $this->actingAs(User::factory()->create());
 
     expect(Livewire::test('pages::today')->get('daysUntilReview'))->toBe(0);
+});
+
+test('shows an inbox pending nudge when there are unprocessed inbox items', function () {
+    $this->actingAs(User::factory()->create());
+
+    InboxItem::factory()->create(['processed_at' => null]);
+
+    $this->get(route('today'))->assertSee('1 élément en inbox');
+});
+
+test('does not show the inbox pending nudge when there are no unprocessed inbox items', function () {
+    $this->actingAs(User::factory()->create());
+
+    InboxItem::factory()->create(['processed_at' => now()]);
+
+    $this->get(route('today'))->assertDontSee('en inbox');
+});
+
+test('groups overdue tasks under an "En retard" heading', function () {
+    $this->actingAs(User::factory()->create());
+
+    $overdue = Task::factory()->create(['title' => 'Overdue task', 'due_date' => today()->subDay()]);
+    $dueToday = Task::factory()->create(['title' => 'Due today task', 'scheduled_date' => today()]);
+
+    $this->get(route('today'))
+        ->assertSee('En retard')
+        ->assertSee($overdue->title)
+        ->assertSee($dueToday->title);
+});
+
+test('does not show the "En retard" heading when there is no overdue task', function () {
+    $this->actingAs(User::factory()->create());
+
+    Task::factory()->create(['title' => 'Due today only', 'scheduled_date' => today()]);
+
+    $this->get(route('today'))->assertDontSee('En retard');
+});
+
+test('shows completed-today tasks inside the "Terminées aujourd\'hui" section', function () {
+    $this->actingAs(User::factory()->create());
+
+    $done = Task::factory()->done()->create(['title' => 'Done today task', 'scheduled_date' => today(), 'completed_at' => now()]);
+
+    $this->get(route('today'))
+        ->assertSee("Terminées aujourd'hui", false)
+        ->assertSee($done->title);
 });

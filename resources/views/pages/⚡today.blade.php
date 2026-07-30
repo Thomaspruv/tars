@@ -4,6 +4,7 @@ use App\Enums\TaskStatus;
 use App\Models\Checklist;
 use App\Models\ChecklistItem;
 use App\Models\Event;
+use App\Models\InboxItem;
 use App\Models\QuestionnaireRun;
 use App\Models\Review;
 use App\Models\Task;
@@ -27,6 +28,39 @@ new #[Title('Aujourd\'hui')] class extends Component
             ->orderBy('due_date')
             ->orderBy('priority')
             ->get();
+    }
+
+    #[Computed]
+    public function overdueTasks(): Collection
+    {
+        return $this->tasksToday->filter(
+            fn (Task $task): bool => $task->status !== TaskStatus::Done
+                && $task->due_date !== null
+                && $task->due_date->isPast()
+                && ! $task->due_date->isToday(),
+        );
+    }
+
+    #[Computed]
+    public function dueTodayTasks(): Collection
+    {
+        $overdueIds = $this->overdueTasks->modelKeys();
+
+        return $this->tasksToday->reject(
+            fn (Task $task): bool => $task->status === TaskStatus::Done || in_array($task->id, $overdueIds, true),
+        );
+    }
+
+    #[Computed]
+    public function doneTodayTasks(): Collection
+    {
+        return $this->tasksToday->where('status', TaskStatus::Done);
+    }
+
+    #[Computed]
+    public function inboxPendingCount(): int
+    {
+        return InboxItem::whereNull('processed_at')->count();
     }
 
     #[Computed]
@@ -100,34 +134,47 @@ new #[Title('Aujourd\'hui')] class extends Component
 ?>
 
 <div>
-    <x-screen-header treatment="work" title="Aujourd'hui" />
+    @php
+        $reviewSubtitle = $this->pendingReview
+            ? null
+            : ($this->daysUntilReview === 0
+                ? "Prochaine revue aujourd'hui"
+                : 'Prochaine revue dans '.$this->daysUntilReview.' '.Str::plural('jour', $this->daysUntilReview));
+    @endphp
 
-    <div class="mt-6 rounded-[12px] border border-(--aibd2) p-[18px] {{ $this->pendingReview ? 'animate-pulse-soft' : '' }}" style="background: linear-gradient(135deg, rgba(167,139,250,.08), rgba(110,139,255,.05))">
-        <p class="font-mono text-[10.5px] font-semibold tracking-[.08em] text-(--ai) uppercase">Revue</p>
-        @if ($this->pendingReview)
-            <p class="mt-1 text-sm text-(--tx)">
-                Ta revue est <span class="font-semibold text-(--ac)">prête à lire</span>
-                — <a href="{{ route('review.index') }}" wire:navigate class="text-(--ac) underline underline-offset-2">l'ouvrir</a>
-            </p>
-        @else
-            <p class="mt-1 text-sm text-(--tx)">
-                @if ($this->daysUntilReview === 0)
-                    Prochaine revue <span class="font-semibold text-(--ac)">aujourd'hui</span>
-                @else
-                    Prochaine revue dans <span class="font-mono font-semibold text-(--ac)">{{ $this->daysUntilReview }}</span> {{ Str::plural('jour', $this->daysUntilReview) }}
-                @endif
-            </p>
-        @endif
-    </div>
+    <x-screen-header treatment="work" title="Aujourd'hui" :subtitle="$reviewSubtitle" />
 
-    @if ($this->pendingBilan)
-        <div class="mt-4 flex items-center justify-between rounded-[12px] border border-(--ac)/35 bg-(--acbg) px-[18px] py-3">
-            <p class="text-sm text-(--tx)">
-                <span class="font-semibold text-(--ac)">{{ $this->pendingBilan->questionnaire->name }}</span> en attente
-            </p>
-            <a href="{{ route('bilan.index', ['activeTab' => 'bilans']) }}" wire:navigate class="text-sm text-(--ac) underline underline-offset-2">
-                Le remplir →
-            </a>
+    @if ($this->pendingReview || $this->pendingBilan || $this->inboxPendingCount > 0)
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+            @if ($this->pendingReview)
+                <a
+                    href="{{ route('review.index') }}"
+                    wire:navigate
+                    class="animate-pulse-soft flex items-center gap-1.5 rounded-full border border-(--aibd2) bg-(--aibg) px-3 py-1.5 text-[12.5px] text-(--ai)"
+                >
+                    <span aria-hidden="true">◈</span> Revue prête à lire
+                </a>
+            @endif
+
+            @if ($this->pendingBilan)
+                <a
+                    href="{{ route('bilan.index', ['activeTab' => 'bilans']) }}"
+                    wire:navigate
+                    class="flex items-center gap-1.5 rounded-full border border-(--ac)/35 bg-(--acbg) px-3 py-1.5 text-[12.5px] text-(--ac)"
+                >
+                    Bilan en attente : {{ $this->pendingBilan->questionnaire->name }}
+                </a>
+            @endif
+
+            @if ($this->inboxPendingCount > 0)
+                <a
+                    href="{{ route('inbox.index') }}"
+                    wire:navigate
+                    class="flex items-center gap-1.5 rounded-full border border-(--warn)/35 bg-(--warnbg) px-3 py-1.5 text-[12.5px] text-(--warn)"
+                >
+                    {{ $this->inboxPendingCount }} {{ Str::plural('élément', $this->inboxPendingCount) }} en inbox
+                </a>
+            @endif
         </div>
     @endif
 
@@ -136,16 +183,62 @@ new #[Title('Aujourd\'hui')] class extends Component
             <div class="flex items-center justify-between">
                 <h2 class="text-base font-semibold text-(--tx)">Tâches du jour</h2>
                 <span class="font-mono text-xs text-(--mut)">
-                    {{ $this->tasksToday->where('status', TaskStatus::Done)->count() }}/{{ $this->tasksToday->count() }}
+                    {{ $this->doneTodayTasks->count() }}/{{ $this->tasksToday->count() }}
                 </span>
             </div>
 
-            <div class="mt-3 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
-                @forelse ($this->tasksToday as $task)
-                    <x-task-row :task="$task" wire:key="task-{{ $task->id }}" />
-                @empty
-                    <p class="p-5 text-center text-sm text-(--mut)">Rien à faire aujourd'hui.</p>
-                @endforelse
+            @php
+                $tasksTodayTotal = $this->tasksToday->count();
+                $tasksTodayPercent = $tasksTodayTotal > 0
+                    ? (int) round(($this->doneTodayTasks->count() / $tasksTodayTotal) * 100)
+                    : 0;
+            @endphp
+
+            @if ($tasksTodayTotal > 0)
+                <div class="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-(--surf2)">
+                    <div class="h-full rounded-full" style="width: {{ $tasksTodayPercent }}%; background: var(--gradient-signature)"></div>
+                </div>
+            @endif
+
+            <div class="mt-3 rounded-[12px] border border-(--bd) bg-(--surf)">
+                @if ($this->tasksToday->isEmpty())
+                    <p class="p-8 text-center text-sm text-(--mut)">Rien à faire aujourd'hui.</p>
+                @else
+                    @if ($this->overdueTasks->isNotEmpty())
+                        <p class="px-4 pt-3 pb-1 font-mono text-[10.5px] font-semibold tracking-[.06em] text-(--warn) uppercase">En retard</p>
+                        <div class="divide-y divide-(--bd)">
+                            @foreach ($this->overdueTasks as $task)
+                                <x-task-row :task="$task" wire:key="task-{{ $task->id }}" />
+                            @endforeach
+                        </div>
+                    @endif
+
+                    @if ($this->dueTodayTasks->isNotEmpty())
+                        <div class="divide-y divide-(--bd) {{ $this->overdueTasks->isNotEmpty() ? 'border-t border-(--bd)' : '' }}">
+                            @foreach ($this->dueTodayTasks as $task)
+                                <x-task-row :task="$task" wire:key="task-{{ $task->id }}" />
+                            @endforeach
+                        </div>
+                    @endif
+
+                    @if ($this->doneTodayTasks->isNotEmpty())
+                        <div x-data="{ open: false }" class="border-t border-(--bd)">
+                            <button
+                                type="button"
+                                @click="open = !open"
+                                class="flex w-full items-center gap-1.5 px-4 py-2.5 text-left font-mono text-[10.5px] font-semibold tracking-[.06em] text-(--mut) uppercase hover:text-(--tx)"
+                            >
+                                <span aria-hidden="true" class="inline-block text-[10px]" :class="open && 'rotate-180'">▾</span>
+                                Terminées aujourd'hui ({{ $this->doneTodayTasks->count() }})
+                            </button>
+                            <div x-show="open" x-cloak class="divide-y divide-(--bd) border-t border-(--bd)">
+                                @foreach ($this->doneTodayTasks as $task)
+                                    <x-task-row :task="$task" wire:key="task-{{ $task->id }}" />
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+                @endif
             </div>
         </div>
 
@@ -165,7 +258,7 @@ new #[Title('Aujourd\'hui')] class extends Component
                             <x-badge type="goal" :goal="$event->goal" />
                         </div>
                     @empty
-                        <p class="p-5 text-center text-sm text-(--mut)">Aucun événement à venir.</p>
+                        <p class="p-8 text-center text-sm text-(--mut)">Aucun événement à venir.</p>
                     @endforelse
                 </div>
             </div>
