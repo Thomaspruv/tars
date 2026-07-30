@@ -10,7 +10,7 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
 #[Name('delete_task')]
-#[Description('Supprime définitivement une tâche par titre approximatif, faite ou non. Pour marquer une tâche comme faite, utiliser complete_task.')]
+#[Description('Supprime définitivement une tâche par titre approximatif, faite ou non, ainsi que ses éventuelles sous-tâches. Pour marquer une tâche comme faite, utiliser complete_task.')]
 class DeleteTaskTool extends LoggedTool
 {
     public function __construct(private readonly NameResolver $resolver = new NameResolver) {}
@@ -37,8 +37,11 @@ class DeleteTaskTool extends LoggedTool
         }
 
         $title = $task->title;
+        $subtaskCount = $task->subtasks()->count();
         $task->delete();
 
-        return Response::text("Tâche « {$title} » supprimée.");
+        $suffix = $subtaskCount > 0 ? " (et {$subtaskCount} sous-tâche(s))" : '';
+
+        return Response::text("Tâche « {$title} » supprimée{$suffix}.");
     }
 }
