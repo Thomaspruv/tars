@@ -61,7 +61,11 @@ new #[Title('Questionnaire')] class extends Component
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'frequency' => ['required', 'in:weekly,monthly,quarterly,yearly'],
-            'anchor' => ['required', 'string'],
+            'anchor' => ['required', 'string', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (! $this->isValidAnchor($this->frequency, (string) $value)) {
+                    $fail("Format d'ancre invalide pour cette fréquence.");
+                }
+            }],
             'questions' => ['array'],
             'questions.*.text' => ['required', 'string'],
             'questions.*.type' => ['required', 'in:scale,text,boolean,number'],
@@ -91,6 +95,16 @@ new #[Title('Questionnaire')] class extends Component
     private function swap(int $a, int $b): void
     {
         [$this->questions[$a], $this->questions[$b]] = [$this->questions[$b], $this->questions[$a]];
+    }
+
+    private function isValidAnchor(string $frequency, string $anchor): bool
+    {
+        return match ($frequency) {
+            'weekly' => in_array(strtolower($anchor), ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], true),
+            'monthly', 'quarterly' => (bool) preg_match('/^([1-9]|[12]\d|3[01])$/', $anchor),
+            'yearly' => (bool) preg_match('/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/', $anchor),
+            default => false,
+        };
     }
 };
 ?>

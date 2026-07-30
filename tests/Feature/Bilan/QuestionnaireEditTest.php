@@ -101,3 +101,55 @@ test('a questionnaire without runs can be deleted', function () {
 
     expect(Questionnaire::find($questionnaire->id))->toBeNull();
 });
+
+test('rejects a weekly anchor that is not a 3-letter weekday abbreviation', function () {
+    $this->actingAs(User::factory()->create());
+
+    $questionnaire = Questionnaire::factory()->create();
+
+    Livewire::test('pages::bilan.questionnaire', ['questionnaire' => $questionnaire])
+        ->set('frequency', 'weekly')
+        ->set('anchor', 'monday')
+        ->call('save')
+        ->assertHasErrors(['anchor']);
+
+    expect($questionnaire->fresh()->frequency->value)->not->toBe('weekly');
+});
+
+test('accepts a valid weekly anchor', function () {
+    $this->actingAs(User::factory()->create());
+
+    $questionnaire = Questionnaire::factory()->create();
+
+    Livewire::test('pages::bilan.questionnaire', ['questionnaire' => $questionnaire])
+        ->set('frequency', 'weekly')
+        ->set('anchor', 'mon')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($questionnaire->fresh()->anchor)->toBe('mon');
+});
+
+test('rejects a yearly anchor that is not in MM-DD format', function () {
+    $this->actingAs(User::factory()->create());
+
+    $questionnaire = Questionnaire::factory()->create();
+
+    Livewire::test('pages::bilan.questionnaire', ['questionnaire' => $questionnaire])
+        ->set('frequency', 'yearly')
+        ->set('anchor', '1') // leftover monthly-style anchor
+        ->call('save')
+        ->assertHasErrors(['anchor']);
+});
+
+test('rejects a monthly anchor outside 1-31', function () {
+    $this->actingAs(User::factory()->create());
+
+    $questionnaire = Questionnaire::factory()->create();
+
+    Livewire::test('pages::bilan.questionnaire', ['questionnaire' => $questionnaire])
+        ->set('frequency', 'monthly')
+        ->set('anchor', '32')
+        ->call('save')
+        ->assertHasErrors(['anchor']);
+});

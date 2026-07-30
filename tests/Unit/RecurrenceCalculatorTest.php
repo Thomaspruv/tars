@@ -91,3 +91,61 @@ test('it throws for an unknown pattern', function () {
 test('it throws for an unknown weekday', function () {
     (new RecurrenceCalculator)->nextOccurrence('weekly:xyz', Carbon::create(2026, 7, 15));
 })->throws(InvalidArgumentException::class);
+
+test('firstOccurrenceOnOrAfter returns the anchor date this cycle when it has not passed yet', function () {
+    // Reproduces the confirmed bug: a questionnaire created 2026-07-30 with a
+    // yearly:12-31 anchor must get its first run this same year, not next.
+    $result = (new RecurrenceCalculator)->firstOccurrenceOnOrAfter('yearly:12-31', Carbon::create(2026, 7, 30));
+
+    expect($result->toDateString())->toBe('2026-12-31');
+});
+
+test('firstOccurrenceOnOrAfter advances to the next cycle when the anchor already passed', function () {
+    $result = (new RecurrenceCalculator)->firstOccurrenceOnOrAfter('yearly:03-15', Carbon::create(2026, 7, 1));
+
+    expect($result->toDateString())->toBe('2027-03-15');
+});
+
+test('firstOccurrenceOnOrAfter for monthly stays in the same month when the day has not passed', function () {
+    $result = (new RecurrenceCalculator)->firstOccurrenceOnOrAfter('monthly:15', Carbon::create(2026, 7, 5));
+
+    expect($result->toDateString())->toBe('2026-07-15');
+});
+
+test('firstOccurrenceOnOrAfter for monthly advances to next month when the day already passed', function () {
+    $result = (new RecurrenceCalculator)->firstOccurrenceOnOrAfter('monthly:15', Carbon::create(2026, 7, 20));
+
+    expect($result->toDateString())->toBe('2026-08-15');
+});
+
+test('firstOccurrenceOnOrAfter for quarterly stays in the same quarter-month when the day has not passed', function () {
+    $result = (new RecurrenceCalculator)->firstOccurrenceOnOrAfter('quarterly:1', Carbon::create(2026, 7, 1));
+
+    expect($result->toDateString())->toBe('2026-07-01');
+});
+
+test('firstOccurrenceOnOrAfter for quarterly advances to the next quarter when the day already passed', function () {
+    $result = (new RecurrenceCalculator)->firstOccurrenceOnOrAfter('quarterly:1', Carbon::create(2026, 7, 5));
+
+    expect($result->toDateString())->toBe('2026-10-01');
+});
+
+test('firstOccurrenceOnOrAfter for weekly finds the upcoming weekday, including today', function () {
+    // 2026-07-20 is itself a Monday.
+    $result = (new RecurrenceCalculator)->firstOccurrenceOnOrAfter('weekly:mon', Carbon::create(2026, 7, 20));
+
+    expect($result->toDateString())->toBe('2026-07-20');
+});
+
+test('firstOccurrenceOnOrAfter for weekly advances past an already-passed weekday this week', function () {
+    // 2026-07-15 is a Wednesday; the Monday of that week (07-13) already passed.
+    $result = (new RecurrenceCalculator)->firstOccurrenceOnOrAfter('weekly:mon', Carbon::create(2026, 7, 15));
+
+    expect($result->toDateString())->toBe('2026-07-20');
+});
+
+test('firstOccurrenceOnOrAfter for daily returns the same day', function () {
+    $result = (new RecurrenceCalculator)->firstOccurrenceOnOrAfter('daily', Carbon::create(2026, 7, 15));
+
+    expect($result->toDateString())->toBe('2026-07-15');
+});

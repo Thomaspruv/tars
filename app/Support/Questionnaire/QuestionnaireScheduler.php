@@ -24,10 +24,19 @@ class QuestionnaireScheduler
     private function ensureRunCreated(Questionnaire $questionnaire): bool
     {
         $lastRun = $questionnaire->runs()->orderByDesc('due_date')->first();
-        $from = $lastRun !== null ? $lastRun->due_date : $questionnaire->created_at;
-
         $pattern = "{$questionnaire->frequency->value}:{$questionnaire->anchor}";
-        $nextDue = $this->calculator->nextOccurrence($pattern, $from);
+
+        try {
+            $nextDue = $lastRun !== null
+                ? $this->calculator->nextOccurrence($pattern, $lastRun->due_date)
+                : $this->calculator->firstOccurrenceOnOrAfter($pattern, $questionnaire->created_at);
+        } catch (\Throwable $e) {
+            // A malformed anchor for this questionnaire's frequency must not
+            // abort scheduling for every other active questionnaire.
+            report($e);
+
+            return false;
+        }
 
         if ($nextDue->isFuture()) {
             return false;

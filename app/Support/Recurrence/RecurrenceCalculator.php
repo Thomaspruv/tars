@@ -42,6 +42,35 @@ class RecurrenceCalculator
         };
     }
 
+    /**
+     * Unlike nextOccurrence(), which always assumes $from IS a previous
+     * occurrence and unconditionally advances past it, this returns the
+     * anchor date landing in $from's own cycle when that date hasn't
+     * passed yet — used to compute a schedule's FIRST occurrence from an
+     * arbitrary reference point (e.g. a questionnaire's creation date)
+     * rather than from a known prior occurrence.
+     */
+    public function firstOccurrenceOnOrAfter(string $pattern, CarbonInterface $from): CarbonInterface
+    {
+        $candidate = $this->nextOccurrence($pattern, $this->shiftBackOnePeriod($pattern, $from));
+
+        return $candidate->greaterThanOrEqualTo($from) ? $candidate : $this->nextOccurrence($pattern, $from);
+    }
+
+    private function shiftBackOnePeriod(string $pattern, CarbonInterface $from): CarbonInterface
+    {
+        $frequency = str_contains($pattern, ':') ? explode(':', $pattern, 2)[0] : $pattern;
+
+        return match ($frequency) {
+            'daily' => $from->copy()->subDay(),
+            'weekly' => $from->copy()->subWeek(),
+            'monthly' => $from->copy()->subMonthNoOverflow(),
+            'quarterly' => $from->copy()->subMonthsNoOverflow(3),
+            'yearly' => $from->copy()->subYearNoOverflow(),
+            default => throw new InvalidArgumentException("Unknown recurrence pattern [{$pattern}]."),
+        };
+    }
+
     private function nextWeekday(CarbonInterface $from, int $targetWeekday): CarbonInterface
     {
         $date = $from->copy()->addDay();
