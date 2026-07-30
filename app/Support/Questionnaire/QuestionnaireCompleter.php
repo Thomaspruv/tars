@@ -2,6 +2,7 @@
 
 namespace App\Support\Questionnaire;
 
+use App\Enums\QuestionnaireRunStatus;
 use App\Models\QuestionnaireRun;
 use App\Support\Brain\BrainSettings;
 use App\Support\Brain\GitRepository;
@@ -26,10 +27,14 @@ class QuestionnaireCompleter
      */
     public function complete(QuestionnaireRun $run): void
     {
+        if ($run->status === QuestionnaireRunStatus::Completed) {
+            return;
+        }
+
         $run->loadMissing(['questionnaire', 'answers']);
 
         $vaultPath = rtrim($this->settings->localPath(), '/');
-        $relativePath = "TARS/Journal/Bilans/{$run->due_date->format('Y-m')} — {$run->questionnaire->name}.md";
+        $relativePath = "TARS/Journal/Bilans/{$run->due_date->toDateString()} — {$run->questionnaire->name}.md";
         $absolutePath = "{$vaultPath}/{$relativePath}";
 
         $numericAnswers = [];

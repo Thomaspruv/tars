@@ -46,7 +46,7 @@ test('writes the vault note, commits, reindexes and marks the run completed', fu
     $run->refresh();
     expect($run->status->value)->toBe('completed')
         ->and($run->completed_at)->not->toBeNull()
-        ->and($run->note_path)->toBe('TARS/Journal/Bilans/2026-07 — Retro perso.md');
+        ->and($run->note_path)->toBe('TARS/Journal/Bilans/2026-07-01 — Retro perso.md');
 
     $absolutePath = "{$this->vaultPath}/{$run->note_path}";
     expect(File::exists($absolutePath))->toBeTrue();
@@ -57,4 +57,35 @@ test('writes the vault note, commits, reindexes and marks the run completed', fu
         ->and($content)->toContain('8')
         ->and($content)->toContain('## Un mot sur la période')
         ->and($content)->toContain('Dense mais bien.');
+});
+
+test('two weekly runs completed in the same month produce two distinct vault notes', function () {
+    $questionnaire = Questionnaire::factory()->create(['name' => 'Point hebdo']);
+    $firstRun = QuestionnaireRun::factory()->create(['questionnaire_id' => $questionnaire->id, 'due_date' => '2026-07-06']);
+    $secondRun = QuestionnaireRun::factory()->create(['questionnaire_id' => $questionnaire->id, 'due_date' => '2026-07-13']);
+
+    app(QuestionnaireCompleter::class)->complete($firstRun);
+    app(QuestionnaireCompleter::class)->complete($secondRun);
+
+    $firstRun->refresh();
+    $secondRun->refresh();
+
+    expect($firstRun->note_path)->not->toBe($secondRun->note_path)
+        ->and(File::exists("{$this->vaultPath}/{$firstRun->note_path}"))->toBeTrue()
+        ->and(File::exists("{$this->vaultPath}/{$secondRun->note_path}"))->toBeTrue();
+});
+
+test('completing an already-completed run is a no-op and does not commit again', function () {
+    $questionnaire = Questionnaire::factory()->create(['name' => 'Retro perso']);
+    $run = QuestionnaireRun::factory()->completed()->create(['questionnaire_id' => $questionnaire->id, 'due_date' => '2026-07-01']);
+    QuestionnaireAnswer::factory()->create(['run_id' => $run->id, 'question_text' => 'Satisfaction', 'type' => 'scale', 'answer_numeric' => 8]);
+    $completedAt = $run->completed_at;
+
+    $this->mock(GitRepository::class, function ($mock): void {
+        $mock->shouldNotReceive('commit');
+    });
+
+    app(QuestionnaireCompleter::class)->complete($run);
+
+    expect($run->fresh()->completed_at->toDateTimeString())->toBe($completedAt->toDateTimeString());
 });
