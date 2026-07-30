@@ -6,6 +6,7 @@ use App\Mcp\Tools\AddEventTool;
 use App\Mcp\Tools\AddNoteTool;
 use App\Mcp\Tools\AddTaskTool;
 use App\Mcp\Tools\AddToListTool;
+use App\Mcp\Tools\AnswerQuestionnaireTool;
 use App\Mcp\Tools\AssignTaskTool;
 use App\Mcp\Tools\CaptureTool;
 use App\Mcp\Tools\CompleteTaskTool;
@@ -21,6 +22,7 @@ use App\Mcp\Tools\GetEntityTool;
 use App\Mcp\Tools\GetGoalTool;
 use App\Mcp\Tools\GetJournalTool;
 use App\Mcp\Tools\GetListTool;
+use App\Mcp\Tools\GetPendingQuestionnairesTool;
 use App\Mcp\Tools\GetTodayTool;
 use App\Mcp\Tools\LinkEntitiesTool;
 use App\Mcp\Tools\ListEntitiesTool;
@@ -60,6 +62,8 @@ class TarsServer extends Server
         GetTodayTool::class,
         LogJournalTool::class,
         GetJournalTool::class,
+        GetPendingQuestionnairesTool::class,
+        AnswerQuestionnaireTool::class,
         AddToListTool::class,
         GetListTool::class,
         ListGoalsTool::class,
