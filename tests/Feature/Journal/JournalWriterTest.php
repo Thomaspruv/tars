@@ -120,3 +120,24 @@ test('an explicit date is respected regardless of the pivot hour', function () {
 
     expect($entry->date->toDateString())->toBe($yesterday->toDateString());
 });
+
+test('a plain null mood on merge keeps the existing mood (not provided, not cleared)', function () {
+    $writer = app(JournalWriter::class);
+
+    $writer->write('Journée calme.', 7, null, [], null, 'hermes');
+    $second = $writer->write('Un ajout.', null, null, [], null, 'hermes');
+
+    expect($second->mood)->toBe(7);
+});
+
+test('explicitly clearing the mood on an existing entry sets it to null', function () {
+    $writer = app(JournalWriter::class);
+
+    $writer->write('Journée calme.', 7, 'calme', [], null, 'hermes');
+    $second = $writer->write('Un ajout.', null, null, [], null, 'hermes', clearMood: true);
+
+    expect($second->mood)->toBeNull();
+
+    $content = File::get("{$this->vaultPath}/{$second->note_path}");
+    expect($content)->not->toContain('mood:');
+});

@@ -29,6 +29,8 @@ new #[Title('Bilan de vie')] class extends Component
 
     public ?int $entryMood = null;
 
+    public bool $entryMoodCleared = false;
+
     public string $entryMoodLabel = '';
 
     public string $entrySummary = '';
@@ -194,11 +196,23 @@ new #[Title('Bilan de vie')] class extends Component
         $this->entryDate = $date ?? today()->toDateString();
         $this->entryDateHasExistingEntry = $entry !== null;
         $this->entryMood = $entry?->mood;
+        $this->entryMoodCleared = false;
         $this->entryMoodLabel = (string) $entry?->mood_label;
         $this->entrySummary = '';
         $this->entryHighlights = [];
         $this->newHighlight = '';
         $this->showEntryModal = true;
+    }
+
+    public function setMood(int $mood): void
+    {
+        if ($this->entryMood === $mood) {
+            $this->entryMood = null;
+            $this->entryMoodCleared = true;
+        } else {
+            $this->entryMood = $mood;
+            $this->entryMoodCleared = false;
+        }
     }
 
     public function addHighlight(): void
@@ -235,6 +249,7 @@ new #[Title('Bilan de vie')] class extends Component
             highlights: $this->entryHighlights,
             date: Carbon::parse($validated['entryDate']),
             source: 'manual',
+            clearMood: $this->entryMoodCleared,
         );
 
         $this->showEntryModal = false;
@@ -546,7 +561,7 @@ new #[Title('Bilan de vie')] class extends Component
                     @for ($i = 1; $i <= 10; $i++)
                         <button
                             type="button"
-                            wire:click="$set('entryMood', {{ $entryMood === $i ? 'null' : $i }})"
+                            wire:click="setMood({{ $i }})"
                             class="flex size-7 items-center justify-center rounded-[6px] font-mono text-[11px] {{ $entryMood === $i ? ($i <= 3 ? 'bg-(--dgrbg) text-(--dgr)' : ($i <= 6 ? 'bg-(--surf2) text-(--tx)' : 'bg-(--okbg) text-(--ok)')) : 'bg-(--surf2) text-(--mut) hover:text-(--tx)' }}"
                         >
                             {{ $i }}

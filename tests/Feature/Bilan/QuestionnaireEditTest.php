@@ -65,7 +65,7 @@ test('it reorders questions', function () {
         ->and($questions[1]['text'])->toBe('Premiere');
 });
 
-test('editing questions never alters answers already recorded on past runs', function () {
+test('renaming a question already used in a run is rejected, keeping the answer intact', function () {
     $this->actingAs(User::factory()->create());
 
     $questionnaire = Questionnaire::factory()->create([
@@ -76,9 +76,67 @@ test('editing questions never alters answers already recorded on past runs', fun
 
     Livewire::test('pages::bilan.questionnaire', ['questionnaire' => $questionnaire])
         ->set('questions.0.text', 'Satisfaction (renommée)')
-        ->call('save');
+        ->call('save')
+        ->assertHasErrors(['questions']);
 
-    expect($answer->fresh()->question_text)->toBe('Satisfaction');
+    expect($answer->fresh()->question_text)->toBe('Satisfaction')
+        ->and($questionnaire->fresh()->questions[0]['text'])->toBe('Satisfaction');
+});
+
+test('removing a question already used in a run is rejected', function () {
+    $this->actingAs(User::factory()->create());
+
+    $questionnaire = Questionnaire::factory()->create([
+        'questions' => [
+            ['text' => 'Satisfaction', 'type' => 'scale', 'scale_max' => 10],
+            ['text' => 'Un mot', 'type' => 'text'],
+        ],
+    ]);
+    $run = QuestionnaireRun::factory()->create(['questionnaire_id' => $questionnaire->id]);
+
+    Livewire::test('pages::bilan.questionnaire', ['questionnaire' => $questionnaire])
+        ->call('removeQuestion', 0)
+        ->call('save')
+        ->assertHasErrors(['questions']);
+
+    expect($questionnaire->fresh()->questions)->toHaveCount(2);
+});
+
+test('adding a new question to a questionnaire with existing runs is still allowed', function () {
+    $this->actingAs(User::factory()->create());
+
+    $questionnaire = Questionnaire::factory()->create([
+        'questions' => [['text' => 'Satisfaction', 'type' => 'scale', 'scale_max' => 10]],
+    ]);
+    QuestionnaireRun::factory()->create(['questionnaire_id' => $questionnaire->id]);
+
+    Livewire::test('pages::bilan.questionnaire', ['questionnaire' => $questionnaire])
+        ->call('addQuestion')
+        ->set('questions.1.text', 'Une nouvelle question')
+        ->set('questions.1.type', 'text')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($questionnaire->fresh()->questions)->toHaveCount(2);
+});
+
+test('reordering questions on a questionnaire with existing runs is still allowed', function () {
+    $this->actingAs(User::factory()->create());
+
+    $questionnaire = Questionnaire::factory()->create([
+        'questions' => [
+            ['text' => 'Premiere', 'type' => 'text'],
+            ['text' => 'Seconde', 'type' => 'text'],
+        ],
+    ]);
+    QuestionnaireRun::factory()->create(['questionnaire_id' => $questionnaire->id]);
+
+    Livewire::test('pages::bilan.questionnaire', ['questionnaire' => $questionnaire])
+        ->call('moveDown', 0)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($questionnaire->fresh()->questions[0]['text'])->toBe('Seconde');
 });
 
 test('a questionnaire with runs cannot be deleted', function () {

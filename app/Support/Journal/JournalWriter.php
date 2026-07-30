@@ -38,6 +38,7 @@ class JournalWriter
         array $highlights,
         ?CarbonInterface $date,
         string $source,
+        bool $clearMood = false,
     ): JournalEntry {
         $date = $this->resolveDate($date);
         $existing = JournalEntry::whereDate('date', $date->toDateString())->first();
@@ -47,7 +48,7 @@ class JournalWriter
         $absolutePath = "{$vaultPath}/{$relativePath}";
 
         $fileContent = $existing && File::exists($absolutePath)
-            ? $this->appendEntry(File::get($absolutePath), $summary, $highlights, $mood, $moodLabel)
+            ? $this->appendEntry(File::get($absolutePath), $summary, $highlights, $mood, $moodLabel, $clearMood)
             : $this->buildEntry($date, $summary, $highlights, $mood, $moodLabel, $source);
 
         File::ensureDirectoryExists(dirname($absolutePath));
@@ -60,7 +61,7 @@ class JournalWriter
             : $highlights;
 
         $attributes = [
-            'mood' => $mood ?? $existing?->mood,
+            'mood' => $clearMood ? null : ($mood ?? $existing?->mood),
             'mood_label' => $moodLabel ?? $existing?->mood_label,
             'summary' => $existing ? trim($existing->summary."\n\n".$summary) : $summary,
             'highlights' => $mergedHighlights,
@@ -110,11 +111,13 @@ class JournalWriter
     /**
      * @param  list<string>  $highlights
      */
-    private function appendEntry(string $raw, string $summary, array $highlights, ?int $mood, ?string $moodLabel): string
+    private function appendEntry(string $raw, string $summary, array $highlights, ?int $mood, ?string $moodLabel, bool $clearMood): string
     {
         [$frontmatter, $body] = $this->splitFrontmatter($raw);
 
-        if ($mood !== null) {
+        if ($clearMood) {
+            unset($frontmatter['mood']);
+        } elseif ($mood !== null) {
             $frontmatter['mood'] = $mood;
         }
 

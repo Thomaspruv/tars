@@ -71,6 +71,17 @@ new #[Title('Questionnaire')] class extends Component
             'questions.*.type' => ['required', 'in:scale,text,boolean,number'],
         ]);
 
+        if ($this->questionnaire->runs()->exists()) {
+            $existingTexts = collect($this->questionnaire->questions)->pluck('text');
+            $newTexts = collect($validated['questions'])->pluck('text');
+
+            if ($existingTexts->diff($newTexts)->isNotEmpty()) {
+                $this->addError('questions', 'Impossible de renommer ou supprimer une question déjà utilisée dans un bilan — tu peux en ajouter de nouvelles ou réordonner les existantes.');
+
+                return;
+            }
+        }
+
         $this->questionnaire->update([
             'name' => $validated['name'],
             'frequency' => $validated['frequency'],

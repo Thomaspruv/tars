@@ -98,3 +98,34 @@ test('toggling a questionnaire flips its active state', function () {
 
     expect($questionnaire->fresh()->is_active)->toBeFalse();
 });
+
+test('clicking an already-selected mood clears it, and saving explicitly clears an existing mood', function () {
+    $this->actingAs(User::factory()->create());
+
+    JournalEntry::factory()->create(['date' => today(), 'mood' => 6, 'summary' => 'Texte existant']);
+
+    $component = Livewire::test('pages::bilan')
+        ->call('openEntryModal', today()->toDateString())
+        ->call('setMood', 6);
+
+    expect($component->get('entryMood'))->toBeNull()
+        ->and($component->get('entryMoodCleared'))->toBeTrue();
+
+    $component->set('entrySummary', 'Ajout sans mood')->call('saveEntry');
+
+    expect(JournalEntry::whereDate('date', today())->first()->mood)->toBeNull();
+});
+
+test('picking a new mood after a clear cancels the clear flag', function () {
+    $this->actingAs(User::factory()->create());
+
+    JournalEntry::factory()->create(['date' => today(), 'mood' => 6]);
+
+    $component = Livewire::test('pages::bilan')
+        ->call('openEntryModal', today()->toDateString())
+        ->call('setMood', 6)
+        ->call('setMood', 8);
+
+    expect($component->get('entryMood'))->toBe(8)
+        ->and($component->get('entryMoodCleared'))->toBeFalse();
+});
