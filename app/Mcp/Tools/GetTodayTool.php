@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Models\Event;
 use App\Models\JournalEntry;
+use App\Models\QuestionnaireRun;
 use App\Models\Task;
 use App\Support\Review\ReviewSettings;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -46,6 +47,11 @@ class GetTodayTool extends LoggedTool
         $journalDone = JournalEntry::whereDate('date', today())->exists();
         $journalLine = $journalDone ? 'Journal du jour : fait.' : 'Journal du jour : pas encore fait.';
 
-        return Response::text("Tâches : {$taskLines}\nÉvénements : {$eventLines}\n{$reviewLine}\n{$journalLine}");
+        $pendingQuestionnaires = QuestionnaireRun::where('status', 'pending')->count();
+        $questionnaireLine = $pendingQuestionnaires > 0
+            ? "{$pendingQuestionnaires} bilan(s) en attente."
+            : 'Aucun bilan en attente.';
+
+        return Response::text("Tâches : {$taskLines}\nÉvénements : {$eventLines}\n{$reviewLine}\n{$journalLine}\n{$questionnaireLine}");
     }
 }

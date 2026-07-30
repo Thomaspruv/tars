@@ -4,6 +4,7 @@ use App\Mcp\Servers\TarsServer;
 use App\Mcp\Tools\GetTodayTool;
 use App\Models\Event;
 use App\Models\JournalEntry;
+use App\Models\QuestionnaireRun;
 use App\Models\Task;
 use App\Support\Review\ReviewSettings;
 use Illuminate\Support\Carbon;
@@ -49,4 +50,16 @@ test('says the journal is done when an entry exists today', function () {
     JournalEntry::factory()->create(['date' => today()]);
 
     TarsServer::tool(GetTodayTool::class)->assertOk()->assertSee('Journal du jour : fait.');
+});
+
+test('says when there is no bilan pending', function () {
+    TarsServer::tool(GetTodayTool::class)->assertOk()->assertSee('Aucun bilan en attente.');
+});
+
+test('counts pending bilans', function () {
+    QuestionnaireRun::factory()->create(['status' => 'pending']);
+    QuestionnaireRun::factory()->create(['status' => 'pending']);
+    QuestionnaireRun::factory()->completed()->create();
+
+    TarsServer::tool(GetTodayTool::class)->assertOk()->assertSee('2 bilan(s) en attente.');
 });
