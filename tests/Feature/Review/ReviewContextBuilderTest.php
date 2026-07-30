@@ -5,6 +5,9 @@ use App\Models\BrainDocument;
 use App\Models\Decision;
 use App\Models\Event;
 use App\Models\Goal;
+use App\Models\JournalEntry;
+use App\Models\Questionnaire;
+use App\Models\QuestionnaireRun;
 use App\Models\Task;
 use App\Support\Review\ReviewContextBuilder;
 
@@ -45,5 +48,36 @@ test('reports empty sections gracefully when there is no data', function () {
         ->toContain('Aucune échéance dans les 14 prochains jours.')
         ->toContain('Aucune décision récente.')
         ->toContain('Aucune note récente.')
+        ->toContain('## Journal de la période')
+        ->toContain('Aucune entrée de journal sur cette période.')
+        ->toContain('## Dernier bilan complété')
+        ->toContain("Aucun bilan complété pour l'instant.")
         ->toContain('Aucun document de profil.');
+});
+
+test('includes the journal mood average and entries of the period', function () {
+    JournalEntry::factory()->create(['date' => today()->subDays(2), 'mood' => 8, 'summary' => 'Semaine dense mais bonne.']);
+    JournalEntry::factory()->create(['date' => today()->subDays(1), 'mood' => 6, 'summary' => 'Un peu fatigué.']);
+
+    $context = (new ReviewContextBuilder)->build(now()->subDays(7), now());
+
+    expect($context)
+        ->toContain('## Journal de la période')
+        ->toContain('Mood moyen : 7')
+        ->toContain('2 jour(s) rempli(s)')
+        ->toContain('Semaine dense mais bonne.')
+        ->toContain('Un peu fatigué.');
+});
+
+test('includes the last completed questionnaire run with its answers', function () {
+    $questionnaire = Questionnaire::factory()->create(['name' => 'Bilan mensuel']);
+    $run = QuestionnaireRun::factory()->completed()->create(['questionnaire_id' => $questionnaire->id, 'completed_at' => now()->subDay()]);
+    $run->answers()->create(['question_text' => 'Satisfaction', 'type' => 'scale', 'answer_numeric' => 8]);
+
+    $context = (new ReviewContextBuilder)->build(now()->subDays(7), now());
+
+    expect($context)
+        ->toContain('## Dernier bilan complété')
+        ->toContain('Bilan mensuel')
+        ->toContain('Satisfaction : 8/10');
 });

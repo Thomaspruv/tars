@@ -9,6 +9,9 @@ use App\Models\BrainDocument;
 use App\Models\Decision;
 use App\Models\Event;
 use App\Models\Goal;
+use App\Models\JournalEntry;
+use App\Models\QuestionnaireAnswer;
+use App\Models\QuestionnaireRun;
 use App\Models\Task;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Str;
@@ -23,6 +26,8 @@ class ReviewContextBuilder
             $this->buildUpcomingDeadlines(),
             $this->buildPastDecisions(),
             $this->buildRecentBrainNotes($periodStart, $periodEnd),
+            $this->buildJournalSummary($periodStart, $periodEnd),
+            $this->buildLastQuestionnaireRun(),
             $this->buildProfile(),
         ]));
     }
@@ -143,6 +148,50 @@ class ReviewContextBuilder
         })->implode("\n");
 
         return "## Notes récentes du cerveau\n{$lines}";
+    }
+
+    private function buildJournalSummary(CarbonInterface $periodStart, CarbonInterface $periodEnd): string
+    {
+        $entries = JournalEntry::whereBetween('date', [$periodStart->toDateString(), $periodEnd->toDateString()])
+            ->orderBy('date')
+            ->get();
+
+        if ($entries->isEmpty()) {
+            return "## Journal de la période\nAucune entrée de journal sur cette période.";
+        }
+
+        $moods = $entries->pluck('mood')->filter();
+        $moodLine = $moods->isNotEmpty()
+            ? 'Mood moyen : '.round($moods->avg(), 1)."/10 sur {$entries->count()} jour(s) rempli(s)."
+            : "{$entries->count()} jour(s) rempli(s), mood non renseigné.";
+
+        $excerpts = $entries->map(function (JournalEntry $entry): string {
+            $moodPart = $entry->mood !== null ? " (mood {$entry->mood}/10)" : '';
+
+            return "- {$entry->date->translatedFormat('d M')}{$moodPart} : ".Str::limit($entry->summary, 150);
+        })->implode("\n");
+
+        return "## Journal de la période\n{$moodLine}\n{$excerpts}";
+    }
+
+    private function buildLastQuestionnaireRun(): string
+    {
+        $run = QuestionnaireRun::where('status', 'completed')
+            ->with(['questionnaire', 'answers'])
+            ->orderByDesc('completed_at')
+            ->first();
+
+        if (! $run) {
+            return "## Dernier bilan complété\nAucun bilan complété pour l'instant.";
+        }
+
+        $answers = $run->answers->map(function (QuestionnaireAnswer $answer): string {
+            $value = $answer->answer_numeric !== null ? "{$answer->answer_numeric}/10" : $answer->answer_text;
+
+            return "- {$answer->question_text} : {$value}";
+        })->implode("\n");
+
+        return "## Dernier bilan complété\n{$run->questionnaire->name} ({$run->completed_at->translatedFormat('d M Y')})\n{$answers}";
     }
 
     private function buildProfile(): string
