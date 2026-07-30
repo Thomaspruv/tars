@@ -33,7 +33,7 @@ new #[Title('Objectif')] class extends Component
     #[Computed]
     public function tasks(): Collection
     {
-        return $this->goal->tasks()->with('entity')->orderByRaw('status = "done"')->orderBy('due_date')->get();
+        return $this->goal->tasks()->topLevel()->with(['entity', 'subtasks.goal', 'subtasks.entity'])->orderByRaw('status = "done"')->orderBy('due_date')->get();
     }
 
     #[Computed]
@@ -67,6 +67,19 @@ new #[Title('Objectif')] class extends Component
     public function toggleTask(int $taskId): void
     {
         Task::findOrFail($taskId)->toggleCompletion();
+
+        unset($this->tasks, $this->weeklyActivity);
+    }
+
+    public function createSubtask(int $parentTaskId, string $title): void
+    {
+        $title = trim($title);
+
+        if ($title === '') {
+            return;
+        }
+
+        Task::findOrFail($parentTaskId)->subtasks()->create(['title' => $title, 'status' => 'todo']);
 
         unset($this->tasks, $this->weeklyActivity);
     }

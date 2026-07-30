@@ -44,7 +44,7 @@ new #[Title('Entité')] class extends Component
     #[Computed]
     public function openTasks(): Collection
     {
-        return $this->entity->tasks()->open()->orderBy('due_date')->get();
+        return $this->entity->tasks()->open()->topLevel()->with(['goal', 'subtasks.goal', 'subtasks.entity'])->orderBy('due_date')->get();
     }
 
     #[Computed]
@@ -92,6 +92,19 @@ new #[Title('Entité')] class extends Component
     public function toggleTask(int $taskId): void
     {
         Task::findOrFail($taskId)->toggleCompletion();
+
+        unset($this->openTasks, $this->recurringTasks);
+    }
+
+    public function createSubtask(int $parentTaskId, string $title): void
+    {
+        $title = trim($title);
+
+        if ($title === '') {
+            return;
+        }
+
+        Task::findOrFail($parentTaskId)->subtasks()->create(['title' => $title, 'status' => 'todo']);
 
         unset($this->openTasks, $this->recurringTasks);
     }

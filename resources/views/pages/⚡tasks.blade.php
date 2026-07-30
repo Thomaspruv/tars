@@ -19,7 +19,7 @@ new #[Title('Tâches')] class extends Component
     #[Computed]
     public function tasks(): Collection
     {
-        $query = Task::open()->with(['goal', 'entity'])
+        $query = Task::open()->topLevel()->with(['goal', 'entity', 'subtasks.goal', 'subtasks.entity'])
             ->orderByRaw('due_date IS NULL')
             ->orderBy('due_date')
             ->orderBy('priority');
@@ -42,8 +42,8 @@ new #[Title('Tâches')] class extends Component
     #[Computed]
     public function orphanRatio(): array
     {
-        $total = Task::open()->count();
-        $orphan = Task::open()->orphan()->count();
+        $total = Task::open()->topLevel()->count();
+        $orphan = Task::open()->topLevel()->orphan()->count();
 
         return [
             'orphan' => $orphan,
@@ -66,6 +66,19 @@ new #[Title('Tâches')] class extends Component
     public function toggleTask(int $taskId): void
     {
         Task::findOrFail($taskId)->toggleCompletion();
+
+        unset($this->tasks, $this->orphanRatio);
+    }
+
+    public function createSubtask(int $parentTaskId, string $title): void
+    {
+        $title = trim($title);
+
+        if ($title === '') {
+            return;
+        }
+
+        Task::findOrFail($parentTaskId)->subtasks()->create(['title' => $title, 'status' => 'todo']);
 
         unset($this->tasks, $this->orphanRatio);
     }

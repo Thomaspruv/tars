@@ -11,10 +11,12 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
+ * @property int|null $parent_task_id
  * @property string $title
  * @property string|null $notes
  * @property int|null $goal_id
@@ -31,7 +33,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  */
 #[Fillable([
-    'title', 'notes', 'goal_id', 'milestone_id', 'entity_id', 'due_date', 'scheduled_date',
+    'parent_task_id', 'title', 'notes', 'goal_id', 'milestone_id', 'entity_id', 'due_date', 'scheduled_date',
     'status', 'priority', 'is_delegable', 'recurrence', 'completed_at',
 ])]
 class Task extends Model
@@ -90,6 +92,19 @@ class Task extends Model
         return $query->whereNull('goal_id');
     }
 
+    /**
+     * Excludes subtasks — the top-level tasks shown in the main task lists
+     * (Aujourd'hui, Tâches, fiches objectif/entité). Subtasks only ever
+     * appear nested under their parent's row.
+     *
+     * @param  Builder<Task>  $query
+     * @return Builder<Task>
+     */
+    public function scopeTopLevel(Builder $query): Builder
+    {
+        return $query->whereNull('parent_task_id');
+    }
+
     public function toggleCompletion(): void
     {
         if ($this->status === TaskStatus::Done) {
@@ -113,6 +128,22 @@ class Task extends Model
         }
 
         $this->update(['status' => TaskStatus::Done, 'completed_at' => now()]);
+    }
+
+    /**
+     * @return BelongsTo<Task, $this>
+     */
+    public function parentTask(): BelongsTo
+    {
+        return $this->belongsTo(Task::class, 'parent_task_id');
+    }
+
+    /**
+     * @return HasMany<Task, $this>
+     */
+    public function subtasks(): HasMany
+    {
+        return $this->hasMany(Task::class, 'parent_task_id')->orderByRaw('due_date is null')->orderBy('due_date')->orderBy('priority');
     }
 
     /**

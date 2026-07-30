@@ -47,4 +47,11 @@ class TaskFactory extends Factory
             'completed_at' => now(),
         ]);
     }
+
+    public function subtaskOf(Task $parent): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'parent_task_id' => $parent->id,
+        ]);
+    }
 }
