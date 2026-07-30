@@ -132,3 +132,34 @@ test('a second call answering an already-answered question updates it instead of
     expect($this->run->answers()->count())->toBe(1)
         ->and($this->run->answers()->first()->answer_numeric)->toBe(9.0);
 });
+
+test('a number answer beyond the decimal(8,2) column range is rejected', function () {
+    $questionnaire = Questionnaire::factory()->create([
+        'name' => 'Registre financier',
+        'questions' => [['text' => 'Montant du contrat', 'type' => 'number']],
+    ]);
+    $run = QuestionnaireRun::factory()->create(['questionnaire_id' => $questionnaire->id]);
+
+    TarsServer::tool(AnswerQuestionnaireTool::class, [
+        'questionnaire' => 'registre financier',
+        'answers' => [
+            ['question' => 'Montant du contrat', 'answer' => '1000000'],
+        ],
+    ])->assertOk()->assertSee('Non prise(s) en compte');
+
+    expect($run->answers()->count())->toBe(0);
+});
+
+test('a questionnaire with no questions never completes on its own', function () {
+    $questionnaire = Questionnaire::factory()->create(['name' => 'Nouveau questionnaire', 'questions' => []]);
+    $run = QuestionnaireRun::factory()->create(['questionnaire_id' => $questionnaire->id]);
+
+    TarsServer::tool(AnswerQuestionnaireTool::class, [
+        'questionnaire' => 'nouveau questionnaire',
+        'answers' => [
+            ['question' => 'Une question qui ne correspond a rien', 'answer' => 'peu importe'],
+        ],
+    ])->assertOk()->assertDontSee('Bilan complété.');
+
+    expect($run->fresh()->status->value)->toBe('pending');
+});

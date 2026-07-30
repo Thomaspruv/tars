@@ -84,3 +84,29 @@ test('completing does nothing when a question is still unanswered', function () 
 
     expect($this->run->fresh()->status->value)->toBe('pending');
 });
+
+test('an out-of-bounds scale answer is rejected, matching the MCP tool', function () {
+    $this->actingAs(User::factory()->create());
+
+    $component = Livewire::test('pages::bilan.run', ['run' => $this->run])
+        ->set('answers.0', '999')
+        ->set('answers.1', 'Bonne période');
+
+    expect($component->instance()->allAnswered())->toBeFalse();
+
+    $component->call('complete');
+
+    expect($this->run->fresh()->status->value)->toBe('pending')
+        ->and($this->run->answers()->where('question_text', 'Satisfaction, de 1 à 10')->exists())->toBeFalse();
+});
+
+test('a questionnaire with no questions never completes on its own', function () {
+    $this->actingAs(User::factory()->create());
+
+    $emptyQuestionnaire = Questionnaire::factory()->create(['name' => 'Vide', 'questions' => []]);
+    $emptyRun = QuestionnaireRun::factory()->create(['questionnaire_id' => $emptyQuestionnaire->id]);
+
+    Livewire::test('pages::bilan.run', ['run' => $emptyRun])->call('complete');
+
+    expect($emptyRun->fresh()->status->value)->toBe('pending');
+});

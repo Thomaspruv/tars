@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\QuestionnaireRun;
+use App\Support\Questionnaire\QuestionAnswerNormalizer;
 use App\Support\Questionnaire\QuestionnaireCompleter;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -32,8 +33,16 @@ new #[Title('Remplir le bilan')] class extends Component
 
     public function allAnswered(): bool
     {
+        if ($this->run->questionnaire->questions === []) {
+            return false;
+        }
+
+        $normalizer = app(QuestionAnswerNormalizer::class);
+
         foreach ($this->run->questionnaire->questions as $index => $question) {
-            if (trim($this->answers[$index] ?? '') === '') {
+            $raw = trim($this->answers[$index] ?? '');
+
+            if ($raw === '' || $normalizer->normalize($question, $raw) === null) {
                 return false;
             }
         }
@@ -41,14 +50,14 @@ new #[Title('Remplir le bilan')] class extends Component
         return true;
     }
 
-    public function saveProgress(): void
+    public function saveProgress(QuestionAnswerNormalizer $normalizer): void
     {
-        $this->persistAnswers();
+        $this->persistAnswers($normalizer);
     }
 
-    public function complete(QuestionnaireCompleter $completer): void
+    public function complete(QuestionnaireCompleter $completer, QuestionAnswerNormalizer $normalizer): void
     {
-        $this->persistAnswers();
+        $this->persistAnswers($normalizer);
 
         if (! $this->allAnswered()) {
             return;
@@ -59,7 +68,7 @@ new #[Title('Remplir le bilan')] class extends Component
         $this->redirect(route('bilan.index', ['activeTab' => 'bilans']), navigate: true);
     }
 
-    private function persistAnswers(): void
+    private function persistAnswers(QuestionAnswerNormalizer $normalizer): void
     {
         foreach ($this->run->questionnaire->questions as $index => $question) {
             $raw = trim($this->answers[$index] ?? '');
@@ -68,18 +77,15 @@ new #[Title('Remplir le bilan')] class extends Component
                 continue;
             }
 
-            $answerText = null;
-            $answerNumeric = null;
+            $normalized = $normalizer->normalize($question, $raw);
 
-            if (in_array($question['type'], ['scale', 'number'], true)) {
-                $answerNumeric = is_numeric($raw) ? (float) $raw : null;
-            } else {
-                $answerText = $raw;
+            if ($normalized === null) {
+                continue;
             }
 
             $this->run->answers()->updateOrCreate(
                 ['question_text' => $question['text']],
-                ['type' => $question['type'], 'answer_text' => $answerText, 'answer_numeric' => $answerNumeric],
+                ['type' => $question['type'], 'answer_text' => $normalized['answerText'], 'answer_numeric' => $normalized['answerNumeric']],
             );
         }
     }

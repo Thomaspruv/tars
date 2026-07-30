@@ -2,11 +2,11 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\QuestionType;
 use App\Mcp\Support\NameResolver;
 use App\Models\Questionnaire;
 use App\Models\QuestionnaireRun;
 use App\Support\FuzzyMatcher;
+use App\Support\Questionnaire\QuestionAnswerNormalizer;
 use App\Support\Questionnaire\QuestionnaireCompleter;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -20,6 +20,7 @@ class AnswerQuestionnaireTool extends LoggedTool
 {
     public function __construct(
         private readonly QuestionnaireCompleter $completer,
+        private readonly QuestionAnswerNormalizer $normalizer = new QuestionAnswerNormalizer,
         private readonly FuzzyMatcher $matcher = new FuzzyMatcher,
         private readonly NameResolver $resolver = new NameResolver,
     ) {}
@@ -81,8 +82,8 @@ class AnswerQuestionnaireTool extends LoggedTool
             }
         }
 
-        $allAnswered = collect($questionnaire->questions)
-            ->every(fn (array $question): bool => $run->answers()->where('question_text', $question['text'])->exists());
+        $allAnswered = $questionnaire->questions !== []
+            && collect($questionnaire->questions)->every(fn (array $question): bool => $run->answers()->where('question_text', $question['text'])->exists());
 
         if ($allAnswered) {
             $this->completer->complete($run);
@@ -106,57 +107,17 @@ class AnswerQuestionnaireTool extends LoggedTool
      */
     private function storeAnswer(QuestionnaireRun $run, array $questionDef, string $rawAnswer): bool
     {
-        $type = $questionDef['type'];
+        $normalized = $this->normalizer->normalize($questionDef, $rawAnswer);
 
-        if ($type === QuestionType::Scale->value) {
-            $scaleMax = $questionDef['scale_max'] ?? 10;
-
-            if (! is_numeric($rawAnswer) || (int) $rawAnswer < 1 || (int) $rawAnswer > $scaleMax) {
-                return false;
-            }
-
-            $this->upsertAnswer($run, $questionDef, answerNumeric: (float) $rawAnswer);
-
-            return true;
+        if ($normalized === null) {
+            return false;
         }
 
-        if ($type === QuestionType::Number->value) {
-            if (! is_numeric($rawAnswer)) {
-                return false;
-            }
-
-            $this->upsertAnswer($run, $questionDef, answerNumeric: (float) $rawAnswer);
-
-            return true;
-        }
-
-        if ($type === QuestionType::Boolean->value) {
-            $normalized = mb_strtolower(trim($rawAnswer));
-            $isYes = in_array($normalized, ['oui', 'yes', 'true', '1'], true);
-            $isNo = in_array($normalized, ['non', 'no', 'false', '0'], true);
-
-            if (! $isYes && ! $isNo) {
-                return false;
-            }
-
-            $this->upsertAnswer($run, $questionDef, answerText: $isYes ? 'oui' : 'non');
-
-            return true;
-        }
-
-        $this->upsertAnswer($run, $questionDef, answerText: $rawAnswer);
-
-        return true;
-    }
-
-    /**
-     * @param  array{text: string, type: string, scale_max?: int}  $questionDef
-     */
-    private function upsertAnswer(QuestionnaireRun $run, array $questionDef, ?string $answerText = null, ?float $answerNumeric = null): void
-    {
         $run->answers()->updateOrCreate(
             ['question_text' => $questionDef['text']],
-            ['type' => $questionDef['type'], 'answer_text' => $answerText, 'answer_numeric' => $answerNumeric],
+            ['type' => $questionDef['type'], 'answer_text' => $normalized['answerText'], 'answer_numeric' => $normalized['answerNumeric']],
         );
+
+        return true;
     }
 }
