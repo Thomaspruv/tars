@@ -19,6 +19,7 @@ use App\Mcp\Tools\GetContextTool;
 use App\Mcp\Tools\GetEntitiesDashboardTool;
 use App\Mcp\Tools\GetEntityTool;
 use App\Mcp\Tools\GetGoalTool;
+use App\Mcp\Tools\GetJournalTool;
 use App\Mcp\Tools\GetListTool;
 use App\Mcp\Tools\GetTodayTool;
 use App\Mcp\Tools\LinkEntitiesTool;
@@ -26,6 +27,7 @@ use App\Mcp\Tools\ListEntitiesTool;
 use App\Mcp\Tools\ListGoalsTool;
 use App\Mcp\Tools\ListTasksTool;
 use App\Mcp\Tools\LogDecisionTool;
+use App\Mcp\Tools\LogJournalTool;
 use App\Mcp\Tools\RenameListTool;
 use App\Mcp\Tools\SearchBrainTool;
 use App\Mcp\Tools\UnlinkEntitiesTool;
@@ -56,6 +58,8 @@ class TarsServer extends Server
         ListTasksTool::class,
         CompleteTaskTool::class,
         GetTodayTool::class,
+        LogJournalTool::class,
+        GetJournalTool::class,
         AddToListTool::class,
         GetListTool::class,
         ListGoalsTool::class,

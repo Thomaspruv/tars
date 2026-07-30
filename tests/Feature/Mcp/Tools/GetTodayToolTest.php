@@ -3,6 +3,7 @@
 use App\Mcp\Servers\TarsServer;
 use App\Mcp\Tools\GetTodayTool;
 use App\Models\Event;
+use App\Models\JournalEntry;
 use App\Models\Task;
 use App\Support\Review\ReviewSettings;
 use Illuminate\Support\Carbon;
@@ -38,4 +39,14 @@ test('respects a custom weekly review time', function () {
     (new ReviewSettings)->updateWeeklyTime('20:00');
 
     TarsServer::tool(GetTodayTool::class)->assertOk()->assertSee("prévue aujourd'hui");
+});
+
+test('says the journal is not done yet when there is no entry today', function () {
+    TarsServer::tool(GetTodayTool::class)->assertOk()->assertSee('Journal du jour : pas encore fait.');
+});
+
+test('says the journal is done when an entry exists today', function () {
+    JournalEntry::factory()->create(['date' => today()]);
+
+    TarsServer::tool(GetTodayTool::class)->assertOk()->assertSee('Journal du jour : fait.');
 });

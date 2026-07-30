@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Models\Event;
+use App\Models\JournalEntry;
 use App\Models\Task;
 use App\Support\Review\ReviewSettings;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -42,6 +43,9 @@ class GetTodayTool extends LoggedTool
 
         $reviewLine = $daysUntilReview === 0 ? "La revue est prévue aujourd'hui." : "Prochaine revue dans {$daysUntilReview} jour(s).";
 
-        return Response::text("Tâches : {$taskLines}\nÉvénements : {$eventLines}\n{$reviewLine}");
+        $journalDone = JournalEntry::whereDate('date', today())->exists();
+        $journalLine = $journalDone ? 'Journal du jour : fait.' : 'Journal du jour : pas encore fait.';
+
+        return Response::text("Tâches : {$taskLines}\nÉvénements : {$eventLines}\n{$reviewLine}\n{$journalLine}");
     }
 }

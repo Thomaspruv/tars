@@ -6,6 +6,7 @@ use App\Models\BrainDocument;
 use App\Models\Checklist;
 use App\Models\Entity;
 use App\Models\Goal;
+use App\Models\JournalEntry;
 
 test('summarizes current state and profile documents when the vault is configured', function () {
     config(['brain.remote_url' => 'git@example.com:vault.git']);
@@ -43,4 +44,16 @@ test('mentions when there are no lists', function () {
     TarsServer::tool(GetContextTool::class)
         ->assertOk()
         ->assertSee('Aucune liste existante.');
+});
+
+test('never exposes journal content — confidentiality is by explicit get_journal only', function () {
+    JournalEntry::factory()->create([
+        'summary' => 'Contenu très personnel du journal',
+        'mood_label' => 'secret',
+    ]);
+
+    TarsServer::tool(GetContextTool::class)
+        ->assertOk()
+        ->assertDontSee('Contenu très personnel du journal')
+        ->assertDontSee('secret');
 });
