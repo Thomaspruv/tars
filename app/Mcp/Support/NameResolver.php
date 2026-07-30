@@ -43,7 +43,7 @@ class NameResolver
      */
     public function openTasks(string $needle): Collection
     {
-        return $this->matcher->rankedMatches(Task::open()->get(), $needle, fn (Task $task): string => $task->title);
+        return $this->matcher->rankedMatches(Task::open()->topLevel()->get(), $needle, fn (Task $task): string => $task->title);
     }
 
     /**
@@ -54,7 +54,7 @@ class NameResolver
      */
     public function tasks(string $needle): Collection
     {
-        return $this->matcher->rankedMatches(Task::all(), $needle, fn (Task $task): string => $task->title);
+        return $this->matcher->rankedMatches(Task::topLevel()->get(), $needle, fn (Task $task): string => $task->title);
     }
 
     /**

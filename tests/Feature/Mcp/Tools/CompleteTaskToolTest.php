@@ -45,3 +45,13 @@ test('reports when no open task matches', function () {
     TarsServer::tool(CompleteTaskTool::class, ['task' => 'introuvable'])
         ->assertHasErrors(['Aucune tâche']);
 });
+
+test('does not match a subtask, even by its exact title', function () {
+    $parent = Task::factory()->create(['title' => 'Organiser la fête', 'status' => 'todo']);
+    $subtask = Task::factory()->subtaskOf($parent)->create(['title' => 'Réserver la salle', 'status' => 'todo']);
+
+    TarsServer::tool(CompleteTaskTool::class, ['task' => 'réserver la salle'])
+        ->assertHasErrors(['Aucune tâche']);
+
+    expect($subtask->fresh()->status)->toBe(TaskStatus::Todo);
+});

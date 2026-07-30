@@ -43,3 +43,13 @@ test('reports when the entity filter matches nothing', function () {
 test('says when there are no tasks', function () {
     TarsServer::tool(ListTasksTool::class)->assertOk()->assertSee('Aucune tâche.');
 });
+
+test('does not list a subtask as an independent task', function () {
+    $parent = Task::factory()->create(['title' => 'Planifier le voyage', 'status' => 'todo']);
+    Task::factory()->subtaskOf($parent)->create(['title' => 'Réserver les billets', 'status' => 'todo']);
+
+    TarsServer::tool(ListTasksTool::class)
+        ->assertOk()
+        ->assertSee('Planifier le voyage')
+        ->assertDontSee('Réserver les billets');
+});

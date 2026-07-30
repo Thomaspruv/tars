@@ -33,6 +33,23 @@ test('it shows the entity with open tasks and linked goals', function () {
         ->assertDontSee('Ancienne tache');
 });
 
+test('a recurring subtask is excluded from the recurring-deadlines list', function () {
+    $this->actingAs(User::factory()->create());
+
+    $entity = Entity::factory()->create();
+    $parent = Task::factory()->create(['entity_id' => $entity->id, 'title' => 'Routine mensuelle', 'status' => 'todo']);
+    Task::factory()->subtaskOf($parent)->create([
+        'entity_id' => $entity->id,
+        'title' => 'Sous-tâche récurrente',
+        'status' => 'todo',
+        'recurrence' => 'monthly',
+    ]);
+
+    $component = Livewire::test('pages::entities.show', ['entity' => $entity]);
+
+    expect($component->get('recurringTasks'))->toHaveCount(0);
+});
+
 test('it toggles an open task from the entity page', function () {
     $this->actingAs(User::factory()->create());
 

@@ -25,7 +25,7 @@ class GetTodayTool extends LoggedTool
 
     protected function execute(Request $request): Response
     {
-        $tasks = Task::forToday()->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('priority')->get();
+        $tasks = Task::forToday()->topLevel()->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('priority')->get();
         $events = Event::whereBetween('starts_at', [today(), today()->addDays(7)->endOfDay()])->orderBy('starts_at')->get();
 
         $weeklyTime = app(ReviewSettings::class)->weeklyTime();

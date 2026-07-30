@@ -40,6 +40,17 @@ test('includes stats, active goals, deadlines, decisions, notes and profile', fu
         ->toContain('Aime courir le matin.');
 });
 
+test('excludes subtasks from the orphan-ratio stats', function () {
+    $goal = Goal::factory()->create(['status' => 'active']);
+    $parent = Task::factory()->create(['status' => TaskStatus::Todo, 'goal_id' => $goal->id]);
+    Task::factory()->subtaskOf($parent)->create(['status' => TaskStatus::Todo, 'goal_id' => null]);
+
+    $context = (new ReviewContextBuilder)->build(now()->subDays(7), now());
+
+    // Only the top-level, goal-linked task counts: 0 orphaned out of 1 open.
+    expect($context)->toContain('Tâches orphelines (sans objectif) : 0/1 tâches ouvertes (0%)');
+});
+
 test('reports empty sections gracefully when there is no data', function () {
     $context = (new ReviewContextBuilder)->build(now()->subDays(7), now());
 

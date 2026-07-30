@@ -50,7 +50,7 @@ new #[Title('Entité')] class extends Component
     #[Computed]
     public function recurringTasks(): Collection
     {
-        return $this->entity->tasks()->whereNotNull('recurrence')->get();
+        return $this->entity->tasks()->whereNotNull('recurrence')->topLevel()->with(['goal', 'subtasks.goal', 'subtasks.entity'])->get();
     }
 
     #[Computed]

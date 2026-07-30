@@ -33,7 +33,7 @@ class ListTasksTool extends LoggedTool
             'goal' => ['nullable', 'string'],
         ]);
 
-        $query = Task::open()->with(['goal', 'entity']);
+        $query = Task::open()->topLevel()->with(['goal', 'entity']);
 
         match ($validated['filter'] ?? null) {
             'today' => $query->whereDate('scheduled_date', today()),

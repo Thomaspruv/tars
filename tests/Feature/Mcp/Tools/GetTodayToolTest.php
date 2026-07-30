@@ -63,3 +63,13 @@ test('counts pending bilans', function () {
 
     TarsServer::tool(GetTodayTool::class)->assertOk()->assertSee('2 bilan(s) en attente.');
 });
+
+test('does not list a subtask scheduled today as an independent task', function () {
+    $parent = Task::factory()->create(['title' => 'Préparer le voyage', 'status' => 'todo', 'scheduled_date' => today()]);
+    Task::factory()->subtaskOf($parent)->create(['title' => 'Réserver les billets', 'status' => 'todo', 'scheduled_date' => today()]);
+
+    TarsServer::tool(GetTodayTool::class)
+        ->assertOk()
+        ->assertSee('Préparer le voyage')
+        ->assertDontSee('Réserver les billets');
+});

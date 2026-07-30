@@ -43,8 +43,8 @@ class ReviewContextBuilder
                 ->orWhereBetween('due_date', [$periodStart, $periodEnd]);
         })->count();
 
-        $openCount = Task::open()->count();
-        $orphanCount = Task::open()->orphan()->count();
+        $openCount = Task::open()->topLevel()->count();
+        $orphanCount = Task::open()->topLevel()->orphan()->count();
         $orphanRatio = $openCount > 0 ? round(($orphanCount / $openCount) * 100) : 0;
 
         return <<<MD
