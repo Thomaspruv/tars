@@ -3,9 +3,11 @@
 use App\Enums\BrainSuggestionStatus;
 use App\Models\BrainSuggestion;
 use App\Models\InboxItem;
+use App\Models\QuestionnaireRun;
 
 $inboxPendingCount = InboxItem::whereNull('processed_at')->count();
 $curatorPendingCount = BrainSuggestion::where('status', BrainSuggestionStatus::Pending->value)->count();
+$bilanPendingCount = QuestionnaireRun::where('status', 'pending')->count();
 
 $theme = request()->cookie('la-theme') === 'light' ? 'light' : 'dark';
 
@@ -18,6 +20,7 @@ $navItems = [
     ['route' => 'brain.index', 'label' => 'Cerveau', 'icon' => 'document-text'],
     ['route' => 'tasks.index', 'label' => 'Tâches', 'icon' => 'check-circle'],
     ['route' => 'review.index', 'label' => 'Revue', 'icon' => 'clipboard-document-check'],
+    ['route' => 'bilan.index', 'label' => 'Bilan de vie', 'icon' => 'chart-bar'],
 ];
 ?>
 <!DOCTYPE html>
@@ -52,6 +55,9 @@ $navItems = [
                         @endif
                         @if ($item['route'] === 'brain.index' && $curatorPendingCount > 0)
                             <span class="rounded-full bg-(--aibg) px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-(--ai)">{{ $curatorPendingCount }}</span>
+                        @endif
+                        @if ($item['route'] === 'bilan.index' && $bilanPendingCount > 0)
+                            <span class="animate-pulse-soft rounded-full bg-(--acbg) px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-(--ac)">{{ $bilanPendingCount }}</span>
                         @endif
                     </a>
                 @endforeach

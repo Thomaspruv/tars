@@ -13,6 +13,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('cerveau', 'pages::brain')->name('brain.index');
     Route::livewire('taches', 'pages::tasks')->name('tasks.index');
     Route::livewire('revue', 'pages::review')->name('review.index');
+    Route::livewire('bilan-de-vie', 'pages::bilan')->name('bilan.index');
+    Route::livewire('bilan-de-vie/questionnaires/{questionnaire}', 'pages::bilan.questionnaire')->name('bilan.questionnaire.edit');
+    Route::livewire('bilan-de-vie/runs/{run}', 'pages::bilan.run')->name('bilan.run.fill');
     Route::livewire('agents', 'pages::agents')->name('agents.index');
     Route::livewire('reglages', 'pages::settings-app')->name('settings.index');
 });

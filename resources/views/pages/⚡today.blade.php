@@ -4,6 +4,7 @@ use App\Enums\TaskStatus;
 use App\Models\Checklist;
 use App\Models\ChecklistItem;
 use App\Models\Event;
+use App\Models\QuestionnaireRun;
 use App\Models\Review;
 use App\Models\Task;
 use App\Support\Review\ReviewSettings;
@@ -20,7 +21,8 @@ new #[Title('Aujourd\'hui')] class extends Component
     public function tasksToday(): Collection
     {
         return Task::forToday()
-            ->with(['goal', 'entity'])
+            ->topLevel()
+            ->with(['goal', 'entity', 'subtasks.goal', 'subtasks.entity'])
             ->orderByRaw('due_date IS NULL')
             ->orderBy('due_date')
             ->orderBy('priority')
@@ -51,6 +53,12 @@ new #[Title('Aujourd\'hui')] class extends Component
     }
 
     #[Computed]
+    public function pendingBilan(): ?QuestionnaireRun
+    {
+        return QuestionnaireRun::where('status', 'pending')->orderBy('due_date')->with('questionnaire')->first();
+    }
+
+    #[Computed]
     public function daysUntilReview(): int
     {
         $weeklyTime = app(ReviewSettings::class)->weeklyTime();
@@ -64,6 +72,19 @@ new #[Title('Aujourd\'hui')] class extends Component
     public function toggleTask(int $taskId): void
     {
         Task::findOrFail($taskId)->toggleCompletion();
+
+        unset($this->tasksToday);
+    }
+
+    public function createSubtask(int $parentTaskId, string $title): void
+    {
+        $title = trim($title);
+
+        if ($title === '') {
+            return;
+        }
+
+        Task::findOrFail($parentTaskId)->subtasks()->create(['title' => $title, 'status' => 'todo']);
 
         unset($this->tasksToday);
     }
@@ -98,6 +119,17 @@ new #[Title('Aujourd\'hui')] class extends Component
             </p>
         @endif
     </div>
+
+    @if ($this->pendingBilan)
+        <div class="mt-4 flex items-center justify-between rounded-[12px] border border-(--ac)/35 bg-(--acbg) px-[18px] py-3">
+            <p class="text-sm text-(--tx)">
+                <span class="font-semibold text-(--ac)">{{ $this->pendingBilan->questionnaire->name }}</span> en attente
+            </p>
+            <a href="{{ route('bilan.index', ['activeTab' => 'bilans']) }}" wire:navigate class="text-sm text-(--ac) underline underline-offset-2">
+                Le remplir →
+            </a>
+        </div>
+    @endif
 
     <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1.5fr_1fr]">
         <div>
