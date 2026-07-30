@@ -48,6 +48,24 @@ test('monthly with a day clamps to the last day of a shorter month', function ()
     expect($result->toDateString())->toBe('2026-02-28');
 });
 
+test('quarterly without a day adds three months without overflow', function () {
+    $result = (new RecurrenceCalculator)->nextOccurrence('quarterly', Carbon::create(2026, 1, 31));
+
+    expect($result->toDateString())->toBe('2026-04-30');
+});
+
+test('quarterly with a day targets that day three months later', function () {
+    $result = (new RecurrenceCalculator)->nextOccurrence('quarterly:1', Carbon::create(2026, 7, 1));
+
+    expect($result->toDateString())->toBe('2026-10-01');
+});
+
+test('quarterly with a day clamps to the last day of a shorter month', function () {
+    $result = (new RecurrenceCalculator)->nextOccurrence('quarterly:31', Carbon::create(2026, 1, 1));
+
+    expect($result->toDateString())->toBe('2026-04-30');
+});
+
 test('yearly without a date adds one year without overflow', function () {
     $result = (new RecurrenceCalculator)->nextOccurrence('yearly', Carbon::create(2028, 2, 29));
 

@@ -32,6 +32,9 @@ class RecurrenceCalculator
             'monthly' => $argument !== null
                 ? $from->copy()->addMonthNoOverflow()->day(min((int) $argument, $from->copy()->addMonthNoOverflow()->daysInMonth))
                 : $from->copy()->addMonthNoOverflow(),
+            'quarterly' => $argument !== null
+                ? $from->copy()->addMonthsNoOverflow(3)->day(min((int) $argument, $from->copy()->addMonthsNoOverflow(3)->daysInMonth))
+                : $from->copy()->addMonthsNoOverflow(3),
             'yearly' => $argument !== null
                 ? $this->nextYearlyDate($from, $argument)
                 : $from->copy()->addYearNoOverflow(),
