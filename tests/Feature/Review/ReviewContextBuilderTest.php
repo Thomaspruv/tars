@@ -40,6 +40,15 @@ test('includes stats, active goals, deadlines, decisions, notes and profile', fu
         ->toContain('Aime courir le matin.');
 });
 
+test('still counts a completed task that has since been archived in the period stats', function () {
+    $task = Task::factory()->create(['status' => TaskStatus::Done, 'completed_at' => now()->subDays(2)]);
+    $task->update(['archived_at' => now()]);
+
+    $context = (new ReviewContextBuilder)->build(now()->subDays(7), now());
+
+    expect($context)->toContain('Tâches terminées : 1');
+});
+
 test('excludes subtasks from the orphan-ratio stats', function () {
     $goal = Goal::factory()->create(['status' => 'active']);
     $parent = Task::factory()->create(['status' => TaskStatus::Todo, 'goal_id' => $goal->id]);

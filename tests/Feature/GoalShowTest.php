@@ -60,6 +60,18 @@ test('it toggles a linked task from the goal page', function () {
     expect($task->fresh()->status)->toBe(TaskStatus::Done);
 });
 
+test('weekly activity still counts a task that has since been archived', function () {
+    $this->actingAs(User::factory()->create());
+
+    $goal = Goal::factory()->create();
+    $task = Task::factory()->done()->create(['goal_id' => $goal->id, 'completed_at' => now()]);
+    $task->update(['archived_at' => now()]);
+
+    $weeklyActivity = Livewire::test('pages::goals.show', ['goal' => $goal])->get('weeklyActivity');
+
+    expect(array_sum($weeklyActivity))->toBe(1);
+});
+
 test('it updates the goal status', function () {
     $this->actingAs(User::factory()->create());
 

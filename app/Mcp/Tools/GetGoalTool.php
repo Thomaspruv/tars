@@ -38,7 +38,7 @@ class GetGoalTool extends LoggedTool
             return Response::error("Aucun objectif ne correspond à « {$validated['goal']} ».");
         }
 
-        $goal->load('milestones', 'tasks');
+        $goal->load(['milestones', 'tasks' => fn ($query) => $query->withArchived()]);
 
         $totalMilestones = $goal->milestones->count();
         $doneMilestones = $goal->milestones->where('status', MilestoneStatus::Done)->count();

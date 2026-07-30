@@ -29,12 +29,13 @@ use Illuminate\Support\Carbon;
  * @property bool $is_delegable
  * @property string|null $recurrence
  * @property Carbon|null $completed_at
+ * @property Carbon|null $archived_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
 #[Fillable([
     'parent_task_id', 'title', 'notes', 'goal_id', 'milestone_id', 'entity_id', 'due_date', 'scheduled_date',
-    'status', 'priority', 'is_delegable', 'recurrence', 'completed_at',
+    'status', 'priority', 'is_delegable', 'recurrence', 'completed_at', 'archived_at',
 ])]
 class Task extends Model
 {
@@ -55,7 +56,22 @@ class Task extends Model
             'scheduled_date' => 'date',
             'is_delegable' => 'boolean',
             'completed_at' => 'datetime',
+            'archived_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::addGlobalScope('unarchived', fn (Builder $query): Builder => $query->whereNull('archived_at'));
+    }
+
+    /**
+     * @param  Builder<Task>  $query
+     * @return Builder<Task>
+     */
+    public function scopeWithArchived(Builder $query): Builder
+    {
+        return $query->withoutGlobalScope('unarchived');
     }
 
     /**

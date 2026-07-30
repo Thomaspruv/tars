@@ -52,6 +52,7 @@ new #[Title('Objectif')] class extends Component
     public function weeklyActivity(): array
     {
         $completed = $this->goal->tasks()
+            ->withArchived()
             ->where('status', 'done')
             ->where('completed_at', '>=', now()->subWeeks(6))
             ->get(['completed_at']);

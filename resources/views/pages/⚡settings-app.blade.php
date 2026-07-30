@@ -5,6 +5,7 @@ use App\Models\AiProvider;
 use App\Models\BrainDocument;
 use App\Models\McpCall;
 use App\Support\Agents\AgentRunner;
+use App\Support\Archiving\ArchiveSettings;
 use App\Support\Brain\BrainSettings;
 use App\Support\Brain\GitRepository;
 use App\Support\Mcp\McpSettings;
@@ -67,6 +68,10 @@ new #[Title('Réglages')] class extends Component
 
     public bool $reviewSettingsSaved = false;
 
+    public ?int $archiveAfterDays = null;
+
+    public bool $archiveSettingsSaved = false;
+
     public function mount(): void
     {
         $settings = app(BrainSettings::class);
@@ -82,6 +87,21 @@ new #[Title('Réglages')] class extends Component
         $this->reviewWeeklyTime = $reviewSettings->weeklyTime();
         $this->reviewNotificationEmail = (string) $reviewSettings->notificationEmail();
         $this->reviewNotificationsEnabled = $reviewSettings->notificationsEnabled();
+
+        $this->archiveAfterDays = app(ArchiveSettings::class)->afterDays();
+    }
+
+    public function saveArchiveSettings(): void
+    {
+        $this->archiveSettingsSaved = false;
+
+        $validated = $this->validate([
+            'archiveAfterDays' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        app(ArchiveSettings::class)->updateAfterDays($validated['archiveAfterDays']);
+
+        $this->archiveSettingsSaved = true;
     }
 
     public function saveReviewSettings(): void
@@ -602,6 +622,40 @@ new #[Title('Réglages')] class extends Component
                 <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="saveReviewSettings" wire:loading.attr="disabled" wire:target="saveReviewSettings">
                     <span wire:loading wire:target="saveReviewSettings">Enregistrement…</span>
                     <span wire:loading.remove wire:target="saveReviewSettings">Enregistrer</span>
+                </x-btn>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-8">
+        <h2 class="text-base font-semibold text-(--tx)">Archivage</h2>
+
+        <div class="mt-4 space-y-3 rounded-[12px] border border-(--bd) bg-(--surf) p-4" wire:loading.class="opacity-50" wire:target="saveArchiveSettings">
+            <div class="flex items-center gap-3">
+                <label class="w-64 text-sm text-(--tx)">Archiver après (jours)</label>
+                <input
+                    type="number"
+                    min="1"
+                    wire:model="archiveAfterDays"
+                    wire:loading.attr="disabled"
+                    wire:target="saveArchiveSettings"
+                    placeholder="désactivé"
+                    class="w-32 rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-1.5 font-mono text-sm text-(--tx)"
+                />
+            </div>
+            @error('archiveAfterDays') <p class="text-xs text-(--dgr)">{{ $message }}</p> @enderror
+
+            <p class="text-xs text-(--mut)">
+                Laisser vide pour désactiver. Les tâches terminées et éléments de liste cochés depuis plus de N jours seront masqués (mais conservés) automatiquement.
+            </p>
+
+            <div class="flex items-center justify-end gap-2">
+                @if ($archiveSettingsSaved)
+                    <p class="text-xs text-(--ok)" wire:loading.remove wire:target="saveArchiveSettings">✓ Enregistré</p>
+                @endif
+                <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="saveArchiveSettings" wire:loading.attr="disabled" wire:target="saveArchiveSettings">
+                    <span wire:loading wire:target="saveArchiveSettings">Enregistrement…</span>
+                    <span wire:loading.remove wire:target="saveArchiveSettings">Enregistrer</span>
                 </x-btn>
             </div>
         </div>

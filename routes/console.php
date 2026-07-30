@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\ArchiveStaleItemsCommand;
 use App\Console\Commands\CuratorTidyCommand;
 use App\Console\Commands\CuratorTodoCommand;
 use App\Console\Commands\GenerateReviewCommand;
@@ -20,3 +21,4 @@ Schedule::command(GenerateReviewCommand::class, ['--scheduled'])->everyMinute()-
 Schedule::command(CuratorTodoCommand::class, ['--scheduled'])->hourly()->withoutOverlapping();
 Schedule::command(CuratorTidyCommand::class, ['--scheduled'])->dailyAt('22:00')->withoutOverlapping();
 Schedule::command(QuestionnaireSchedulerCommand::class, ['--scheduled'])->hourly()->withoutOverlapping();
+Schedule::command(ArchiveStaleItemsCommand::class, ['--scheduled'])->daily();

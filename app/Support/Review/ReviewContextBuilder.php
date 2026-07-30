@@ -34,7 +34,8 @@ class ReviewContextBuilder
 
     private function buildStats(CarbonInterface $periodStart, CarbonInterface $periodEnd): string
     {
-        $done = Task::where('status', TaskStatus::Done)
+        $done = Task::withArchived()
+            ->where('status', TaskStatus::Done)
             ->whereBetween('completed_at', [$periodStart, $periodEnd])
             ->count();
 
