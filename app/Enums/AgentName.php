@@ -31,6 +31,6 @@ enum AgentName: string
 
     public function isAvailable(): bool
     {
-        return in_array($this, [self::Reviewer, self::Curateur], true);
+        return true;
     }
 }

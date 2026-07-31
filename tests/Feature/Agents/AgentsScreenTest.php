@@ -1,15 +1,19 @@
 <?php
 
 use App\Enums\AgentRunStatus;
+use App\Enums\PlannerProposalStatus;
 use App\Jobs\RunAgentCommandJob;
 use App\Models\AgentConfig;
 use App\Models\AgentRun;
 use App\Models\AiProvider;
+use App\Models\PlannerProposal;
+use App\Models\PlannerProposalItem;
+use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 
-test('shows an interactive card for reviewer and curateur, and a greyed out card for triage and planner', function () {
+test('shows an interactive card for all four agents', function () {
     $this->actingAs(User::factory()->create());
 
     Livewire::test('pages::agents')
@@ -17,7 +21,7 @@ test('shows an interactive card for reviewer and curateur, and a greyed out card
         ->assertSee('curateur')
         ->assertSee('triage')
         ->assertSee('planner')
-        ->assertSee('À venir');
+        ->assertDontSee('À venir');
 });
 
 test('saves the reviewer agent configuration', function () {
@@ -295,6 +299,169 @@ test('shows the run detail when a row is clicked', function () {
         ->call('showRunDetail', $run->id)
         ->assertSet('selectedRunId', $run->id)
         ->assertSee('Contenu détaillé de la revue.');
+});
+
+test('saves the triage agent configuration independently from the others', function () {
+    $this->actingAs(User::factory()->create());
+
+    $provider = AiProvider::factory()->create(['is_active' => true]);
+
+    Livewire::test('pages::agents')
+        ->set('providerId.triage', (string) $provider->id)
+        ->set('model.triage', 'claude-haiku')
+        ->set('enabled.triage', true)
+        ->call('saveAgentConfig', 'triage')
+        ->assertHasNoErrors();
+
+    $config = AgentConfig::where('agent_name', 'triage')->firstOrFail();
+    expect($config->ai_provider_id)->toBe($provider->id)
+        ->and($config->model)->toBe('claude-haiku');
+});
+
+test('saves the planner agent configuration independently from the others', function () {
+    $this->actingAs(User::factory()->create());
+
+    $provider = AiProvider::factory()->create(['is_active' => true]);
+
+    Livewire::test('pages::agents')
+        ->set('providerId.planner', (string) $provider->id)
+        ->set('model.planner', 'claude-haiku')
+        ->set('enabled.planner', true)
+        ->call('saveAgentConfig', 'planner')
+        ->assertHasNoErrors();
+
+    $config = AgentConfig::where('agent_name', 'planner')->firstOrFail();
+    expect($config->ai_provider_id)->toBe($provider->id)
+        ->and($config->model)->toBe('claude-haiku');
+});
+
+test('queues the triage run instead of blocking on the LLM call', function () {
+    Queue::fake();
+    $this->actingAs(User::factory()->create());
+
+    $provider = AiProvider::factory()->create();
+    AgentConfig::factory()->create(['agent_name' => 'triage', 'ai_provider_id' => $provider->id, 'enabled' => true]);
+
+    Livewire::test('pages::agents')
+        ->call('runTriageNow')
+        ->assertHasNoErrors();
+
+    Queue::assertPushed(RunAgentCommandJob::class, fn ($job): bool => $job->command === 'triage:run');
+});
+
+test('running a disabled/unconfigured triage surfaces an error and does not queue anything', function () {
+    Queue::fake();
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages::agents')
+        ->call('runTriageNow')
+        ->assertHasErrors(['run.triage']);
+
+    Queue::assertNotPushed(RunAgentCommandJob::class);
+});
+
+test('queues the planner run with the default period', function () {
+    Queue::fake();
+    $this->actingAs(User::factory()->create());
+
+    $provider = AiProvider::factory()->create();
+    AgentConfig::factory()->create(['agent_name' => 'planner', 'ai_provider_id' => $provider->id, 'enabled' => true]);
+
+    Livewire::test('pages::agents')
+        ->call('runPlannerNow')
+        ->assertHasNoErrors();
+
+    Queue::assertPushed(RunAgentCommandJob::class, fn ($job): bool => $job->command === 'planner:generate' && $job->arguments === []);
+});
+
+test('queues the planner run with a free period when provided', function () {
+    Queue::fake();
+    $this->actingAs(User::factory()->create());
+
+    $provider = AiProvider::factory()->create();
+    AgentConfig::factory()->create(['agent_name' => 'planner', 'ai_provider_id' => $provider->id, 'enabled' => true]);
+
+    Livewire::test('pages::agents')
+        ->set('plannerPeriodStart', '2024-01-01')
+        ->set('plannerPeriodEnd', '2024-01-07')
+        ->call('runPlannerNow')
+        ->assertHasNoErrors();
+
+    Queue::assertPushed(RunAgentCommandJob::class, fn ($job): bool => $job->command === 'planner:generate'
+        && $job->arguments === ['--start' => '2024-01-01', '--end' => '2024-01-07']);
+});
+
+test('running a disabled/unconfigured planner surfaces an error and does not queue anything', function () {
+    Queue::fake();
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages::agents')
+        ->call('runPlannerNow')
+        ->assertHasErrors(['run.planner']);
+
+    Queue::assertNotPushed(RunAgentCommandJob::class);
+});
+
+test('shows the planner proposal in the run detail modal and applies a single item', function () {
+    $this->actingAs(User::factory()->create());
+
+    $run = AgentRun::factory()->create(['agent_name' => 'planner', 'status' => AgentRunStatus::Success]);
+    $proposal = PlannerProposal::factory()->create(['agent_run_id' => $run->id]);
+    $task = Task::factory()->create(['status' => 'todo', 'scheduled_date' => null]);
+    $item = PlannerProposalItem::factory()->create([
+        'planner_proposal_id' => $proposal->id,
+        'task_id' => $task->id,
+        'proposed_scheduled_date' => now()->addDays(2),
+        'reason' => 'Priorité haute.',
+    ]);
+
+    Livewire::test('pages::agents')
+        ->call('showRunDetail', $run->id)
+        ->assertSee('Priorité haute.')
+        ->call('applyPlannerItem', $item->id);
+
+    expect($task->fresh()->scheduled_date->toDateString())->toBe($item->proposed_scheduled_date->toDateString())
+        ->and($item->fresh()->status)->toBe(PlannerProposalStatus::Applied);
+});
+
+test('dismisses a single planner proposal item without touching the task', function () {
+    $this->actingAs(User::factory()->create());
+
+    $run = AgentRun::factory()->create(['agent_name' => 'planner', 'status' => AgentRunStatus::Success]);
+    $proposal = PlannerProposal::factory()->create(['agent_run_id' => $run->id]);
+    $task = Task::factory()->create(['status' => 'todo', 'scheduled_date' => null]);
+    $item = PlannerProposalItem::factory()->create([
+        'planner_proposal_id' => $proposal->id,
+        'task_id' => $task->id,
+    ]);
+
+    Livewire::test('pages::agents')
+        ->call('showRunDetail', $run->id)
+        ->call('dismissPlannerItem', $item->id);
+
+    expect($task->fresh()->scheduled_date)->toBeNull()
+        ->and($item->fresh()->status)->toBe(PlannerProposalStatus::Dismissed);
+});
+
+test('applies all pending planner proposal items at once', function () {
+    $this->actingAs(User::factory()->create());
+
+    $run = AgentRun::factory()->create(['agent_name' => 'planner', 'status' => AgentRunStatus::Success]);
+    $proposal = PlannerProposal::factory()->create(['agent_run_id' => $run->id]);
+    $taskA = Task::factory()->create(['status' => 'todo', 'scheduled_date' => null]);
+    $taskB = Task::factory()->create(['status' => 'todo', 'scheduled_date' => null]);
+    $itemA = PlannerProposalItem::factory()->create(['planner_proposal_id' => $proposal->id, 'task_id' => $taskA->id, 'proposed_scheduled_date' => now()->addDay()]);
+    $itemB = PlannerProposalItem::factory()->create(['planner_proposal_id' => $proposal->id, 'task_id' => $taskB->id, 'proposed_scheduled_date' => now()->addDays(2)]);
+
+    Livewire::test('pages::agents')
+        ->call('showRunDetail', $run->id)
+        ->call('applyAllPlannerItems', $proposal->id);
+
+    expect($taskA->fresh()->scheduled_date)->not->toBeNull()
+        ->and($taskB->fresh()->scheduled_date)->not->toBeNull()
+        ->and($itemA->fresh()->status)->toBe(PlannerProposalStatus::Applied)
+        ->and($itemB->fresh()->status)->toBe(PlannerProposalStatus::Applied)
+        ->and($proposal->fresh()->status)->toBe(PlannerProposalStatus::Applied);
 });
 
 test('shows the total tokens used this month', function () {

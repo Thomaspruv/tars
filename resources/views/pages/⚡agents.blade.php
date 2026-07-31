@@ -1,10 +1,13 @@
 <?php
 
 use App\Enums\AgentName;
+use App\Enums\PlannerProposalStatus;
 use App\Jobs\RunAgentCommandJob;
 use App\Models\AgentConfig;
 use App\Models\AgentRun;
 use App\Models\AiProvider;
+use App\Models\PlannerProposal;
+use App\Models\PlannerProposalItem;
 use App\Support\Agents\KnownModels;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
@@ -46,6 +49,10 @@ new #[Title('Agents')] class extends Component
     public string $reviewPeriodStart = '';
 
     public string $reviewPeriodEnd = '';
+
+    public string $plannerPeriodStart = '';
+
+    public string $plannerPeriodEnd = '';
 
     public function mount(): void
     {
@@ -174,6 +181,96 @@ new #[Title('Agents')] class extends Component
 
         $this->runMessage['curateur'] = 'Lancement en cours, mis en file d\'attente…';
         $this->resetErrorBag('run.curateur');
+    }
+
+    public function runTriageNow(): void
+    {
+        if (! AgentConfig::where('agent_name', 'triage')->where('enabled', true)->exists()) {
+            $this->addError('run.triage', "Triage n'est pas configuré.");
+
+            return;
+        }
+
+        RunAgentCommandJob::dispatch('triage:run');
+
+        $this->runMessage['triage'] = 'Lancement en cours, mis en file d\'attente…';
+        $this->resetErrorBag('run.triage');
+    }
+
+    public function runPlannerNow(): void
+    {
+        if (! AgentConfig::where('agent_name', 'planner')->where('enabled', true)->exists()) {
+            $this->addError('run.planner', "Planner n'est pas configuré.");
+
+            return;
+        }
+
+        if (($this->plannerPeriodStart === '') !== ($this->plannerPeriodEnd === '')) {
+            $this->addError('run.planner', 'Renseigne une date de début et de fin, ou aucune des deux.');
+
+            return;
+        }
+
+        $arguments = [];
+
+        if ($this->plannerPeriodStart !== '' && $this->plannerPeriodEnd !== '') {
+            $arguments['--start'] = $this->plannerPeriodStart;
+            $arguments['--end'] = $this->plannerPeriodEnd;
+        }
+
+        RunAgentCommandJob::dispatch('planner:generate', $arguments);
+
+        $this->runMessage['planner'] = 'Lancement en cours, mis en file d\'attente…';
+        $this->resetErrorBag('run.planner');
+    }
+
+    #[Computed]
+    public function plannerProposal(): ?PlannerProposal
+    {
+        if (! $this->selectedRun || $this->selectedRun->agent_name !== 'planner') {
+            return null;
+        }
+
+        return PlannerProposal::where('agent_run_id', $this->selectedRun->id)->with('items.task')->first();
+    }
+
+    public function applyPlannerItem(int $itemId): void
+    {
+        $item = PlannerProposalItem::findOrFail($itemId);
+        $item->task->update(['scheduled_date' => $item->proposed_scheduled_date]);
+        $item->update(['status' => PlannerProposalStatus::Applied]);
+
+        unset($this->plannerProposal);
+    }
+
+    public function dismissPlannerItem(int $itemId): void
+    {
+        PlannerProposalItem::where('id', $itemId)->update(['status' => PlannerProposalStatus::Dismissed]);
+
+        unset($this->plannerProposal);
+    }
+
+    public function applyAllPlannerItems(int $proposalId): void
+    {
+        $proposal = PlannerProposal::with('items.task')->findOrFail($proposalId);
+
+        foreach ($proposal->items->where('status', PlannerProposalStatus::Pending) as $item) {
+            $item->task->update(['scheduled_date' => $item->proposed_scheduled_date]);
+            $item->update(['status' => PlannerProposalStatus::Applied]);
+        }
+
+        $proposal->update(['status' => PlannerProposalStatus::Applied]);
+
+        unset($this->plannerProposal);
+    }
+
+    public function dismissAllPlannerItems(int $proposalId): void
+    {
+        $proposal = PlannerProposal::findOrFail($proposalId);
+        $proposal->items()->where('status', PlannerProposalStatus::Pending)->update(['status' => PlannerProposalStatus::Dismissed]);
+        $proposal->update(['status' => PlannerProposalStatus::Dismissed]);
+
+        unset($this->plannerProposal);
     }
 
     /**
@@ -348,6 +445,18 @@ new #[Title('Agents')] class extends Component
                                 </div>
                             </div>
                             <p class="mt-1.5 text-[10.5px] text-(--mut)">Début et fin laissés vides : période par défaut (depuis la dernière revue hebdo, ou 7 jours).</p>
+                        @elseif ($name === 'planner')
+                            <div class="mt-3 grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="text-[10.5px] text-(--mut)">Début</label>
+                                    <input type="date" wire:model="plannerPeriodStart" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)" />
+                                </div>
+                                <div>
+                                    <label class="text-[10.5px] text-(--mut)">Fin</label>
+                                    <input type="date" wire:model="plannerPeriodEnd" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)" />
+                                </div>
+                            </div>
+                            <p class="mt-1.5 text-[10.5px] text-(--mut)">Début et fin laissés vides : la semaine à venir par défaut.</p>
                         @endif
 
                         @error("run.{$name}") <p class="mt-2 text-xs text-(--dgr)">{{ $message }}</p> @enderror
@@ -371,6 +480,20 @@ new #[Title('Agents')] class extends Component
                                 <x-btn variant="agent" wire:click="runCuratorMission('tidy')" wire:loading.attr="disabled" wire:target="runCuratorMission('tidy')">
                                     <span wire:loading wire:target="runCuratorMission('tidy')">En cours…</span>
                                     <span wire:loading.remove wire:target="runCuratorMission('tidy')">Lancer le rangement</span>
+                                </x-btn>
+                            </div>
+                        @elseif ($name === 'triage')
+                            <div class="mt-3 flex justify-end">
+                                <x-btn variant="agent" wire:click="runTriageNow" wire:loading.attr="disabled" wire:target="runTriageNow">
+                                    <span wire:loading wire:target="runTriageNow">En cours…</span>
+                                    <span wire:loading.remove wire:target="runTriageNow">Lancer maintenant</span>
+                                </x-btn>
+                            </div>
+                        @elseif ($name === 'planner')
+                            <div class="mt-3 flex justify-end">
+                                <x-btn variant="agent" wire:click="runPlannerNow" wire:loading.attr="disabled" wire:target="runPlannerNow">
+                                    <span wire:loading wire:target="runPlannerNow">En cours…</span>
+                                    <span wire:loading.remove wire:target="runPlannerNow">Lancer maintenant</span>
                                 </x-btn>
                             </div>
                         @endif
@@ -451,10 +574,47 @@ new #[Title('Agents')] class extends Component
                     </div>
                 @endif
 
-                @if ($this->selectedRun->output)
+                @if ($this->selectedRun->output && ! $this->plannerProposal)
                     <div>
                         <p class="text-xs font-semibold text-(--mut)">Sortie</p>
                         <pre class="mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-[8px] bg-(--surf2) p-3 text-xs text-(--tx)">{{ $this->selectedRun->output }}</pre>
+                    </div>
+                @endif
+
+                @if ($this->plannerProposal)
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <p class="text-xs font-semibold text-(--mut)">Proposition de planification</p>
+                            @if ($this->plannerProposal->items->where('status', PlannerProposalStatus::Pending)->isNotEmpty())
+                                <div class="flex gap-2">
+                                    <x-btn variant="ghost" class="!px-2.5 !py-1 text-xs" wire:click="dismissAllPlannerItems({{ $this->plannerProposal->id }})">Ignorer tout</x-btn>
+                                    <x-btn variant="agent" class="!px-2.5 !py-1 text-xs" wire:click="applyAllPlannerItems({{ $this->plannerProposal->id }})">Appliquer tout</x-btn>
+                                </div>
+                            @endif
+                        </div>
+                        <div class="mt-2 max-h-64 space-y-2 overflow-y-auto">
+                            @forelse ($this->plannerProposal->items as $item)
+                                <div class="flex items-center justify-between gap-3 rounded-[8px] bg-(--surf2) px-3 py-2" wire:key="planner-item-{{ $item->id }}">
+                                    <div class="min-w-0 flex-1">
+                                        <p class="text-xs text-(--tx)">{{ $item->task->title }}</p>
+                                        <p class="font-mono text-[10.5px] text-(--mut)">
+                                            {{ $item->task->scheduled_date?->translatedFormat('d M') ?? 'non planifiée' }} → {{ $item->proposed_scheduled_date->translatedFormat('d M') }}
+                                            — {{ $item->reason }}
+                                        </p>
+                                    </div>
+                                    @if ($item->status === PlannerProposalStatus::Pending)
+                                        <div class="flex shrink-0 gap-2">
+                                            <x-btn variant="secondary" class="!px-2.5 !py-1 text-xs" wire:click="dismissPlannerItem({{ $item->id }})">Ignorer</x-btn>
+                                            <x-btn variant="agent" class="!px-2.5 !py-1 text-xs" wire:click="applyPlannerItem({{ $item->id }})">Appliquer</x-btn>
+                                        </div>
+                                    @else
+                                        <x-badge type="status" :value="$item->status->value === 'applied' ? 'active' : 'paused'" :label="$item->status->value" />
+                                    @endif
+                                </div>
+                            @empty
+                                <p class="p-3 text-center text-xs text-(--mut)">Aucune tâche proposée sur cette période.</p>
+                            @endforelse
+                        </div>
                     </div>
                 @endif
 
