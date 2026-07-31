@@ -56,6 +56,10 @@
                 {{ $isDone ? 'fait' : ($dueDate->isToday() ? "aujourd'hui" : $dueDate->translatedFormat('d M')) }}
             </time>
         @endif
+
+        @isset($actions)
+            <div class="{{ $dueDate ? 'shrink-0' : 'ml-auto shrink-0' }}">{{ $actions }}</div>
+        @endisset
     </div>
 
     @unless ($nested)

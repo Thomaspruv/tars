@@ -58,6 +58,19 @@ new #[Title('Aujourd\'hui')] class extends Component
     }
 
     #[Computed]
+    public function unscheduledTasks(): Collection
+    {
+        return Task::open()
+            ->topLevel()
+            ->whereNull('scheduled_date')
+            ->whereNull('due_date')
+            ->with(['goal', 'entity'])
+            ->orderBy('priority')
+            ->orderBy('created_at')
+            ->get();
+    }
+
+    #[Computed]
     public function inboxPendingCount(): int
     {
         return InboxItem::whereNull('processed_at')->count();
@@ -108,6 +121,13 @@ new #[Title('Aujourd\'hui')] class extends Component
         Task::findOrFail($taskId)->toggleCompletion();
 
         unset($this->tasksToday);
+    }
+
+    public function scheduleForToday(int $taskId): void
+    {
+        Task::findOrFail($taskId)->update(['scheduled_date' => today()]);
+
+        unset($this->tasksToday, $this->unscheduledTasks);
     }
 
     public function createSubtask(int $parentTaskId, string $title): void
@@ -240,6 +260,25 @@ new #[Title('Aujourd\'hui')] class extends Component
                     @endif
                 @endif
             </div>
+
+            @if ($this->unscheduledTasks->isNotEmpty())
+                <div class="mt-6">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-base font-semibold text-(--tx)">Sans date</h2>
+                        <span class="font-mono text-xs text-(--mut)">{{ $this->unscheduledTasks->count() }}</span>
+                    </div>
+
+                    <div class="mt-3 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
+                        @foreach ($this->unscheduledTasks as $task)
+                            <x-task-row :task="$task" wire:key="unscheduled-{{ $task->id }}">
+                                <x-slot:actions>
+                                    <x-btn variant="secondary" wire:click="scheduleForToday({{ $task->id }})" class="!px-2.5 !py-1 text-xs">Planifier aujourd'hui</x-btn>
+                                </x-slot:actions>
+                            </x-task-row>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
         </div>
 
         <div class="space-y-6">

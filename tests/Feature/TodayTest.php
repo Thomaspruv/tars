@@ -166,3 +166,38 @@ test('shows completed-today tasks inside the "Terminées aujourd\'hui" section',
         ->assertSee("Terminées aujourd'hui", false)
         ->assertSee($done->title);
 });
+
+test('lists open tasks with no scheduled date and no due date under "Sans date"', function () {
+    $this->actingAs(User::factory()->create());
+
+    $unscheduled = Task::factory()->create(['title' => 'No date task', 'scheduled_date' => null, 'due_date' => null]);
+    Task::factory()->create(['title' => 'Scheduled task', 'scheduled_date' => today()]);
+    Task::factory()->create(['title' => 'Due later task', 'scheduled_date' => null, 'due_date' => today()->addWeek()]);
+    Task::factory()->done()->create(['title' => 'Done no date task', 'scheduled_date' => null, 'due_date' => null]);
+
+    $unscheduledTasks = Livewire::test('pages::today')->get('unscheduledTasks');
+
+    expect($unscheduledTasks->pluck('id')->all())->toBe([$unscheduled->id]);
+
+    $this->get(route('today'))
+        ->assertSee('Sans date')
+        ->assertSee($unscheduled->title);
+});
+
+test('does not show the "Sans date" section when every open task has a date', function () {
+    $this->actingAs(User::factory()->create());
+
+    Task::factory()->create(['title' => 'Scheduled task', 'scheduled_date' => today()]);
+
+    $this->get(route('today'))->assertDontSee('Sans date');
+});
+
+test('scheduling an unscheduled task for today moves it into "Tâches du jour"', function () {
+    $this->actingAs(User::factory()->create());
+
+    $task = Task::factory()->create(['title' => 'No date task', 'scheduled_date' => null, 'due_date' => null]);
+
+    Livewire::test('pages::today')->call('scheduleForToday', $task->id);
+
+    expect($task->fresh()->scheduled_date->isToday())->toBeTrue();
+});
