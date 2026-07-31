@@ -70,17 +70,49 @@ test('it shows pinned lists and toggles list items', function () {
     $this->actingAs(User::factory()->create());
 
     $pinned = Checklist::factory()->create(['name' => 'Courses', 'is_pinned' => true]);
-    $unpinned = Checklist::factory()->create(['name' => 'Not pinned', 'is_pinned' => false]);
     $item = ChecklistItem::factory()->create(['list_id' => $pinned->id, 'content' => 'Lait']);
 
     $this->get(route('today'))
         ->assertSee('Courses')
-        ->assertSee('Lait')
-        ->assertDontSee('Not pinned');
+        ->assertSee('Lait');
 
     Livewire::test('pages::today')->call('toggleListItem', $item->id);
 
     expect($item->fresh()->checked_at)->not->toBeNull();
+});
+
+test('it shows unpinned lists under "Autres listes" and toggles their items too', function () {
+    $this->actingAs(User::factory()->create());
+
+    $unpinned = Checklist::factory()->create(['name' => 'Livres à lire', 'is_pinned' => false]);
+    $item = ChecklistItem::factory()->create(['list_id' => $unpinned->id, 'content' => 'Dune']);
+
+    $this->get(route('today'))
+        ->assertSee('Autres listes')
+        ->assertSee('Livres à lire')
+        ->assertSee('Dune');
+
+    Livewire::test('pages::today')->call('toggleListItem', $item->id);
+
+    expect($item->fresh()->checked_at)->not->toBeNull();
+});
+
+test('does not show the "Autres listes" section when every list is pinned', function () {
+    $this->actingAs(User::factory()->create());
+
+    Checklist::factory()->create(['name' => 'Courses', 'is_pinned' => true]);
+
+    $this->get(route('today'))->assertDontSee('Autres listes');
+});
+
+test('pinning an unpinned list moves it out of "Autres listes"', function () {
+    $this->actingAs(User::factory()->create());
+
+    $list = Checklist::factory()->create(['name' => 'Livres à lire', 'is_pinned' => false]);
+
+    Livewire::test('pages::today')->call('pinList', $list->id);
+
+    expect($list->fresh()->is_pinned)->toBeTrue();
 });
 
 test('shows a banner when an uncompleted review exists', function () {

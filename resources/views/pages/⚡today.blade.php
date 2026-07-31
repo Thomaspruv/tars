@@ -64,7 +64,7 @@ new #[Title('Aujourd\'hui')] class extends Component
             ->topLevel()
             ->whereNull('scheduled_date')
             ->whereNull('due_date')
-            ->with(['goal', 'entity'])
+            ->with(['goal', 'entity', 'subtasks.goal', 'subtasks.entity'])
             ->orderBy('priority')
             ->orderBy('created_at')
             ->get();
@@ -90,6 +90,15 @@ new #[Title('Aujourd\'hui')] class extends Component
     {
         return Checklist::where('is_pinned', true)
             ->with(['items' => fn ($query) => $query->orderBy('position')])
+            ->get();
+    }
+
+    #[Computed]
+    public function unpinnedLists(): Collection
+    {
+        return Checklist::where('is_pinned', false)
+            ->with(['items' => fn ($query) => $query->orderBy('position')])
+            ->orderBy('name')
             ->get();
     }
 
@@ -148,7 +157,14 @@ new #[Title('Aujourd\'hui')] class extends Component
         $item = ChecklistItem::findOrFail($itemId);
         $item->update(['checked_at' => $item->checked_at ? null : now()]);
 
-        unset($this->pinnedLists);
+        unset($this->pinnedLists, $this->unpinnedLists);
+    }
+
+    public function pinList(int $listId): void
+    {
+        Checklist::findOrFail($listId)->update(['is_pinned' => true]);
+
+        unset($this->pinnedLists, $this->unpinnedLists);
     }
 };
 ?>
@@ -321,6 +337,47 @@ new #[Title('Aujourd\'hui')] class extends Component
                     </div>
                 </div>
             @endforeach
+
+            @if ($this->unpinnedLists->isNotEmpty())
+                <div>
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-base font-semibold text-(--tx)">Autres listes</h2>
+                        <span class="font-mono text-xs text-(--mut)">{{ $this->unpinnedLists->count() }}</span>
+                    </div>
+                    <div class="mt-3 space-y-3">
+                        @foreach ($this->unpinnedLists as $list)
+                            <div class="rounded-[12px] border border-(--bd) bg-(--surf) p-2" wire:key="unpinned-list-{{ $list->id }}">
+                                <div class="flex items-center justify-between gap-2 px-[10px] pt-1">
+                                    <p class="text-[13.5px] font-medium text-(--tx)">{{ $list->name }}</p>
+                                    <button
+                                        type="button"
+                                        wire:click="pinList({{ $list->id }})"
+                                        class="shrink-0 text-[11px] text-(--mut) hover:text-(--ac)"
+                                    >
+                                        Épingler
+                                    </button>
+                                </div>
+                                <div class="mt-1 divide-y divide-(--bd)">
+                                    @forelse ($list->items as $item)
+                                        <div class="flex items-center gap-[10px] px-[10px] py-[8px] hover:bg-(--surf2)">
+                                            <x-checkbox
+                                                shape="round"
+                                                wire:click="toggleListItem({{ $item->id }})"
+                                                @checked($item->checked_at)
+                                            />
+                                            <span class="text-[13.5px] {{ $item->checked_at ? 'text-(--mut) line-through opacity-45' : 'text-(--tx)' }}">
+                                                {{ $item->content }}
+                                            </span>
+                                        </div>
+                                    @empty
+                                        <p class="px-[10px] py-2 text-xs text-(--mut)">Liste vide.</p>
+                                    @endforelse
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
         </div>
     </div>
 </div>
