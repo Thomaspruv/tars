@@ -4,6 +4,16 @@ use App\Models\Questionnaire;
 use App\Support\Questionnaire\QuestionnaireScheduler;
 use Illuminate\Support\Carbon;
 
+// Freeze "now" to a date away from any monthly/yearly anchor boundary: tests
+// below use bare today() and would otherwise become flaky whenever the suite
+// happens to run on the 1st of a month or Dec 31. Also strip the "Bilan
+// mensuel"/"Bilan annuel" questionnaires seeded by migration, which would
+// otherwise become due on their own anchor day and inflate these counts.
+beforeEach(function () {
+    Carbon::setTestNow(Carbon::create(2026, 3, 15));
+    Questionnaire::query()->delete();
+});
+
 afterEach(fn () => Carbon::setTestNow());
 
 test('creates a run once its due date has arrived', function () {
@@ -112,10 +122,9 @@ test('creates the first run for a brand-new yearly questionnaire the same year w
     // have been miscomputed as 2027-12-31 (a full year late).
     Carbon::setTestNow(Carbon::create(2026, 12, 31));
 
-    (new QuestionnaireScheduler)->ensureRunsCreated();
+    $created = (new QuestionnaireScheduler)->ensureRunsCreated();
 
-    // Not asserting on the scheduler's return count: the seeded "Bilan annuel"
-    // questionnaire shares this exact anchor and becomes due the same day.
+    expect($created)->toBe(1);
     expect($questionnaire->runs()->count())->toBe(1);
     expect($questionnaire->runs()->first()->due_date->toDateString())->toBe('2026-12-31');
 });
