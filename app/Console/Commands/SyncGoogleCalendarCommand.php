@@ -13,7 +13,14 @@ class SyncGoogleCalendarCommand extends Command
 {
     public function handle(GoogleCalendarSyncService $sync): int
     {
-        $result = $sync->pull();
+        try {
+            $result = $sync->pull();
+        } catch (\Throwable $e) {
+            report($e);
+            $this->error('Échec de la synchronisation Google Calendar : '.$e->getMessage());
+
+            return self::FAILURE;
+        }
 
         if (! $this->option('scheduled')) {
             $this->info("{$result['created']} créé(s), {$result['updated']} mis à jour, {$result['deleted']} supprimé(s).");

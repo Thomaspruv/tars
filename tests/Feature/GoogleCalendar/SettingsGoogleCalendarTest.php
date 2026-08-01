@@ -61,3 +61,17 @@ test('synchronising now runs the sync command and shows the result', function ()
         ->call('syncGoogleCalendarNow')
         ->assertSee('créé');
 });
+
+test('synchronising now shows a friendly error instead of crashing when google fails', function () {
+    $this->actingAs(User::factory()->create());
+    GoogleCalendarConnection::factory()->create();
+
+    Http::fake([
+        'https://www.googleapis.com/calendar/v3/calendars/primary/events*' => Http::response(['error' => 'server_error'], 500),
+    ]);
+
+    Livewire::test('pages::settings-app')
+        ->call('syncGoogleCalendarNow')
+        ->assertOk()
+        ->assertSee('Échec de la synchronisation');
+});
