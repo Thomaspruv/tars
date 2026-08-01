@@ -46,3 +46,50 @@ test('does not show tasks on the calendar', function () {
 
     Livewire::test('pages::calendar')->assertDontSee('Tâche fantôme');
 });
+
+test('a multi-day event spans every column it covers, not just its start day', function () {
+    $event = Event::factory()->create([
+        'starts_at' => Carbon::create(2026, 8, 5, 9, 0), // Wednesday
+        'ends_at' => Carbon::create(2026, 8, 7, 18, 0), // Friday
+    ]);
+
+    $weeks = Livewire::test('pages::calendar')->instance()->weeks();
+
+    $week = collect($weeks)->first(fn (array $w): bool => collect($w['days'])->contains(fn (Carbon $d): bool => $d->toDateString() === '2026-08-05'));
+
+    $placement = collect($week['laneRows'][0])->first(fn ($slot): bool => is_array($slot) && $slot['event']->id === $event->id);
+
+    expect($placement)->not->toBeNull()
+        ->and($placement['colSpan'])->toBe(3);
+});
+
+test('a multi-day event spanning a week boundary is clipped to each week', function () {
+    // Aug 1 2026 is a Saturday; the grid's Monday-start week containing it
+    // runs Jul 27 -> Aug 2, so this event (Fri -> Wed the week after) crosses
+    // two weeks and must be clipped separately in each.
+    $event = Event::factory()->create([
+        'starts_at' => Carbon::create(2026, 7, 31, 9, 0), // Friday, week 1
+        'ends_at' => Carbon::create(2026, 8, 5, 18, 0), // Wednesday, week 2
+    ]);
+
+    $weeks = collect(Livewire::test('pages::calendar')->instance()->weeks());
+
+    $firstWeek = $weeks->first(fn (array $w): bool => collect($w['days'])->contains(fn (Carbon $d): bool => $d->toDateString() === '2026-07-31'));
+    $secondWeek = $weeks->first(fn (array $w): bool => collect($w['days'])->contains(fn (Carbon $d): bool => $d->toDateString() === '2026-08-05'));
+
+    $firstPlacement = collect($firstWeek['laneRows'][0])->first(fn ($slot): bool => is_array($slot) && $slot['event']->id === $event->id);
+    $secondPlacement = collect($secondWeek['laneRows'][0])->first(fn ($slot): bool => is_array($slot) && $slot['event']->id === $event->id);
+
+    expect($firstPlacement['colSpan'])->toBe(3) // Fri, Sat, Sun — clipped at the week's end
+        ->and($secondPlacement['colSpan'])->toBe(3); // Mon, Tue, Wed — clipped at the week's start
+});
+
+test('caps visible events per week and reports the rest as an overflow count', function () {
+    Event::factory()->count(5)->create(['starts_at' => Carbon::create(2026, 8, 10, 9, 0), 'ends_at' => null]);
+
+    $weeks = collect(Livewire::test('pages::calendar')->instance()->weeks());
+    $week = $weeks->first(fn (array $w): bool => collect($w['days'])->contains(fn (Carbon $d): bool => $d->toDateString() === '2026-08-10'));
+
+    expect($week['laneRows'])->toHaveCount(3)
+        ->and($week['overflow']['2026-08-10'])->toBe(2);
+});
