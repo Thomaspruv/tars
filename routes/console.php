@@ -8,6 +8,7 @@ use App\Console\Commands\GenerateReviewCommand;
 use App\Console\Commands\IndexBrainCommand;
 use App\Console\Commands\QuestionnaireSchedulerCommand;
 use App\Console\Commands\SyncBrainCommand;
+use App\Console\Commands\SyncGoogleCalendarCommand;
 use App\Console\Commands\TriageInboxCommand;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -26,3 +27,4 @@ Schedule::command(TriageInboxCommand::class, ['--scheduled'])->hourly()->without
 Schedule::command(GeneratePlannerProposalCommand::class, ['--scheduled'])->everyMinute()->withoutOverlapping();
 Schedule::command(QuestionnaireSchedulerCommand::class, ['--scheduled'])->hourly()->withoutOverlapping();
 Schedule::command(ArchiveStaleItemsCommand::class, ['--scheduled'])->daily();
+Schedule::command(SyncGoogleCalendarCommand::class, ['--scheduled'])->everyFiveMinutes()->withoutOverlapping();

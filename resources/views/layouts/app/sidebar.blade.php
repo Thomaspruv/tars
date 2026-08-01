@@ -19,6 +19,7 @@ $navItems = [
     ['route' => 'lists.index', 'label' => 'Listes', 'icon' => 'list-bullet'],
     ['route' => 'brain.index', 'label' => 'Cerveau', 'icon' => 'document-text'],
     ['route' => 'tasks.index', 'label' => 'Tâches', 'icon' => 'check-circle'],
+    ['route' => 'calendar.index', 'label' => 'Calendrier', 'icon' => 'calendar'],
     ['route' => 'review.index', 'label' => 'Revue', 'icon' => 'clipboard-document-check'],
     ['route' => 'bilan.index', 'label' => 'Bilan de vie', 'icon' => 'chart-bar'],
 ];

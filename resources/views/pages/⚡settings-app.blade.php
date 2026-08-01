@@ -3,11 +3,13 @@
 use App\Enums\GitSyncStatus;
 use App\Models\AiProvider;
 use App\Models\BrainDocument;
+use App\Models\GoogleCalendarConnection;
 use App\Models\McpCall;
 use App\Support\Agents\AgentRunner;
 use App\Support\Archiving\ArchiveSettings;
 use App\Support\Brain\BrainSettings;
 use App\Support\Brain\GitRepository;
+use App\Support\GoogleCalendar\GoogleCalendarClient;
 use App\Support\Mcp\McpSettings;
 use App\Support\Review\ReviewSettings;
 use Illuminate\Database\Eloquent\Collection;
@@ -71,6 +73,8 @@ new #[Title('Réglages')] class extends Component
     public ?int $archiveAfterDays = null;
 
     public bool $archiveSettingsSaved = false;
+
+    public ?string $googleCalendarSyncMessage = null;
 
     public function mount(): void
     {
@@ -332,11 +336,58 @@ new #[Title('Réglages')] class extends Component
 
         unset($this->mcpHasToken);
     }
+
+    #[Computed]
+    public function googleCalendarConnection(): ?GoogleCalendarConnection
+    {
+        return GoogleCalendarConnection::query()->first();
+    }
+
+    #[Computed]
+    public function googleCalendarConfigured(): bool
+    {
+        return filled(config('services.google.client_id')) && filled(config('services.google.client_secret'));
+    }
+
+    #[Computed]
+    public function googleCalendarRedirectUri(): string
+    {
+        return route('google-calendar.callback');
+    }
+
+    public function disconnectGoogleCalendar(): void
+    {
+        $connection = GoogleCalendarConnection::query()->first();
+
+        if ($connection === null) {
+            return;
+        }
+
+        app(GoogleCalendarClient::class)->revoke($connection->refresh_token);
+        $connection->delete();
+
+        unset($this->googleCalendarConnection);
+    }
+
+    public function syncGoogleCalendarNow(): void
+    {
+        Artisan::call('google-calendar:sync');
+
+        $this->googleCalendarSyncMessage = trim(Artisan::output());
+
+        unset($this->googleCalendarConnection);
+    }
 };
 ?>
 
 <div>
     <x-screen-header treatment="work" title="Réglages" />
+
+    @if (session('status') === 'google-calendar-connected')
+        <p class="mt-4 rounded-[8px] bg-(--okbg) px-3 py-2 text-xs text-(--ok)">✓ Google Calendar connecté.</p>
+    @elseif (session('status') === 'google-calendar-failed')
+        <p class="mt-4 rounded-[8px] bg-(--dgrbg) px-3 py-2 text-xs text-(--dgr)">Échec de la connexion à Google Calendar. Réessaie.</p>
+    @endif
 
     <div class="mt-8">
         <h2 class="text-base font-semibold text-(--tx)">Cerveau</h2>
@@ -534,6 +585,85 @@ new #[Title('Réglages')] class extends Component
                     le domaine public reste nécessaire si Hermes tourne ailleurs.
                 </div>
             </dl>
+        </div>
+    </div>
+
+    <div class="mt-8">
+        <h2 class="text-base font-semibold text-(--tx)">Connexions — Google Calendar</h2>
+
+        <div class="mt-4 max-w-xl space-y-4 rounded-[12px] border border-(--bd) bg-(--surf) p-5">
+            @if ($this->googleCalendarConnection)
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-(--tx)">{{ $this->googleCalendarConnection->google_account_email ?? 'Compte Google connecté' }}</p>
+                        <p class="mt-0.5 font-mono text-[10.5px] text-(--mut)">
+                            Dernière synchro : {{ $this->googleCalendarConnection->last_synced_at?->diffForHumans() ?? 'jamais' }}
+                        </p>
+                    </div>
+                    @if ($this->googleCalendarConnection->needs_reconnect)
+                        <x-badge type="status" value="failed" label="Reconnexion requise" />
+                    @endif
+                </div>
+
+                @if ($this->googleCalendarConnection->needs_reconnect)
+                    <p class="rounded-[8px] bg-(--warnbg) px-3 py-2 text-xs text-(--warn)">
+                        Google a révoqué l'accès (souvent parce que l'écran de consentement OAuth est resté en mode "Test", où les jetons expirent après 7 jours — voir le guide ci-dessous pour passer en production). Reconnecte-toi ci-dessus.
+                    </p>
+                @endif
+
+                @if ($googleCalendarSyncMessage)
+                    <p class="text-xs text-(--mut)">{{ $googleCalendarSyncMessage }}</p>
+                @endif
+
+                <div class="flex justify-end gap-2 pt-1">
+                    <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="syncGoogleCalendarNow">Synchroniser maintenant</x-btn>
+                    <x-btn variant="danger" class="!px-3 !py-1.5 text-xs" wire:click="disconnectGoogleCalendar" wire:confirm="Déconnecter Google Calendar ?">Déconnecter</x-btn>
+                </div>
+            @elseif ($this->googleCalendarConfigured)
+                <p class="text-sm text-(--mut)">Connecte un compte Google pour synchroniser tes événements avec Google Calendar dans les deux sens.</p>
+                <div class="flex justify-end pt-1">
+                    <x-btn variant="primary" href="{{ route('google-calendar.connect') }}">Connecter Google Calendar</x-btn>
+                </div>
+            @else
+                <p class="text-sm text-(--mut)">
+                    Aucun identifiant OAuth Google n'est configuré côté serveur. Suis le guide ci-dessous pour en créer un — ça prend 5 minutes et ne se fait qu'une fois.
+                </p>
+            @endif
+
+            <div x-data="{ open: {{ $this->googleCalendarConfigured ? 'false' : 'true' }} }" class="border-t border-(--bd) pt-3">
+                <button type="button" @click="open = !open" class="flex w-full items-center justify-between text-left text-xs font-medium text-(--mut) hover:text-(--tx)">
+                    Comment connecter Google Calendar ?
+                    <span aria-hidden="true" x-text="open ? '−' : '+'"></span>
+                </button>
+
+                <div x-show="open" x-cloak class="mt-3 space-y-3 text-xs text-(--mut)">
+                    <ol class="list-inside list-decimal space-y-2">
+                        <li>Ouvre la <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" class="text-(--ac) underline">Google Cloud Console</a> et crée un projet (ou réutilise un projet existant).</li>
+                        <li>Active l'API <span class="text-(--tx)">Google Calendar API</span> pour ce projet (menu "API et services" → "Bibliothèque").</li>
+                        <li>
+                            Configure l'écran de consentement OAuth : type "Externe", ajoute le scope <code class="rounded-[4px] bg-(--surf2) px-1 py-0.5 font-mono text-(--tx)">.../auth/calendar.events</code>.
+                            Passe le statut de publication en <span class="text-(--tx)">Production</span> dès que possible — laissé en "Test", Google expire le jeton de connexion tous les 7 jours et il faut se reconnecter en boucle.
+                        </li>
+                        <li>Crée des identifiants → "ID client OAuth" → type "Application Web".</li>
+                        <li>
+                            Ajoute cette URI de redirection autorisée (copie-la exactement) :
+                            <input
+                                type="text"
+                                readonly
+                                onclick="this.select()"
+                                value="{{ $this->googleCalendarRedirectUri }}"
+                                class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-[11px] text-(--tx)"
+                            />
+                        </li>
+                        <li>
+                            Copie l'"ID client" et le "Code secret du client" dans le fichier <code class="rounded-[4px] bg-(--surf2) px-1 py-0.5 font-mono text-(--tx)">.env</code> du serveur :
+                            <code class="rounded-[4px] bg-(--surf2) px-1 py-0.5 font-mono text-(--tx)">GOOGLE_CLIENT_ID</code> et
+                            <code class="rounded-[4px] bg-(--surf2) px-1 py-0.5 font-mono text-(--tx)">GOOGLE_CLIENT_SECRET</code>, puis redémarre l'application.
+                        </li>
+                        <li>Reviens sur cette page et clique sur "Connecter Google Calendar".</li>
+                    </ol>
+                </div>
+            </div>
         </div>
     </div>
 
