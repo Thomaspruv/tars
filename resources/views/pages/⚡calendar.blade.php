@@ -1,6 +1,8 @@
 <?php
 
+use App\Models\Entity;
 use App\Models\Event;
+use App\Models\Goal;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
@@ -26,6 +28,22 @@ new #[Title('Calendrier')] class extends Component
 
     #[Url]
     public ?string $month = null;
+
+    public bool $showEditEventModal = false;
+
+    public ?int $editingEventId = null;
+
+    public string $eventTitle = '';
+
+    public string $eventNotes = '';
+
+    public string $eventStartsAt = '';
+
+    public string $eventEndsAt = '';
+
+    public ?int $eventGoalId = null;
+
+    public ?int $eventEntityId = null;
 
     public function mount(): void
     {
@@ -67,15 +85,68 @@ new #[Title('Calendrier')] class extends Component
         return self::GOAL_COLOR_SLOTS[$event->goal_id % count(self::GOAL_COLOR_SLOTS)];
     }
 
-    private function eventTooltip(Event $event): string
+    private function eventDateRange(Event $event): string
     {
-        $range = $event->ends_at !== null && $event->ends_at->toDateString() !== $event->starts_at->toDateString()
-            ? $event->starts_at->translatedFormat('d M').' → '.$event->ends_at->translatedFormat('d M')
-            : $event->starts_at->translatedFormat('d M à H:i');
+        if ($event->ends_at !== null && $event->ends_at->toDateString() !== $event->starts_at->toDateString()) {
+            return $event->starts_at->translatedFormat('d M').' → '.$event->ends_at->translatedFormat('d M');
+        }
 
-        $goal = $event->goal ? ' · #'.$event->goal->tag : '';
+        $range = $event->starts_at->translatedFormat('d M à H:i');
 
-        return "{$event->title} · {$range}{$goal}";
+        return $event->ends_at !== null
+            ? $range.'–'.$event->ends_at->translatedFormat('H:i')
+            : $range;
+    }
+
+    #[Computed]
+    public function editGoalOptions(): Collection
+    {
+        return Goal::where('status', 'active')->orderBy('title')->get();
+    }
+
+    #[Computed]
+    public function editEntityOptions(): Collection
+    {
+        return Entity::orderBy('name')->get();
+    }
+
+    public function openEditEventModal(int $eventId): void
+    {
+        $event = Event::findOrFail($eventId);
+
+        $this->editingEventId = $event->id;
+        $this->eventTitle = $event->title;
+        $this->eventNotes = (string) $event->notes;
+        $this->eventStartsAt = $event->starts_at->format('Y-m-d\TH:i');
+        $this->eventEndsAt = $event->ends_at?->format('Y-m-d\TH:i') ?? '';
+        $this->eventGoalId = $event->goal_id;
+        $this->eventEntityId = $event->entity_id;
+        $this->showEditEventModal = true;
+    }
+
+    public function saveEvent(): void
+    {
+        $validated = $this->validate([
+            'eventTitle' => ['required', 'string', 'max:255'],
+            'eventNotes' => ['nullable', 'string'],
+            'eventStartsAt' => ['required', 'date'],
+            'eventEndsAt' => ['nullable', 'date', 'after_or_equal:eventStartsAt'],
+            'eventGoalId' => ['nullable', 'exists:goals,id'],
+            'eventEntityId' => ['nullable', 'exists:entities,id'],
+        ]);
+
+        Event::findOrFail($this->editingEventId)->update([
+            'title' => $validated['eventTitle'],
+            'notes' => $validated['eventNotes'] ?: null,
+            'starts_at' => $validated['eventStartsAt'],
+            'ends_at' => $validated['eventEndsAt'] ?: null,
+            'goal_id' => $validated['eventGoalId'],
+            'entity_id' => $validated['eventEntityId'],
+        ]);
+
+        $this->showEditEventModal = false;
+
+        unset($this->weeks);
     }
 
     /**
@@ -290,18 +361,29 @@ new #[Title('Calendrier')] class extends Component
                         @endphp
                         <div
                             wire:key="bar-{{ $slot['event']->id }}-{{ $isFirstDayOfWeekCurrentMonth }}-{{ $laneIndex }}"
-                            class="bg-(--surf) px-0.5 pb-0.5 {{ $col + $slot['colSpan'] > 6 ? '' : 'border-r border-(--bd)' }}"
+                            class="group/bar relative bg-(--surf) px-0.5 pb-0.5 {{ $col + $slot['colSpan'] > 6 ? '' : 'border-r border-(--bd)' }}"
                             style="grid-column: span {{ $slot['colSpan'] }};"
                         >
                             <div
-                                title="{{ $this->eventTooltip($slot['event']) }}"
-                                class="truncate rounded-[4px] px-1.5 py-[3px] text-[11px] leading-[13px] transition-[filter,box-shadow] duration-100 hover:shadow-[inset_0_0_0_1px_var(--bar-color)] hover:brightness-110"
+                                wire:click="openEditEventModal({{ $slot['event']->id }})"
+                                class="cursor-pointer truncate rounded-[4px] px-1.5 py-[3px] text-[11px] leading-[13px] transition-[filter,box-shadow] duration-100 hover:shadow-[inset_0_0_0_1px_var(--bar-color)] hover:brightness-110"
                                 style="background-color: var({{ $bgVar }}); color: var({{ $textVar }}); --bar-color: var({{ $textVar }});"
                             >
                                 @if ($slot['colSpan'] === 1)
                                     <span class="font-mono text-[10px] opacity-70">{{ $slot['event']->starts_at->format('H:i') }}</span>
                                 @endif
                                 {{ $slot['event']->title }}
+                            </div>
+
+                            <div class="pointer-events-none invisible absolute bottom-full left-0 z-50 mb-1.5 w-max max-w-64 rounded-[8px] border border-(--bd2) bg-(--surf2) px-2.5 py-2 opacity-0 shadow-lg transition-opacity duration-100 group-hover/bar:visible group-hover/bar:opacity-100">
+                                <p class="text-xs font-medium text-(--tx)">{{ $slot['event']->title }}</p>
+                                <p class="mt-0.5 font-mono text-[10.5px] text-(--mut)">{{ $this->eventDateRange($slot['event']) }}</p>
+                                @if ($slot['event']->goal || $slot['event']->entity)
+                                    <div class="mt-1 flex flex-wrap gap-1.5">
+                                        <x-badge type="goal" :goal="$slot['event']->goal" />
+                                        <x-badge type="entity" :entity="$slot['event']->entity" />
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     @endif
@@ -323,4 +405,86 @@ new #[Title('Calendrier')] class extends Component
             @endif
         @endforeach
     </div>
+
+    <flux:modal wire:model.self="showEditEventModal" class="md:w-[420px]">
+        <div class="space-y-5" wire:loading.class="opacity-50" wire:target="saveEvent">
+            <flux:heading size="lg">Modifier l'événement</flux:heading>
+
+            <div>
+                <label class="text-xs text-(--mut)">Titre</label>
+                <input
+                    type="text"
+                    wire:model="eventTitle"
+                    wire:loading.attr="disabled"
+                    wire:target="saveEvent"
+                    class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)"
+                />
+                @error('eventTitle') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs text-(--mut)">Début</label>
+                    <input
+                        type="datetime-local"
+                        wire:model="eventStartsAt"
+                        wire:loading.attr="disabled"
+                        wire:target="saveEvent"
+                        class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-2 py-2 font-mono text-xs text-(--tx)"
+                    />
+                    @error('eventStartsAt') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label class="text-xs text-(--mut)">Fin (optionnel)</label>
+                    <input
+                        type="datetime-local"
+                        wire:model="eventEndsAt"
+                        wire:loading.attr="disabled"
+                        wire:target="saveEvent"
+                        class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-2 py-2 font-mono text-xs text-(--tx)"
+                    />
+                    @error('eventEndsAt') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                </div>
+            </div>
+
+            <div>
+                <label class="text-xs text-(--mut)">Objectif lié (optionnel)</label>
+                <select wire:model="eventGoalId" wire:loading.attr="disabled" wire:target="saveEvent" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)">
+                    <option value="">—</option>
+                    @foreach ($this->editGoalOptions as $goal)
+                        <option value="{{ $goal->id }}">{{ $goal->title }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div>
+                <label class="text-xs text-(--mut)">Entité liée (optionnel)</label>
+                <select wire:model="eventEntityId" wire:loading.attr="disabled" wire:target="saveEvent" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)">
+                    <option value="">—</option>
+                    @foreach ($this->editEntityOptions as $entity)
+                        <option value="{{ $entity->id }}">{{ $entity->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div>
+                <label class="text-xs text-(--mut)">Notes (optionnel)</label>
+                <textarea
+                    wire:model="eventNotes"
+                    wire:loading.attr="disabled"
+                    wire:target="saveEvent"
+                    rows="3"
+                    class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)"
+                ></textarea>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <x-btn variant="ghost" wire:click="$set('showEditEventModal', false)" wire:loading.attr="disabled" wire:target="saveEvent">Annuler</x-btn>
+                <x-btn variant="primary" wire:click="saveEvent" wire:loading.attr="disabled" wire:target="saveEvent">
+                    <span wire:loading wire:target="saveEvent">Enregistrement…</span>
+                    <span wire:loading.remove wire:target="saveEvent">Enregistrer</span>
+                </x-btn>
+            </div>
+        </div>
+    </flux:modal>
 </div>

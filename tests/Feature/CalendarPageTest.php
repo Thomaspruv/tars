@@ -1,6 +1,8 @@
 <?php
 
+use App\Models\Entity;
 use App\Models\Event;
+use App\Models\Goal;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -92,4 +94,70 @@ test('caps visible events per week and reports the rest as an overflow count', f
 
     expect($week['laneRows'])->toHaveCount(3)
         ->and($week['overflow']['2026-08-10'])->toBe(2);
+});
+
+test('hovering an event shows its date range and goal in a tooltip', function () {
+    $goal = Goal::factory()->create(['title' => 'Refonte site', 'status' => 'active']);
+    Event::factory()->create([
+        'title' => 'Point hebdo',
+        'starts_at' => Carbon::create(2026, 8, 5, 14, 0),
+        'ends_at' => Carbon::create(2026, 8, 5, 15, 0),
+        'goal_id' => $goal->id,
+    ]);
+
+    Livewire::test('pages::calendar')
+        ->assertSee('05 août à 14:00')
+        ->assertSee('#refonte-site');
+});
+
+test('opening the edit modal populates the form from the event', function () {
+    $goal = Goal::factory()->create(['status' => 'active']);
+    $entity = Entity::factory()->create();
+    $event = Event::factory()->create([
+        'title' => 'Point hebdo',
+        'notes' => 'Ordre du jour',
+        'starts_at' => Carbon::create(2026, 8, 5, 14, 0),
+        'ends_at' => Carbon::create(2026, 8, 5, 15, 0),
+        'goal_id' => $goal->id,
+        'entity_id' => $entity->id,
+    ]);
+
+    Livewire::test('pages::calendar')
+        ->call('openEditEventModal', $event->id)
+        ->assertSet('showEditEventModal', true)
+        ->assertSet('eventTitle', 'Point hebdo')
+        ->assertSet('eventNotes', 'Ordre du jour')
+        ->assertSet('eventStartsAt', '2026-08-05T14:00')
+        ->assertSet('eventEndsAt', '2026-08-05T15:00')
+        ->assertSet('eventGoalId', $goal->id)
+        ->assertSet('eventEntityId', $entity->id);
+});
+
+test('saving the edit modal updates the event', function () {
+    $event = Event::factory()->create([
+        'title' => 'Ancien titre',
+        'starts_at' => Carbon::create(2026, 8, 5, 14, 0),
+        'ends_at' => null,
+    ]);
+
+    Livewire::test('pages::calendar')
+        ->call('openEditEventModal', $event->id)
+        ->set('eventTitle', 'Nouveau titre')
+        ->set('eventStartsAt', '2026-08-06T09:00')
+        ->call('saveEvent')
+        ->assertSet('showEditEventModal', false);
+
+    $event->refresh();
+    expect($event->title)->toBe('Nouveau titre')
+        ->and($event->starts_at->format('Y-m-d H:i'))->toBe('2026-08-06 09:00');
+});
+
+test('the edit modal requires a title and a valid start date', function () {
+    $event = Event::factory()->create();
+
+    Livewire::test('pages::calendar')
+        ->call('openEditEventModal', $event->id)
+        ->set('eventTitle', '')
+        ->call('saveEvent')
+        ->assertHasErrors(['eventTitle' => 'required']);
 });
