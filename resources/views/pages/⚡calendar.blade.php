@@ -16,15 +16,15 @@ new #[Title('Calendrier')] class extends Component
     private const int MAX_LANES = 3;
 
     /**
-     * Categorical hues events are colored by when they belong to a goal —
-     * blue is skipped (already the default/goal-less accent) and violet is
-     * skipped (reads as the --ai agent color elsewhere in the app). Order
-     * matters: it's the CVD-safe adjacent ordering from the dataviz skill's
-     * reference palette, validated against this app's actual surfaces.
+     * Categorical hues events are colored by — blue is skipped (it's the
+     * app's main accent, used everywhere else) and violet is skipped (reads
+     * as the --ai agent color elsewhere in the app). Order matters: it's the
+     * CVD-safe adjacent ordering from the dataviz skill's reference palette,
+     * validated against this app's actual surfaces.
      *
      * @var list<string>
      */
-    private const array GOAL_COLOR_SLOTS = ['green', 'magenta', 'yellow', 'aqua', 'orange', 'violet', 'red'];
+    private const array EVENT_COLOR_SLOTS = ['green', 'magenta', 'yellow', 'aqua', 'orange', 'violet', 'red'];
 
     #[Url]
     public ?string $month = null;
@@ -72,17 +72,17 @@ new #[Title('Calendrier')] class extends Component
     }
 
     /**
-     * Deterministic so the same goal always gets the same color across the
-     * whole calendar (and across renders) — not a color per event, a color
-     * per goal. Goal-less events return null and keep the default accent.
+     * Every event gets a color — deterministic, so it's stable across
+     * renders. Events sharing a goal share a color (seeded by goal_id);
+     * goal-less events are seeded by their own id instead, so they still
+     * stand apart from each other rather than all collapsing into one
+     * "default" hue.
      */
-    private function eventColorSlot(Event $event): ?string
+    private function eventColorSlot(Event $event): string
     {
-        if ($event->goal_id === null) {
-            return null;
-        }
+        $seed = $event->goal_id ?? $event->id;
 
-        return self::GOAL_COLOR_SLOTS[$event->goal_id % count(self::GOAL_COLOR_SLOTS)];
+        return self::EVENT_COLOR_SLOTS[$seed % count(self::EVENT_COLOR_SLOTS)];
     }
 
     private function eventDateRange(Event $event): string
@@ -374,8 +374,8 @@ new #[Title('Calendrier')] class extends Component
                     @else
                         @php
                             $colorSlot = $this->eventColorSlot($slot['event']);
-                            $bgVar = $colorSlot ? "--goal-{$colorSlot}-bg" : '--acbg';
-                            $textVar = $colorSlot ? "--goal-{$colorSlot}" : '--ac';
+                            $bgVar = "--goal-{$colorSlot}-bg";
+                            $textVar = "--goal-{$colorSlot}";
                         @endphp
                         <div
                             wire:key="bar-{{ $slot['event']->id }}-{{ $isFirstDayOfWeekCurrentMonth }}-{{ $laneIndex }}"
