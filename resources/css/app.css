@@ -80,6 +80,25 @@
     --warnbg: rgba(251, 191, 36, .13);
     --dgr: #F87171;
     --dgrbg: rgba(248, 113, 113, .15);
+
+    /* Categorical palette for coloring calendar events by goal (7 hues,
+       blue/violet-purple omitted — blue is --ac, violet-purple reads as
+       --ai). Adjacent-pair CVD/contrast-validated against this surface. */
+    --goal-green: #008300;
+    --goal-green-bg: rgba(0, 131, 0, .14);
+    --goal-magenta: #D55181;
+    --goal-magenta-bg: rgba(213, 81, 129, .14);
+    --goal-yellow: #C98500;
+    --goal-yellow-bg: rgba(201, 133, 0, .14);
+    --goal-aqua: #199E70;
+    --goal-aqua-bg: rgba(25, 158, 112, .14);
+    --goal-orange: #D95926;
+    --goal-orange-bg: rgba(217, 89, 38, .14);
+    --goal-violet: #9085E9;
+    --goal-violet-bg: rgba(144, 133, 233, .14);
+    --goal-red: #E66767;
+    --goal-red-bg: rgba(230, 103, 103, .14);
+
     --in: #08090C;
     --aiglow: 0 0 14px rgba(167, 139, 250, .22);
     --gradient-signature: linear-gradient(135deg, #6E8BFF, #A78BFA);
@@ -111,6 +130,23 @@
     --warnbg: rgba(180, 83, 9, .1);
     --dgr: #DC5555;
     --dgrbg: rgba(220, 85, 85, .12);
+
+    /* See the dark-theme block above for the rationale behind this set. */
+    --goal-green: #008300;
+    --goal-green-bg: rgba(0, 131, 0, .1);
+    --goal-magenta: #E87BA4;
+    --goal-magenta-bg: rgba(232, 123, 164, .1);
+    --goal-yellow: #EDA100;
+    --goal-yellow-bg: rgba(237, 161, 0, .1);
+    --goal-aqua: #1BAF7A;
+    --goal-aqua-bg: rgba(27, 175, 122, .1);
+    --goal-orange: #EB6834;
+    --goal-orange-bg: rgba(235, 104, 52, .1);
+    --goal-violet: #4A3AA7;
+    --goal-violet-bg: rgba(74, 58, 167, .1);
+    --goal-red: #E34948;
+    --goal-red-bg: rgba(227, 73, 72, .1);
+
     --in: #FFFFFF;
     --aiglow: 0 1px 2px rgba(16, 20, 32, .06);
     --gradient-signature: linear-gradient(135deg, #3A5BD9, #6D4AE0);

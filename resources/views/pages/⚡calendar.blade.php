@@ -13,6 +13,17 @@ new #[Title('Calendrier')] class extends Component
 {
     private const int MAX_LANES = 3;
 
+    /**
+     * Categorical hues events are colored by when they belong to a goal —
+     * blue is skipped (already the default/goal-less accent) and violet is
+     * skipped (reads as the --ai agent color elsewhere in the app). Order
+     * matters: it's the CVD-safe adjacent ordering from the dataviz skill's
+     * reference palette, validated against this app's actual surfaces.
+     *
+     * @var list<string>
+     */
+    private const array GOAL_COLOR_SLOTS = ['green', 'magenta', 'yellow', 'aqua', 'orange', 'violet', 'red'];
+
     #[Url]
     public ?string $month = null;
 
@@ -40,6 +51,31 @@ new #[Title('Calendrier')] class extends Component
     public function monthLabel(): string
     {
         return ucfirst($this->monthStart()->translatedFormat('F Y'));
+    }
+
+    /**
+     * Deterministic so the same goal always gets the same color across the
+     * whole calendar (and across renders) — not a color per event, a color
+     * per goal. Goal-less events return null and keep the default accent.
+     */
+    private function eventColorSlot(Event $event): ?string
+    {
+        if ($event->goal_id === null) {
+            return null;
+        }
+
+        return self::GOAL_COLOR_SLOTS[$event->goal_id % count(self::GOAL_COLOR_SLOTS)];
+    }
+
+    private function eventTooltip(Event $event): string
+    {
+        $range = $event->ends_at !== null && $event->ends_at->toDateString() !== $event->starts_at->toDateString()
+            ? $event->starts_at->translatedFormat('d M').' → '.$event->ends_at->translatedFormat('d M')
+            : $event->starts_at->translatedFormat('d M à H:i');
+
+        $goal = $event->goal ? ' · #'.$event->goal->tag : '';
+
+        return "{$event->title} · {$range}{$goal}";
     }
 
     /**
@@ -247,14 +283,23 @@ new #[Title('Calendrier')] class extends Component
                             class="bg-(--surf) {{ $col < 6 ? 'border-r border-(--bd)' : '' }}"
                         ></div>
                     @else
+                        @php
+                            $colorSlot = $this->eventColorSlot($slot['event']);
+                            $bgVar = $colorSlot ? "--goal-{$colorSlot}-bg" : '--acbg';
+                            $textVar = $colorSlot ? "--goal-{$colorSlot}" : '--ac';
+                        @endphp
                         <div
                             wire:key="bar-{{ $slot['event']->id }}-{{ $isFirstDayOfWeekCurrentMonth }}-{{ $laneIndex }}"
                             class="bg-(--surf) px-0.5 pb-0.5 {{ $col + $slot['colSpan'] > 6 ? '' : 'border-r border-(--bd)' }}"
                             style="grid-column: span {{ $slot['colSpan'] }};"
                         >
-                            <div class="truncate rounded-[4px] bg-(--acbg) px-1.5 py-[3px] text-[11px] leading-[13px] text-(--ac)">
+                            <div
+                                title="{{ $this->eventTooltip($slot['event']) }}"
+                                class="truncate rounded-[4px] px-1.5 py-[3px] text-[11px] leading-[13px] transition-[filter,box-shadow] duration-100 hover:shadow-[inset_0_0_0_1px_var(--bar-color)] hover:brightness-110"
+                                style="background-color: var({{ $bgVar }}); color: var({{ $textVar }}); --bar-color: var({{ $textVar }});"
+                            >
                                 @if ($slot['colSpan'] === 1)
-                                    <span class="font-mono text-[10px] text-(--ac)/70">{{ $slot['event']->starts_at->format('H:i') }}</span>
+                                    <span class="font-mono text-[10px] opacity-70">{{ $slot['event']->starts_at->format('H:i') }}</span>
                                 @endif
                                 {{ $slot['event']->title }}
                             </div>
