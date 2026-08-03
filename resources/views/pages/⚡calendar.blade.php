@@ -258,8 +258,26 @@ new #[Title('Calendrier')] class extends Component
                 continue;
             }
 
-            $lanes[$placedLane][] = ['event' => $event, 'startCol' => $startCol, 'colSpan' => $endCol - $startCol + 1];
+            $lanes[$placedLane][] = [
+                'event' => $event,
+                'startCol' => $startCol,
+                'colSpan' => $endCol - $startCol + 1,
+                // Whether this week's slice is where the event actually
+                // starts/ends (vs. merely clipped by the week boundary) —
+                // only true edges get rounded corners, so a multi-week event
+                // visually "continues" across the square-cut edge.
+                'isStart' => $startDate === $event->starts_at->toDateString(),
+                'isEnd' => $endDate === ($event->ends_at ?? $event->starts_at)->toDateString(),
+            ];
             $laneLastCol[$placedLane] = $endCol;
+        }
+
+        // Always exactly MAX_LANES rows (padded with empty ones) so every
+        // week renders at the same height regardless of how many events it
+        // holds — an uneven accordion of row heights is the single biggest
+        // thing that made the grid read as unpolished.
+        for ($lane = count($lanes); $lane < self::MAX_LANES; $lane++) {
+            $lanes[$lane] = [];
         }
 
         $laneRows = array_map(fn (array $placements): array => $this->laneRow($placements), $lanes);
@@ -268,7 +286,7 @@ new #[Title('Calendrier')] class extends Component
     }
 
     /**
-     * @param  list<array{event: Event, startCol: int, colSpan: int}>  $placements
+     * @param  list<array{event: Event, startCol: int, colSpan: int, isStart: bool, isEnd: bool}>  $placements
      * @return list<mixed>
      */
     private function laneRow(array $placements): array
@@ -351,7 +369,7 @@ new #[Title('Calendrier')] class extends Component
                     @if ($slot === null)
                         <div
                             wire:key="filler-{{ $isFirstDayOfWeekCurrentMonth }}-{{ $laneIndex }}-{{ $col }}"
-                            class="bg-(--surf) {{ $col < 6 ? 'border-r border-(--bd)' : '' }}"
+                            class="h-[23px] bg-(--surf) {{ $col < 6 ? 'border-r border-(--bd)' : '' }}"
                         ></div>
                     @else
                         @php
@@ -361,15 +379,15 @@ new #[Title('Calendrier')] class extends Component
                         @endphp
                         <div
                             wire:key="bar-{{ $slot['event']->id }}-{{ $isFirstDayOfWeekCurrentMonth }}-{{ $laneIndex }}"
-                            class="group/bar relative bg-(--surf) px-0.5 pb-0.5 {{ $col + $slot['colSpan'] > 6 ? '' : 'border-r border-(--bd)' }}"
+                            class="group/bar relative h-[23px] bg-(--surf) px-0.5 pb-0.5 {{ $col + $slot['colSpan'] > 6 ? '' : 'border-r border-(--bd)' }}"
                             style="grid-column: span {{ $slot['colSpan'] }};"
                         >
                             <div
                                 wire:click="openEditEventModal({{ $slot['event']->id }})"
-                                class="cursor-pointer truncate rounded-[4px] px-1.5 py-[3px] text-[11px] leading-[13px] transition-[filter,box-shadow] duration-100 hover:shadow-[inset_0_0_0_1px_var(--bar-color)] hover:brightness-110"
+                                class="cursor-pointer truncate px-1.5 py-1 text-[11px] leading-[13px] transition-[filter,box-shadow] duration-100 hover:shadow-[inset_0_0_0_1px_var(--bar-color)] hover:brightness-110 {{ $slot['isStart'] ? 'rounded-l-[4px]' : '' }} {{ $slot['isEnd'] ? 'rounded-r-[4px]' : '' }}"
                                 style="background-color: var({{ $bgVar }}); color: var({{ $textVar }}); --bar-color: var({{ $textVar }});"
                             >
-                                @if ($slot['colSpan'] === 1)
+                                @if ($slot['colSpan'] === 1 && $slot['isStart'])
                                     <span class="font-mono text-[10px] opacity-70">{{ $slot['event']->starts_at->format('H:i') }}</span>
                                 @endif
                                 {{ $slot['event']->title }}
@@ -390,19 +408,17 @@ new #[Title('Calendrier')] class extends Component
                 @endforeach
             @endforeach
 
-            {{-- overflow indicators --}}
-            @if (array_sum($week['overflow']) > 0)
-                @foreach ($week['days'] as $i => $day)
-                    <div
-                        wire:key="overflow-{{ $day->toDateString() }}"
-                        class="bg-(--surf) px-1.5 pb-1 {{ $i < 6 ? 'border-r border-(--bd)' : '' }}"
-                    >
-                        @if ($count = $week['overflow'][$day->toDateString()] ?? 0)
-                            <span class="text-[10px] text-(--mut)">+{{ $count }} de plus</span>
-                        @endif
-                    </div>
-                @endforeach
-            @endif
+            {{-- overflow indicators — always rendered (even blank) so every week is the same height --}}
+            @foreach ($week['days'] as $i => $day)
+                <div
+                    wire:key="overflow-{{ $day->toDateString() }}"
+                    class="h-[18px] bg-(--surf) px-1.5 {{ $i < 6 ? 'border-r border-(--bd)' : '' }}"
+                >
+                    @if ($count = $week['overflow'][$day->toDateString()] ?? 0)
+                        <span class="text-[10px] text-(--mut)">+{{ $count }} de plus</span>
+                    @endif
+                </div>
+            @endforeach
         @endforeach
     </div>
 

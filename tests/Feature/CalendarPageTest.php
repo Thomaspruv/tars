@@ -86,6 +86,29 @@ test('a multi-day event spanning a week boundary is clipped to each week', funct
         ->and($secondPlacement['colSpan'])->toBe(3); // Mon, Tue, Wed — clipped at the week's start
 });
 
+test('only the segment holding the true start/end is marked as such, for rounded corners and the time label', function () {
+    // Straddles a week boundary with exactly one day on each side, so both
+    // segments render at colSpan 1 — a prior bug showed the start time on
+    // both, implying the event "started" again on the continuation day.
+    $event = Event::factory()->create([
+        'starts_at' => Carbon::create(2026, 8, 16, 9, 0), // Sunday, week 2
+        'ends_at' => Carbon::create(2026, 8, 17, 20, 0), // Monday, week 3
+    ]);
+
+    $weeks = collect(Livewire::test('pages::calendar')->instance()->weeks());
+
+    $firstWeek = $weeks->first(fn (array $w): bool => collect($w['days'])->contains(fn (Carbon $d): bool => $d->toDateString() === '2026-08-16'));
+    $secondWeek = $weeks->first(fn (array $w): bool => collect($w['days'])->contains(fn (Carbon $d): bool => $d->toDateString() === '2026-08-17'));
+
+    $firstPlacement = collect($firstWeek['laneRows'][0])->first(fn ($slot): bool => is_array($slot) && $slot['event']->id === $event->id);
+    $secondPlacement = collect($secondWeek['laneRows'][0])->first(fn ($slot): bool => is_array($slot) && $slot['event']->id === $event->id);
+
+    expect($firstPlacement['isStart'])->toBeTrue()
+        ->and($firstPlacement['isEnd'])->toBeFalse()
+        ->and($secondPlacement['isStart'])->toBeFalse()
+        ->and($secondPlacement['isEnd'])->toBeTrue();
+});
+
 test('caps visible events per week and reports the rest as an overflow count', function () {
     Event::factory()->count(5)->create(['starts_at' => Carbon::create(2026, 8, 10, 9, 0), 'ends_at' => null]);
 
