@@ -190,7 +190,13 @@ new class extends Component
 
     private function firstSentence(string $content): string
     {
-        $plain = trim((string) preg_replace('/\s+/', ' ', (string) preg_replace('/[#*_>`]+/', '', strip_tags($content))));
+        // Les titres de la revue ne sont pas sa première phrase : « # Revue de
+        // la semaine » collé au texte donnait « Revue Elle restait debout ».
+        $body = collect(preg_split('/\R/', strip_tags($content)) ?: [])
+            ->reject(fn (string $line): bool => str_starts_with(trim($line), '#'))
+            ->implode(' ');
+
+        $plain = trim((string) preg_replace('/\s+/', ' ', (string) preg_replace('/[*_>`]+/', '', $body)));
 
         if ($plain === '') {
             return '';
