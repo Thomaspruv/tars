@@ -148,6 +148,10 @@ class QuickAddParser
      * « @SARL Alpha » désigne une entité, pas l'entité « SARL » dans un titre
      * qui garderait « Alpha ».
      *
+     * Un mot de date capitalisé ne se laisse jamais absorber : « @Lilas Jeudi »
+     * est l'entité Lilas *et* une échéance, et le fuzzy est assez tolérant pour
+     * avaler les deux sans broncher si on le laisse faire.
+     *
      * @return array{0: string, 1: string, 2: int}|null [besoin, texte brut, offset]
      */
     private function extractReference(string $text, string $marker): ?array
@@ -158,7 +162,23 @@ class QuickAddParser
             return null;
         }
 
-        return [$matches[1][0], $matches[0][0], $matches[0][1]];
+        $words = preg_split('/\s+/u', $matches[1][0]) ?: [];
+
+        while (count($words) > 1 && $this->isDateWord((string) end($words))) {
+            array_pop($words);
+        }
+
+        $needle = implode(' ', $words);
+
+        return [$needle, $marker.$needle, $matches[0][1]];
+    }
+
+    private function isDateWord(string $word): bool
+    {
+        $normalized = Str::lower($word);
+
+        return isset(self::WEEKDAYS[$normalized])
+            || in_array($normalized, ['demain', 'après-demain', 'apres-demain', 'aujourd\'hui', 'aujourdhui', 'prochain'], true);
     }
 
     /**

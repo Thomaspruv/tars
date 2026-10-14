@@ -6,6 +6,7 @@ use App\Models\Goal;
 use App\Models\InboxItem;
 use App\Models\Task;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 
 beforeEach(fn () => test()->actingAs(User::factory()->create()));
@@ -97,4 +98,71 @@ test('a line announcing a note goes to the inbox as it is', function () {
 
     expect(InboxItem::where('content', 'Idée : newsletter #Lancer le site vitrine')->exists())->toBeTrue();
     expect(Task::count())->toBe(0);
+});
+
+test('the palette says what it reads, what it will create and how to change it', function () {
+    $html = Livewire::test('quick-add')->set('query', 'Appeler le plombier demain 14h30 p1')->html();
+
+    expect($html)->toContain('Poser quelque chose')
+        ->and($html)->toContain('Ça va créer')
+        // Le type annoncé est en pousse : c'est l'agent qui parle.
+        ->and($html)->toContain('text-(--ai)">Tâche')
+        ->and($html)->toContain('⇥ pour changer le type')
+        ->and($html)->toContain('Entrée pour poser');
+});
+
+test('an empty field invites instead of staying mute', function () {
+    Livewire::test('quick-add')
+        ->assertSee('je les reconnais pendant que tu écris', false)
+        ->assertSee('Ça va créer');
+});
+
+test('a two-word name that resolves leaves nothing behind in the title', function () {
+    Entity::factory()->create(['name' => 'SARL Alpha']);
+
+    $component = Livewire::test('quick-add')->set('query', 'Réunion compta vendredi 10h @SARL Alpha');
+
+    expect($component->get('preview'))->toContain('Réunion compta')
+        ->and($component->get('preview'))->not->toContain('Alpha ·');
+});
+
+test('a two-word capture that resolves to nothing falls back to the first word alone', function () {
+    $entity = Entity::factory()->create(['name' => 'Appart Lilas']);
+
+    // « Jeudi » est une date, pas la suite du nom : seul « Lilas » est
+    // consommé, et l'échéance est lue derrière.
+    $component = Livewire::test('quick-add')->set('query', 'Relancer @Lilas Jeudi');
+
+    expect($component->get('parsed')->entity?->id)->toBe($entity->id);
+    expect($component->get('parsed')->title)->toBe('Relancer');
+    expect($component->get('parsed')->date?->dayOfWeek)->toBe(Carbon::THURSDAY);
+});
+
+test('a task posted without a chosen type keeps falling back to the inbox', function () {
+    Livewire::test('quick-add')
+        ->set('query', 'Acheter du lait')
+        ->call('submit');
+
+    expect(InboxItem::where('content', 'Acheter du lait')->exists())->toBeTrue()
+        ->and(Task::count())->toBe(0);
+
+    // Mais si je dis « Tâche », c'est une tâche — même sans rien de reconnu.
+    Livewire::test('quick-add')
+        ->set('query', 'Acheter du pain')
+        ->call('cycleKind')
+        ->call('cycleKind')
+        ->call('cycleKind')
+        ->call('submit');
+
+    expect(Task::where('title', 'Acheter du pain')->exists())->toBeTrue();
+});
+
+test('the chosen type is forgotten once the capture is posted', function () {
+    $component = Livewire::test('quick-add')
+        ->set('query', 'Réunion compta vendredi 10h')
+        ->call('cycleKind')
+        ->call('submit');
+
+    expect($component->get('typeOverride'))->toBe('');
+    expect($component->get('query'))->toBe('');
 });

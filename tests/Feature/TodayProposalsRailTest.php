@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\AgentRunTrigger;
 use App\Enums\OpenDecisionStatus;
 use App\Enums\PlannerProposalStatus;
 use App\Enums\SuggestionConfidence;
@@ -10,6 +11,7 @@ use App\Models\Goal;
 use App\Models\InboxItem;
 use App\Models\InboxSuggestion;
 use App\Models\Milestone;
+use App\Models\Note;
 use App\Models\OpenDecision;
 use App\Models\PlannerProposal;
 use App\Models\PlannerProposalItem;
@@ -17,6 +19,10 @@ use App\Models\ProposalDismissal;
 use App\Models\Review;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Agents\AgentRunner;
+use App\Support\Planner\PlannerAgent;
+use App\Support\Planner\PlannerContextBuilder;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 
@@ -218,4 +224,123 @@ test('the day kicker carries the date, the count and the streak', function () {
     expect($kicker)->toContain(ucfirst(now()->translatedFormat('l j F')))
         ->and($kicker)->toContain('1 sur 2')
         ->and($kicker)->toContain('la série tient à');
+});
+
+test('a task whose scheduled date rotted counts as late too, done ones never do', function () {
+    $rotted = Task::factory()->create(['title' => 'Trier la cave', 'scheduled_date' => today()->subDays(20), 'due_date' => null]);
+    Task::factory()->done()->create(['scheduled_date' => today()->subDays(20), 'completed_at' => now()->subDays(19)]);
+
+    expect(Livewire::test('pages::today')->get('longOverdueTasks')->pluck('id')->all())->toBe([$rotted->id]);
+});
+
+test('the late block stays out of the day count', function () {
+    Task::factory()->create(['due_date' => today()->subDays(10)]);
+    Task::factory()->create(['scheduled_date' => today()]);
+
+    $component = Livewire::test('pages::today');
+
+    expect($component->get('tasksToday'))->toHaveCount(1);
+    expect($component->get('kicker'))->toContain('0 sur 1');
+});
+
+test('the planner answers in the page, to accept or to refuse', function () {
+    $task = Task::factory()->create(['title' => 'Relancer le syndic', 'due_date' => today()->subDays(10)]);
+
+    // Un planificateur de test : il répond une proposition sans appeler aucun
+    // fournisseur.
+    app()->bind(PlannerAgent::class, fn () => new class(app(AgentRunner::class), app(PlannerContextBuilder::class)) extends PlannerAgent
+    {
+        public function isConfigured(): bool
+        {
+            return true;
+        }
+
+        public function generate(CarbonInterface $periodStart, CarbonInterface $periodEnd, AgentRunTrigger $trigger): ?PlannerProposal
+        {
+            $proposal = PlannerProposal::factory()->create([
+                'period_start' => $periodStart,
+                'period_end' => $periodEnd,
+                'status' => PlannerProposalStatus::Pending,
+            ]);
+
+            PlannerProposalItem::factory()->create([
+                'planner_proposal_id' => $proposal->id,
+                'task_id' => Task::first()->id,
+                'proposed_scheduled_date' => today()->addDays(3),
+                'status' => PlannerProposalStatus::Pending,
+            ]);
+
+            return $proposal->fresh(['items']);
+        }
+    });
+
+    Livewire::test('pages::today')
+        ->assertDontSee('Ce que je propose')
+        ->call('replanLate')
+        ->assertHasNoErrors()
+        ->assertSee('Ce que je propose')
+        ->assertSee($task->title)
+        ->assertSee(today()->addDays(3)->translatedFormat('D j M'));
+
+    // Tant que je n'ai pas dit oui, rien n'a bougé.
+    expect($task->fresh()->scheduled_date)->toBeNull();
+});
+
+test('the planner saying nothing is said plainly', function () {
+    Task::factory()->create(['due_date' => today()->subDays(10)]);
+
+    app()->bind(PlannerAgent::class, fn () => new class(app(AgentRunner::class), app(PlannerContextBuilder::class)) extends PlannerAgent
+    {
+        public function isConfigured(): bool
+        {
+            return true;
+        }
+
+        public function generate(CarbonInterface $periodStart, CarbonInterface $periodEnd, AgentRunTrigger $trigger): ?PlannerProposal
+        {
+            return null;
+        }
+    });
+
+    Livewire::test('pages::today')
+        ->call('replanLate')
+        ->assertHasErrors('planner')
+        ->assertDontSee('Ce que je propose');
+});
+
+test('an applied proposal stops being proposed', function () {
+    $task = Task::factory()->create(['due_date' => today()->subDays(10)]);
+    $proposal = PlannerProposal::factory()->create(['status' => PlannerProposalStatus::Pending]);
+    PlannerProposalItem::factory()->create([
+        'planner_proposal_id' => $proposal->id,
+        'task_id' => $task->id,
+        'proposed_scheduled_date' => today()->addDay(),
+        'status' => PlannerProposalStatus::Pending,
+    ]);
+
+    Livewire::test('pages::today')->call('applyPlannerProposal', $proposal->id);
+
+    expect(Livewire::test('pages::today')->get('plannerProposal'))->toBeNull();
+});
+
+test('the rail says nothing rather than saying it is empty', function () {
+    $html = Livewire::test('proposals-rail')->html();
+
+    expect($html)->not->toContain('TARS propose');
+});
+
+test('a goal kept alive by a note is left alone', function () {
+    $goal = Goal::factory()->create(['status' => 'active', 'created_at' => now()->subMonths(3)]);
+    Note::factory()->create(['goal_id' => $goal->id, 'created_at' => now()->subDays(3)]);
+
+    expect(Livewire::test('proposals-rail')->get('proposals'))->toHaveCount(0);
+});
+
+test('a review with nothing written in it still proposes itself', function () {
+    Review::factory()->create(['completed_at' => null, 'generated_content' => '# Revue de la semaine']);
+
+    $proposal = Livewire::test('proposals-rail')->get('proposals')->first();
+
+    expect($proposal->text)->toContain("Je l'ouvre ?");
+    expect($proposal->text)->not->toContain('Revue de la semaine');
 });

@@ -174,3 +174,31 @@ test('a line that announces itself as a note is a note', function () {
 
     expect((new QuickAddParser)->parse('Note : relancer plus tard')->kind())->toBe('note');
 });
+
+test('a capitalized date word is never swallowed by an entity reference', function () {
+    Entity::factory()->create(['name' => 'Appart Lilas']);
+
+    $result = (new QuickAddParser)->parse('Relancer @Lilas Jeudi');
+
+    expect($result->entity?->name)->toBe('Appart Lilas');
+    expect($result->date?->dayOfWeek)->toBe(Carbon::THURSDAY);
+    expect($result->title)->toBe('Relancer');
+});
+
+test('the result knows how to turn a date and an hour into a start time', function () {
+    $withBoth = (new QuickAddParser)->parse('Réunion demain 14h30');
+    expect($withBoth->startsAt()->format('Y-m-d H:i'))
+        ->toBe(today()->addDay()->format('Y-m-d').' 14:30');
+
+    // Une heure sans date se pose sur aujourd'hui, une date sans heure à minuit.
+    expect((new QuickAddParser)->parse('Réunion 9h')->startsAt()->format('Y-m-d H:i'))
+        ->toBe(today()->format('Y-m-d').' 09:00');
+    expect((new QuickAddParser)->parse('Réunion demain')->startsAt()->format('H:i'))->toBe('00:00');
+    expect((new QuickAddParser)->parse('Réunion')->startsAt())->toBeNull();
+});
+
+test('a recurrence or an hour alone is enough to stop being an inbox item', function () {
+    expect((new QuickAddParser)->parse('TVA tous les mois')->hasStructuredToken())->toBeTrue();
+    expect((new QuickAddParser)->parse('Réunion 10h')->hasStructuredToken())->toBeTrue();
+    expect((new QuickAddParser)->parse('Acheter du lait')->hasStructuredToken())->toBeFalse();
+});
