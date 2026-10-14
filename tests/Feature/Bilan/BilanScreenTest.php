@@ -25,13 +25,13 @@ test('guests are redirected to the login page', function () {
     $this->get(route('bilan.index'))->assertRedirect(route('login'));
 });
 
-test('it renders both tabs and defaults to journal', function () {
+test('it renders the journal and the bilan rail on one reading page', function () {
     $this->actingAs(User::factory()->create());
 
     $this->get(route('bilan.index'))
-        ->assertSee('Bilan de vie')
         ->assertSee('Journal')
-        ->assertSee('Bilans');
+        ->assertSee('Bilans')
+        ->assertSee('Humeur du jour');
 });
 
 test('it shows the empty state when the journal has no entries', function () {
@@ -83,10 +83,9 @@ test('the pending bilan banner and sidebar count show when a run is pending', fu
     $questionnaire = Questionnaire::factory()->create(['name' => 'Retro perso']);
     QuestionnaireRun::factory()->create(['questionnaire_id' => $questionnaire->id]);
 
-    Livewire::test('pages::bilan', ['activeTab' => 'bilans'])
-        ->set('activeTab', 'bilans')
+    Livewire::test('pages::bilan')
         ->assertSee('Retro perso')
-        ->assertSee('en attente');
+        ->assertSee('à remplir');
 });
 
 test('toggling a questionnaire flips its active state', function () {

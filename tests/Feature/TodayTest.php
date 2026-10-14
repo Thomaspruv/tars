@@ -1,14 +1,15 @@
 <?php
 
+use App\Enums\GoalStatus;
 use App\Enums\TaskStatus;
 use App\Models\Checklist;
 use App\Models\ChecklistItem;
 use App\Models\Event;
+use App\Models\Goal;
 use App\Models\InboxItem;
 use App\Models\Review;
 use App\Models\Task;
 use App\Models\User;
-use App\Support\Review\ReviewSettings;
 use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 
@@ -81,125 +82,82 @@ test('it shows pinned lists and toggles list items', function () {
     expect($item->fresh()->checked_at)->not->toBeNull();
 });
 
-test('it shows unpinned lists under "Autres listes" and toggles their items too', function () {
+test('summarizes the unpinned lists without listing their items', function () {
     $this->actingAs(User::factory()->create());
 
     $unpinned = Checklist::factory()->create(['name' => 'Livres à lire', 'is_pinned' => false]);
-    $item = ChecklistItem::factory()->create(['list_id' => $unpinned->id, 'content' => 'Dune']);
+    ChecklistItem::factory()->create(['list_id' => $unpinned->id, 'content' => 'Dune']);
 
     $this->get(route('today'))
-        ->assertSee('Autres listes')
         ->assertSee('Livres à lire')
-        ->assertSee('Dune');
-
-    Livewire::test('pages::today')->call('toggleListItem', $item->id);
-
-    expect($item->fresh()->checked_at)->not->toBeNull();
+        ->assertDontSee('Dune');
 });
 
-test('does not show the "Autres listes" section when every list is pinned', function () {
+test('adds an item to a pinned list from the day screen', function () {
     $this->actingAs(User::factory()->create());
 
-    Checklist::factory()->create(['name' => 'Courses', 'is_pinned' => true]);
+    $list = Checklist::factory()->create(['name' => 'Courses', 'is_pinned' => true]);
 
-    $this->get(route('today'))->assertDontSee('Autres listes');
+    Livewire::test('pages::today')->call('addListItem', $list->id, 'Pain');
+
+    expect($list->items()->pluck('content')->all())->toBe(['Pain']);
 });
 
-test('pinning an unpinned list moves it out of "Autres listes"', function () {
-    $this->actingAs(User::factory()->create());
-
-    $list = Checklist::factory()->create(['name' => 'Livres à lire', 'is_pinned' => false]);
-
-    Livewire::test('pages::today')->call('pinList', $list->id);
-
-    expect($list->fresh()->is_pinned)->toBeTrue();
-});
-
-test('shows a banner when an uncompleted review exists', function () {
+test('shows the agent block when an uncompleted review exists', function () {
     $this->actingAs(User::factory()->create());
 
     Review::factory()->create(['completed_at' => null]);
 
-    $this->get(route('today'))->assertSee('prête à lire', false);
+    $this->get(route('today'))->assertSee('Revue prête', false);
 });
 
-test('does not show the pending review banner once completed', function () {
+test('does not show the pending review block once completed', function () {
     $this->actingAs(User::factory()->create());
 
     Review::factory()->create(['completed_at' => now()]);
 
-    $this->get(route('today'))->assertDontSee('prête à lire', false);
+    $this->get(route('today'))->assertDontSee('Revue prête', false);
 });
 
-test('shows the review as due today when the configured time has not passed yet', function () {
-    Carbon::setTestNow(Carbon::parse('2024-01-07 10:00:00')); // a Sunday, before the default 17:00
-    $this->actingAs(User::factory()->create());
-
-    expect(Livewire::test('pages::today')->get('daysUntilReview'))->toBe(0);
-});
-
-test('shows the review as due next sunday once the configured time has passed', function () {
-    Carbon::setTestNow(Carbon::parse('2024-01-07 18:00:00')); // a Sunday, after the default 17:00
-    $this->actingAs(User::factory()->create());
-
-    expect(Livewire::test('pages::today')->get('daysUntilReview'))->toBe(7);
-});
-
-test('respects a custom weekly review time', function () {
-    Carbon::setTestNow(Carbon::parse('2024-01-07 19:00:00')); // a Sunday at 19:00
-    (new ReviewSettings)->updateWeeklyTime('20:00');
-    $this->actingAs(User::factory()->create());
-
-    expect(Livewire::test('pages::today')->get('daysUntilReview'))->toBe(0);
-});
-
-test('shows an inbox pending nudge when there are unprocessed inbox items', function () {
+test('the agent speaks in a single place: inbox is only nudged when no review is pending', function () {
     $this->actingAs(User::factory()->create());
 
     InboxItem::factory()->create(['processed_at' => null]);
 
-    $this->get(route('today'))->assertSee('1 élément en inbox');
-});
+    $this->get(route('today'))->assertSee('Inbox à trier');
 
-test('does not show the inbox pending nudge when there are no unprocessed inbox items', function () {
-    $this->actingAs(User::factory()->create());
-
-    InboxItem::factory()->create(['processed_at' => now()]);
-
-    $this->get(route('today'))->assertDontSee('en inbox');
-});
-
-test('groups overdue tasks under an "En retard" heading', function () {
-    $this->actingAs(User::factory()->create());
-
-    $overdue = Task::factory()->create(['title' => 'Overdue task', 'due_date' => today()->subDay()]);
-    $dueToday = Task::factory()->create(['title' => 'Due today task', 'scheduled_date' => today()]);
+    Review::factory()->create(['completed_at' => null]);
 
     $this->get(route('today'))
-        ->assertSee('En retard')
-        ->assertSee($overdue->title)
-        ->assertSee($dueToday->title);
+        ->assertSee('Revue prête', false)
+        ->assertDontSee('Inbox à trier');
 });
 
-test('does not show the "En retard" heading when there is no overdue task', function () {
+test('isolates the first open task as "la suivante" and leaves the others below', function () {
     $this->actingAs(User::factory()->create());
 
-    Task::factory()->create(['title' => 'Due today only', 'scheduled_date' => today()]);
+    $first = Task::factory()->create(['title' => 'Première tâche', 'due_date' => today()->subDay()]);
+    $second = Task::factory()->create(['title' => 'Deuxième tâche', 'scheduled_date' => today()]);
 
-    $this->get(route('today'))->assertDontSee('En retard');
-});
-
-test('shows completed-today tasks inside the "Terminées aujourd\'hui" section', function () {
-    $this->actingAs(User::factory()->create());
-
-    $done = Task::factory()->done()->create(['title' => 'Done today task', 'scheduled_date' => today(), 'completed_at' => now()]);
+    expect(Livewire::test('pages::today')->get('nextTask')->id)->toBe($first->id);
 
     $this->get(route('today'))
-        ->assertSee("Terminées aujourd'hui", false)
-        ->assertSee($done->title);
+        ->assertSee('La suivante')
+        ->assertSee($first->title)
+        ->assertSee($second->title);
 });
 
-test('lists open tasks with no scheduled date and no due date under "Sans date"', function () {
+test('postponing "la suivante" moves it to tomorrow', function () {
+    $this->actingAs(User::factory()->create());
+
+    $task = Task::factory()->create(['scheduled_date' => today()]);
+
+    Livewire::test('pages::today')->call('postponeTask', $task->id);
+
+    expect($task->fresh()->scheduled_date->isTomorrow())->toBeTrue();
+});
+
+test('lists open tasks with no scheduled date and no due date under "En réserve"', function () {
     $this->actingAs(User::factory()->create());
 
     $unscheduled = Task::factory()->create(['title' => 'No date task', 'scheduled_date' => null, 'due_date' => null]);
@@ -212,19 +170,19 @@ test('lists open tasks with no scheduled date and no due date under "Sans date"'
     expect($unscheduledTasks->pluck('id')->all())->toBe([$unscheduled->id]);
 
     $this->get(route('today'))
-        ->assertSee('Sans date')
+        ->assertSee('En réserve')
         ->assertSee($unscheduled->title);
 });
 
-test('does not show the "Sans date" section when every open task has a date', function () {
+test('does not show the "En réserve" section when every open task has a date', function () {
     $this->actingAs(User::factory()->create());
 
     Task::factory()->create(['title' => 'Scheduled task', 'scheduled_date' => today()]);
 
-    $this->get(route('today'))->assertDontSee('Sans date');
+    $this->get(route('today'))->assertDontSee('En réserve');
 });
 
-test('scheduling an unscheduled task for today moves it into "Tâches du jour"', function () {
+test('scheduling an unscheduled task for today moves it into the day', function () {
     $this->actingAs(User::factory()->create());
 
     $task = Task::factory()->create(['title' => 'No date task', 'scheduled_date' => null, 'due_date' => null]);
@@ -232,4 +190,37 @@ test('scheduling an unscheduled task for today moves it into "Tâches du jour"',
     Livewire::test('pages::today')->call('scheduleForToday', $task->id);
 
     expect($task->fresh()->scheduled_date->isToday())->toBeTrue();
+});
+
+test('the reserve can be emptied onto today in one gesture', function () {
+    $this->actingAs(User::factory()->create());
+
+    $first = Task::factory()->create(['scheduled_date' => null, 'due_date' => null]);
+    $second = Task::factory()->create(['scheduled_date' => null, 'due_date' => null]);
+
+    Livewire::test('pages::today')->call('scheduleAllForToday');
+
+    expect($first->fresh()->scheduled_date->isToday())->toBeTrue()
+        ->and($second->fresh()->scheduled_date->isToday())->toBeTrue();
+});
+
+test('titles the day with the streak', function () {
+    $this->actingAs(User::factory()->create());
+
+    Task::factory()->done()->create(['completed_at' => now()]);
+    Task::factory()->done()->create(['completed_at' => now()->subDay()]);
+
+    expect(Livewire::test('pages::today')->get('dayTitle'))->toBe("Deuxième jour d'affilée");
+});
+
+test('celebrates a goal closed in the last two days', function () {
+    $this->actingAs(User::factory()->create());
+
+    $goal = Goal::factory()->create(['title' => 'Vendre l\'appartement', 'status' => 'done']);
+
+    $this->get(route('today'))->assertSee('Objectif atteint');
+
+    Livewire::test('pages::today')->call('archiveGoal', $goal->id);
+
+    expect($goal->fresh()->status)->toBe(GoalStatus::Abandoned);
 });

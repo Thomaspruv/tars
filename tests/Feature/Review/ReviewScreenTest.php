@@ -11,7 +11,9 @@ use Livewire\Livewire;
 test('shows an empty state when there is no review yet', function () {
     $this->actingAs(User::factory()->create());
 
-    Livewire::test('pages::review')->assertSee('Aucune revue pour', false);
+    Livewire::test('pages::review')
+        ->assertSee('Aucune revue', false)
+        ->assertSee("L'agent qui les écrit s'active sur l'écran Agents.", false);
 });
 
 test('shows the latest review by default', function () {

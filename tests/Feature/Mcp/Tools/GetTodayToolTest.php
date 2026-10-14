@@ -35,6 +35,12 @@ test('says the review is today when the configured weekly time has not passed ye
     TarsServer::tool(GetTodayTool::class)->assertOk()->assertSee("prévue aujourd'hui");
 });
 
+test('says the review is next sunday once the configured weekly time has passed', function () {
+    Carbon::setTestNow(Carbon::parse('2024-01-07 18:00:00')); // a Sunday, after the default 17:00
+
+    TarsServer::tool(GetTodayTool::class)->assertOk()->assertSee('Prochaine revue dans 7 jour');
+});
+
 test('respects a custom weekly review time', function () {
     Carbon::setTestNow(Carbon::parse('2024-01-07 19:00:00')); // a Sunday at 19:00
     (new ReviewSettings)->updateWeeklyTime('20:00');

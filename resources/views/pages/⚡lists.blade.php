@@ -28,6 +28,12 @@ new #[Title('Listes')] class extends Component
     }
 
     #[Computed]
+    public function pinnedCount(): int
+    {
+        return $this->lists->where('is_pinned', true)->count();
+    }
+
+    #[Computed]
     public function allEntities(): Collection
     {
         return Entity::orderBy('name')->get();
@@ -104,76 +110,104 @@ new #[Title('Listes')] class extends Component
 ?>
 
 <div>
-    <x-screen-header treatment="work" title="Listes">
+    <x-screen-header
+        :kicker="$this->lists->count().' '.Str::plural('liste', $this->lists->count()).' · '.$this->pinnedCount.' '.Str::plural('épinglée', $this->pinnedCount)"
+        title="Listes"
+        class="mb-5"
+    >
         <x-slot:actions>
-            <x-btn variant="primary" wire:click="openCreateModal">+ Nouvelle liste</x-btn>
+            <x-btn variant="secondary" wire:click="openCreateModal">Nouvelle liste</x-btn>
         </x-slot:actions>
     </x-screen-header>
 
-    <div class="mt-8 grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr))">
+    {{-- Le seul écran en colonnes de cartes, parce que les listes sont
+         vraiment des objets séparés. Cases *rondes* ici, carrées pour les
+         tâches : la distinction est portée par la forme, pas par la couleur. --}}
+    <div class="grid items-start gap-4" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr))">
         @forelse ($this->lists as $list)
-            <div class="rounded-[12px] border border-(--bd) bg-(--surf) p-5" wire:key="list-{{ $list->id }}">
-                <div class="flex items-center justify-between gap-2">
-                    <div class="flex items-center gap-2">
-                        <h2 class="text-[15px] font-semibold text-(--tx)">{{ $list->name }}</h2>
-                        @if ($list->entity)
-                            <x-badge type="entity" :entity="$list->entity" />
+            @php
+                // Au-delà, la carte de liste devient une colonne interminable.
+                $visibleItems = 6;
+                $openItems = $list->items->whereNull('checked_at');
+                $doneCount = $list->items->count() - $openItems->count();
+            @endphp
+
+            <x-card padding="20" class="group/list" wire:key="list-{{ $list->id }}">
+                <div class="mb-4 flex items-center gap-2.5">
+                    <h2 class="font-display min-w-0 truncate text-[18px] font-semibold text-(--tx)">{{ $list->name }}</h2>
+
+                    @if ($list->is_pinned)
+                        <x-badge type="pill" tone="mine" class="!text-[11px] shrink-0">épinglée</x-badge>
+                    @endif
+
+                    @if ($openItems->isNotEmpty())
+                        <span class="ml-auto shrink-0 text-[12px] text-(--mut)">{{ $openItems->count() }}</span>
+                    @endif
+
+                    <button
+                        type="button"
+                        wire:click="togglePin({{ $list->id }})"
+                        class="press {{ $openItems->isNotEmpty() ? '' : 'ml-auto' }} shrink-0 text-[12px] text-(--mut) hover:text-(--tx)"
+                    >{{ $list->is_pinned ? 'Détacher' : 'Épingler' }}</button>
+
+                    <button
+                        type="button"
+                        wire:click="deleteList({{ $list->id }})"
+                        wire:confirm="Supprimer cette liste ?"
+                        aria-label="Supprimer la liste"
+                        class="shrink-0 text-[12px] text-(--mut) opacity-0 group-hover/list:opacity-100 hover:text-(--dgr)"
+                    >✕</button>
+                </div>
+
+                {{-- Une liste vide affiche une bonne nouvelle, pas un vide. --}}
+                @if ($list->items->isNotEmpty() && $openItems->isEmpty())
+                    <p class="mb-4 text-[14px] leading-[1.6] text-(--ai)">Vide — tout est fait.</p>
+                @else
+                    <div class="flex flex-col gap-[13px]">
+                        @foreach ($openItems->take($visibleItems) as $item)
+                            <div class="group flex items-center gap-3 text-[14px]" wire:key="item-{{ $item->id }}">
+                                <x-checkbox
+                                    shape="round"
+                                    size="18"
+                                    wire:click="toggleItem({{ $item->id }})"
+                                    target="toggleItem({{ $item->id }})"
+                                />
+                                <span class="min-w-0 flex-1 text-(--tx)">{{ $item->content }}</span>
+                                <button
+                                    type="button"
+                                    wire:click="deleteItem({{ $item->id }})"
+                                    aria-label="Supprimer l'article"
+                                    class="shrink-0 text-(--mut) opacity-0 group-hover:opacity-100 hover:text-(--dgr)"
+                                >✕</button>
+                            </div>
+                        @endforeach
+
+                        @if ($openItems->count() > $visibleItems || $doneCount > 0)
+                            <p class="pt-0.5 text-[13px] text-(--mut)">
+                                @if ($openItems->count() > $visibleItems)
+                                    + {{ $openItems->count() - $visibleItems }} autres
+                                @endif
+                                @if ($openItems->count() > $visibleItems && $doneCount > 0) · @endif
+                                @if ($doneCount > 0)
+                                    {{ $doneCount }} {{ Str::plural('déjà fait', $doneCount) }}
+                                @endif
+                            </p>
                         @endif
                     </div>
-                    <div class="flex items-center gap-1">
-                        <button
-                            type="button"
-                            wire:click="togglePin({{ $list->id }})"
-                            aria-label="{{ $list->is_pinned ? 'Désépingler' : 'Épingler' }}"
-                            class="rounded-[8px] p-1.5 {{ $list->is_pinned ? 'text-(--ac)' : 'text-(--mut) hover:text-(--tx)' }}"
-                        >
-                            <flux:icon name="map-pin" class="size-4" />
-                        </button>
-                        <button
-                            type="button"
-                            wire:click="deleteList({{ $list->id }})"
-                            wire:confirm="Supprimer cette liste ?"
-                            aria-label="Supprimer"
-                            class="rounded-[8px] p-1.5 text-(--mut) hover:text-(--dgr)"
-                        >
-                            <flux:icon name="trash" class="size-4" />
-                        </button>
-                    </div>
-                </div>
+                @endif
 
-                <div class="mt-3 space-y-0.5">
-                    @foreach ($list->items as $item)
-                        <div class="group flex items-center gap-[10px] rounded-[8px] px-[10px] py-[8px] hover:bg-(--surf2)" wire:key="item-{{ $item->id }}">
-                            <x-checkbox
-                                shape="round"
-                                wire:click="toggleItem({{ $item->id }})"
-                                @checked($item->checked_at)
-                            />
-                            <span class="flex-1 text-[13.5px] {{ $item->checked_at ? 'text-(--mut) line-through opacity-45' : 'text-(--tx)' }}">
-                                {{ $item->content }}
-                            </span>
-                            <button
-                                type="button"
-                                wire:click="deleteItem({{ $item->id }})"
-                                class="shrink-0 text-(--mut) opacity-0 group-hover:opacity-100 hover:text-(--dgr)"
-                            >
-                                <flux:icon name="x-mark" class="size-3.5" />
-                            </button>
-                        </div>
-                    @endforeach
-                </div>
-
-                <form wire:submit="addItem({{ $list->id }})" class="mt-2 flex gap-2">
+                <form wire:submit="addItem({{ $list->id }})" class="mt-3 flex items-center gap-3 border-t border-(--bd) pt-3">
+                    <span aria-hidden="true" class="w-[18px] shrink-0 text-center text-(--mut)">+</span>
                     <input
                         type="text"
                         wire:model="newItemContent.{{ $list->id }}"
-                        placeholder="Ajouter un élément…"
-                        class="flex-1 rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-1.5 text-sm text-(--tx)"
+                        placeholder="Ajouter un article"
+                        class="w-full bg-transparent text-[14px] text-(--tx) placeholder:text-(--mut) focus:outline-none"
                     />
                 </form>
-            </div>
+            </x-card>
         @empty
-            <p class="col-span-full p-8 text-center text-sm text-(--mut)">Aucune liste pour l'instant.</p>
+            <p class="col-span-full py-10 text-[15px] text-(--mut)">Aucune liste pour l'instant.</p>
         @endforelse
     </div>
 
@@ -182,14 +216,14 @@ new #[Title('Listes')] class extends Component
             <flux:heading size="lg">Nouvelle liste</flux:heading>
 
             <div>
-                <label class="text-xs text-(--mut)">Nom</label>
-                <input type="text" wire:model="name" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)" />
-                @error('name') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                <label class="text-[12px] text-(--mut)">Nom</label>
+                <input type="text" wire:model="name" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none" />
+                @error('name') <p class="mt-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
             </div>
 
             <div>
-                <label class="text-xs text-(--mut)">Entité liée (optionnel)</label>
-                <select wire:model="entityId" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)">
+                <label class="text-[12px] text-(--mut)">Entité liée (optionnel)</label>
+                <select wire:model="entityId" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none">
                     <option value="">—</option>
                     @foreach ($this->allEntities as $entity)
                         <option value="{{ $entity->id }}">{{ $entity->name }}</option>

@@ -1,41 +1,55 @@
 @props([
-    'variant' => 'secondary', // primary | secondary | ghost | danger | agent
-    'size' => 'md', // md (30px) | sm (28px)
+    'variant' => 'secondary', // primary | agent | secondary | ghost | danger
+    'size' => 'sm', // xs | sm | md | lg
     'href' => null,
     'loading' => false, // agent variant only: shows a pulsing dot
 ])
 
 @php
-    $base = 'inline-flex items-center justify-center gap-2 font-(family-name:--font-sans) transition-[background,border-color,opacity] duration-150 ease-out disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-40 focus-visible:outline focus-visible:outline-1 focus-visible:outline-(--ac) focus-visible:outline-offset-2';
+    // Tout est une pilule (999px). Les deux variantes pleines portent une ombre
+    // *dure* de 2px et s'enfoncent au clic — c'est la seule profondeur du
+    // système, il n'y a aucune ombre floue nulle part.
+    $base = 'inline-flex items-center justify-center gap-2 rounded-full font-(family-name:--font-sans) transition-[background-color,box-shadow,scale,translate,color] duration-(--dur-tap) ease-(--ease) disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ac)';
 
     $sizes = [
-        'md' => 'rounded-[7px] px-[15px] py-[8px] text-[13px] leading-none',
-        'sm' => 'rounded-[6px] px-[12px] py-[6px] text-[12.5px] leading-none',
+        'xs' => 'px-[14px] py-[7px] text-[12px]',
+        'sm' => 'px-[18px] py-[9px] text-[13px]',
+        'md' => 'px-[22px] py-[11px] text-[14px]',
+        'lg' => 'px-[28px] py-[13px] text-[15px]',
     ];
+
+    // Les deux variantes pleines s'enfoncent vraiment : l'ombre dure de 2px
+    // disparaît sous le doigt et le bouton descend d'exactement sa hauteur.
+    $pressable = 'shadow-[0_2px_0_var(--sh)] active:translate-y-[2px] active:shadow-none';
+
+    // Les variantes plates n'ont pas d'ombre à écraser : elles se tassent.
+    $flatPress = 'active:scale-[.97]';
 
     $variants = [
-        'primary' => 'bg-(--ac) text-(--acT) font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,.18),0_1px_2px_rgba(0,0,0,.4)] hover:bg-(--achov)',
-        'secondary' => 'bg-(--surf2) border border-(--bd2) text-(--tx) font-medium hover:border-(--bd3)',
-        'ghost' => 'bg-transparent text-(--mut) font-medium hover:bg-(--surf2) hover:text-(--tx)',
-        'danger' => 'bg-transparent border border-(--dgr)/35 text-(--dgr) font-medium hover:bg-(--dgrbg)',
-        'agent' => 'bg-(--aibg) border border-(--aibd) text-(--ai) font-medium hover:shadow-(--aiglow)',
+        // L'abricot est *mon* action. L'agent n'y touche jamais.
+        'primary' => 'bg-(--ac) text-(--acT) font-bold hover:bg-(--achov) [--sh:var(--acsh)] '.$pressable,
+        // Le vert est celui de l'agent — et aussi celui du « fait ».
+        'agent' => 'bg-(--ai) text-(--aiT) font-bold hover:bg-(--aihov) [--sh:var(--aish)] '.$pressable,
+        'secondary' => 'bg-(--surf2) text-(--tx) font-medium hover:bg-(--bd2) '.$flatPress,
+        'ghost' => 'bg-transparent text-(--mut) font-normal hover:text-(--tx) '.$flatPress,
+        'danger' => 'bg-transparent text-(--dgr) font-medium hover:bg-(--dgrbg) '.$flatPress,
     ];
 
-    $classes = $base.' '.($sizes[$size] ?? $sizes['md']).' '.($variants[$variant] ?? $variants['secondary']);
+    $classes = $base.' '.($sizes[$size] ?? $sizes['sm']).' '.($variants[$variant] ?? $variants['secondary']);
     $showPulse = $loading && $variant === 'agent';
 @endphp
 
 @if ($href)
     <a href="{{ $href }}" {{ $attributes->merge(['class' => $classes]) }}>
         @if ($showPulse)
-            <span class="size-[5px] shrink-0 rounded-full bg-(--ai) animate-pulse-soft"></span>
+            <span class="size-[6px] shrink-0 animate-pulse-soft rounded-full bg-(--aiT)"></span>
         @endif
         {{ $slot }}
     </a>
 @else
     <button {{ $attributes->merge(['type' => 'button', 'class' => $classes]) }}>
         @if ($showPulse)
-            <span class="size-[5px] shrink-0 rounded-full bg-(--ai) animate-pulse-soft"></span>
+            <span class="size-[6px] shrink-0 animate-pulse-soft rounded-full bg-(--aiT)"></span>
         @endif
         {{ $slot }}
     </button>

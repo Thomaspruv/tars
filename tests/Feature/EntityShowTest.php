@@ -102,17 +102,17 @@ test('it shows the filled detail fields on the fiche', function () {
     ]);
 
     $this->get(route('entities.show', $entity))
-        ->assertSee('Informations')
+        ->assertSee('Adresse')
         ->assertSee('3 rue de la République')
         ->assertSee('Loué');
 });
 
-test('the informations section is hidden when there are no detail fields', function () {
+test('the detail list is empty when no field is filled', function () {
     $this->actingAs(User::factory()->create());
 
-    $entity = Entity::factory()->create(['details' => []]);
+    $entity = Entity::factory()->create(['type' => 'property', 'details' => []]);
 
-    $this->get(route('entities.show', $entity))->assertDontSee('Informations');
+    expect(Livewire::test('pages::entities.show', ['entity' => $entity])->get('filledDetails'))->toBe([]);
 });
 
 test('it archives the entity', function () {
@@ -147,7 +147,7 @@ test('it shows anchored vault documents when the vault is configured', function 
     $document = BrainDocument::factory()->create(['title' => 'Réunion SARL Alpha']);
     $entity->brainDocuments()->attach($document);
 
-    $this->get(route('entities.show', $entity))->assertSee('Réunion SARL Alpha');
+    $this->get(route('entities.show', $entity))->assertSee($document->path);
 });
 
 test('the vault notes section is hidden when the vault is not configured', function () {

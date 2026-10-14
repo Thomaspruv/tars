@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hors ligne — Tars</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <meta name="theme-color" content="#0F1310">
+    <style>
+        /* Page autonome : elle est servie par le service worker quand le réseau
+           est tombé, donc elle ne peut dépendre d'aucun asset construit. Les
+           couleurs sont recopiées des jetons de resources/css/app.css. */
+        :root {
+            --bg: #0F1310; --surf: #161B17; --surf2: #1E251F; --bd: #1E251F;
+            --tx: #EEF2EA; --mut: #93A095; --ac: #F2A15C; --acT: #14190F; --acsh: #B36E33;
+        }
+        html[data-theme='light'] {
+            --bg: #F3F5EE; --surf: #FFFFFF; --surf2: #E9EEE4; --bd: #DCE3D6;
+            --tx: #14190F; --mut: #62705F; --ac: #C4661F; --acT: #FFFFFF; --acsh: #8F4715;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; min-height: 100vh; background: var(--bg); color: var(--tx);
+            font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .wrap { max-width: 640px; margin: 0 auto; padding: 40px 20px 64px; }
+        .kicker { margin: 0 0 6px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--mut); }
+        h1 { margin: 0 0 18px; font-size: 34px; line-height: 1; letter-spacing: -.03em; font-weight: 700; }
+        p { font-size: 15px; line-height: 1.5; color: var(--mut); }
+        textarea {
+            width: 100%; min-height: 128px; resize: vertical; padding: 16px 18px;
+            border: 0; border-radius: 18px; background: var(--surf2); color: var(--tx);
+            font: inherit; font-size: 16px;
+        }
+        textarea:focus { outline: 2px solid var(--ac); outline-offset: 2px; }
+        .row { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+        button {
+            border: 0; cursor: pointer; font: inherit; border-radius: 999px;
+            padding: 11px 22px; font-size: 14px; font-weight: 700;
+            background: var(--ac); color: var(--acT); box-shadow: 0 2px 0 var(--acsh);
+        }
+        button:active { transform: translateY(2px); box-shadow: none; }
+        button.flat { background: var(--surf2); color: var(--tx); font-weight: 500; box-shadow: none; }
+        button.flat:active { transform: none; }
+        .queue { margin-top: 32px; border-top: 1px solid var(--bd); padding-top: 20px; }
+        .queue h2 { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--mut); font-weight: 500; margin: 0 0 12px; }
+        .queue li { background: var(--surf); border-radius: 14px; padding: 12px 16px; margin-bottom: 8px; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .queue ul { list-style: none; margin: 0; padding: 0; }
+        .said { color: var(--ac); font-size: 14px; min-height: 20px; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <p class="kicker">pas de réseau</p>
+        <h1>Pose quand même.</h1>
+        <p>Ce que tu écris ici est gardé sur l'appareil et part dans l'inbox à la prochaine ouverture de Tars connectée.</p>
+
+        <form id="capture-form">
+            <textarea id="capture" placeholder="Poser quelque chose…" autofocus></textarea>
+            <div class="row">
+                <button type="submit">Poser</button>
+                <button type="button" class="flat" id="retry">Réessayer le réseau</button>
+                <span class="said" id="said"></span>
+            </div>
+        </form>
+
+        <div class="queue" id="queue" hidden>
+            <h2 id="queue-title"></h2>
+            <ul id="queue-list"></ul>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var KEY = 'tars.pending-captures';
+
+            var theme = /(?:^|; )la-theme=(light|dark)/.exec(document.cookie);
+            document.documentElement.dataset.theme = theme ? theme[1] : 'dark';
+
+            function read() {
+                try {
+                    var raw = window.localStorage.getItem(KEY);
+                    var parsed = raw ? JSON.parse(raw) : [];
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch (error) {
+                    return [];
+                }
+            }
+
+            function write(items) {
+                try {
+                    window.localStorage.setItem(KEY, JSON.stringify(items));
+                } catch (error) {
+                    document.getElementById('said').textContent = 'Impossible de garder la note sur cet appareil.';
+                }
+            }
+
+            function render() {
+                var items = read();
+                var box = document.getElementById('queue');
+                var list = document.getElementById('queue-list');
+
+                box.hidden = items.length === 0;
+                document.getElementById('queue-title').textContent =
+                    items.length + (items.length > 1 ? ' notes en attente d’envoi' : ' note en attente d’envoi');
+
+                list.replaceChildren();
+
+                items.forEach(function (item) {
+                    var li = document.createElement('li');
+                    li.textContent = item.content;
+                    list.appendChild(li);
+                });
+            }
+
+            document.getElementById('capture-form').addEventListener('submit', function (event) {
+                event.preventDefault();
+
+                var field = document.getElementById('capture');
+                var content = field.value.trim();
+
+                if (content === '') {
+                    return;
+                }
+
+                var items = read();
+                items.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2), content: content });
+                write(items);
+
+                field.value = '';
+                field.focus();
+                document.getElementById('said').textContent = 'Gardé sur l’appareil.';
+                render();
+            });
+
+            document.getElementById('retry').addEventListener('click', function () {
+                window.location.href = '/';
+            });
+
+            render();
+        })();
+    </script>
+</body>
+</html>

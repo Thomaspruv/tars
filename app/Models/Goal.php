@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\GoalStatus;
 use App\Enums\ReviewFrequency;
+use App\Support\Palette;
 use Database\Factories\GoalFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -56,6 +57,19 @@ class Goal extends Model
     {
         return Attribute::make(
             get: fn (): string => Str::slug($this->title),
+        )->shouldCache();
+    }
+
+    /**
+     * Teinte de saison de l'objectif — stable dans le temps, parce qu'elle
+     * dérive de l'id. Voir {@see Palette} pour la série.
+     *
+     * @return Attribute<string, never>
+     */
+    protected function colorSlot(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): string => Palette::slot($this->id ?? 0),
         )->shouldCache();
     }
 

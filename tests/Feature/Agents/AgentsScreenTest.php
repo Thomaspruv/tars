@@ -480,5 +480,7 @@ test('shows the total tokens used this month', function () {
         'finished_at' => now()->subMonths(2),
     ]);
 
-    Livewire::test('pages::agents')->assertSee('150 tokens ce mois-ci');
+    Livewire::test('pages::agents')
+        ->assertSee('150')
+        ->assertSee('tokens ce mois-ci');
 });

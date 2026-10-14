@@ -9,8 +9,9 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-    --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
+    --font-sans: 'Karla', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: 'Outfit', 'Karla', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
 
     --color-zinc-50: #fafafa;
     --color-zinc-100: #f5f5f5;
@@ -48,112 +49,142 @@
     }
 }
 
-/* TARS — tokens sémantiques (design system v2 : palette Ardoise/Indigo).
+/* TARS — tokens sémantiques (design system v3 : direction « Niveaux · Tenue »).
+
    Sélecteur sur :root/[data-theme] plutôt que body[data-theme] : l'attribut
    vit sur <html> (voir sidebar.blade.php) pour que le serveur puisse rendre
    le bon thème directement dans le HTML et éviter un flash pendant les
    transitions wire:navigate — la persistance reste un cookie `la-theme`,
-   pas localStorage, pour la même raison. */
+   pas localStorage, pour la même raison.
+
+   Grammaire de la direction :
+   — l'abricot (--ac) est *mon* action, l'agent n'y touche jamais ;
+   — le vert (--ai) est l'agent, et c'est aussi le vert du « fait », parce que
+     l'agent ne fait que préparer du fait ;
+   — les boutons pleins portent une ombre *dure* de 2px (--acsh / --aish),
+     jamais une ombre floue ;
+   — pilules à 999px, cartes à 16-18px, aucun dégradé. */
 :root,
 [data-theme='dark'] {
     color-scheme: dark;
 
-    --bg: #08090C;
-    --surf: #0F1116;
-    --surf2: #16181F;
-    --bd: rgba(160, 170, 195, .12);
-    --bd2: rgba(160, 170, 195, .22);
-    --bd3: rgba(160, 170, 195, .4);
-    --tx: #E8EAF0;
-    --mut: #868EA3;
-    --ac: #6E8BFF;
-    --achov: #8DA5FF;
-    --acT: #06070A;
-    --acbg: rgba(110, 139, 255, .13);
-    --ai: #A78BFA;
-    --aibg: rgba(167, 139, 250, .12);
-    --aibd: rgba(167, 139, 250, .42);
-    --aibd2: rgba(167, 139, 250, .28);
-    --ok: #4ADE80;
-    --okbg: rgba(74, 222, 128, .13);
-    --warn: #FBBF24;
-    --warnbg: rgba(251, 191, 36, .13);
-    --dgr: #F87171;
-    --dgrbg: rgba(248, 113, 113, .15);
+    --bg: #0F1310;
+    --surf: #161B17;
+    --surf2: #1E251F;
+    --sunk: #131A16;
+    --bd: #1E251F;
+    --bd2: #2A332B;
+    --bd3: #3A473C;
+    --tx: #EEF2EA;
+    --mut: #93A095;
 
-    /* Categorical palette for coloring calendar events (7 hues, blue/violet
-       omitted — blue is --ac, violet reads as --ai). Adjacent-pair CVD/
-       contrast-validated against this surface. Backgrounds are deliberately
-       more saturated than the app's other *bg tokens (.13-.15) — with up to
-       7 of these sitting side by side on a near-black surface, each needs
-       enough presence to read as its own color rather than blending. */
-    --goal-green: #008300;
-    --goal-green-bg: rgba(0, 131, 0, .28);
-    --goal-magenta: #D55181;
-    --goal-magenta-bg: rgba(213, 81, 129, .28);
-    --goal-yellow: #C98500;
-    --goal-yellow-bg: rgba(201, 133, 0, .28);
-    --goal-aqua: #199E70;
-    --goal-aqua-bg: rgba(25, 158, 112, .28);
-    --goal-orange: #D95926;
-    --goal-orange-bg: rgba(217, 89, 38, .28);
-    --goal-violet: #9085E9;
-    --goal-violet-bg: rgba(144, 133, 233, .28);
-    --goal-red: #E66767;
-    --goal-red-bg: rgba(230, 103, 103, .28);
+    /* Mon action — abricot. --acsh est l'ombre dure de 2px sous les boutons pleins. */
+    --ac: #F2A15C;
+    --achov: #F6B27A;
+    --acT: #14190F;
+    --acbg: #33251A;
+    --acsh: #B36E33;
 
-    --in: #08090C;
-    --aiglow: 0 0 14px rgba(167, 139, 250, .22);
-    --gradient-signature: linear-gradient(135deg, #6E8BFF, #A78BFA);
-    --card-shadow: none;
+    /* L'agent — pousse. --aibg2 est le fond des pilules *dans* un bloc agent. */
+    --ai: #86C98D;
+    --aihov: #9AD5A1;
+    --aiT: #0F1310;
+    --aibg: #17281C;
+    --aibg2: #1E3323;
+    --aish: #4E8C58;
+
+    --ok: #86C98D;
+    --okbg: #17281C;
+    --warn: #E8C25A;
+    --warnbg: #2B2517;
+    --dgr: #DE7A64;
+    --dgrbg: #2C1E1A;
+
+    /* Palette catégorielle — sept teintes de saison, une par objectif.
+       Toutes claires sur le vert sombre et toutes assez foncées pour porter
+       du texte noir (--onhue) en light : c'est pour ça que les deux thèmes
+       partagent exactement les mêmes valeurs. Au calendrier : aplat plein +
+       texte foncé, jamais la couleur seule. */
+    --goal-apricot: #F2A15C;
+    --goal-sprout: #86C98D;
+    --goal-wheat: #E8C25A;
+    --goal-spring: #7FB8C4;
+    --goal-brick: #DE7A64;
+    --goal-mulberry: #B79ED4;
+    --goal-linden: #A8B96A;
+    --onhue: #14190F;
+
+    --in: #0F1310;
 }
 
 [data-theme='light'] {
     color-scheme: light;
 
-    --bg: #F7F8FA;
+    --bg: #F3F5EE;
     --surf: #FFFFFF;
-    --surf2: #EFF1F5;
-    --bd: rgba(16, 20, 32, .09);
-    --bd2: rgba(16, 20, 32, .18);
-    --bd3: rgba(16, 20, 32, .32);
-    --tx: #12151C;
-    --mut: #5A6273;
-    --ac: #3A5BD9;
-    --achov: #2F4CBF;
-    --acT: #FFFFFF;
-    --acbg: rgba(58, 91, 217, .1);
-    --ai: #6D4AE0;
-    --aibg: rgba(109, 74, 224, .08);
-    --aibd: rgba(109, 74, 224, .35);
-    --aibd2: rgba(109, 74, 224, .28);
-    --ok: #16A34A;
-    --okbg: rgba(22, 163, 74, .1);
-    --warn: #B45309;
-    --warnbg: rgba(180, 83, 9, .1);
-    --dgr: #DC5555;
-    --dgrbg: rgba(220, 85, 85, .12);
+    --surf2: #E9EEE4;
+    --sunk: #EDF1E8;
+    --bd: #DCE3D6;
+    --bd2: #C4CEBD;
+    --bd3: #C4CEBD;
+    --tx: #14190F;
+    --mut: #62705F;
 
-    /* See the dark-theme block above for the rationale behind this set. */
-    --goal-green: #008300;
-    --goal-green-bg: rgba(0, 131, 0, .18);
-    --goal-magenta: #E87BA4;
-    --goal-magenta-bg: rgba(232, 123, 164, .22);
-    --goal-yellow: #EDA100;
-    --goal-yellow-bg: rgba(237, 161, 0, .22);
-    --goal-aqua: #1BAF7A;
-    --goal-aqua-bg: rgba(27, 175, 122, .2);
-    --goal-orange: #EB6834;
-    --goal-orange-bg: rgba(235, 104, 52, .18);
-    --goal-violet: #4A3AA7;
-    --goal-violet-bg: rgba(74, 58, 167, .18);
-    --goal-red: #E34948;
-    --goal-red-bg: rgba(227, 73, 72, .18);
+    --ac: #C4661F;
+    --achov: #A9550F;
+    --acT: #FFFFFF;
+    --acbg: #FBEBDB;
+    --acsh: #8F4715;
+
+    --ai: #2C6E3F;
+    --aihov: #235833;
+    --aiT: #FFFFFF;
+    --aibg: #E4EFE5;
+    --aibg2: #D3E6D6;
+    --aish: #1B4A28;
+
+    --ok: #2C6E3F;
+    --okbg: #E4EFE5;
+    --warn: #8A6A10;
+    --warnbg: #F7EDD3;
+    --dgr: #B34430;
+    --dgrbg: #FBE3DD;
+
+    /* Voir le bloc dark ci-dessus : les sept teintes sont identiques dans les
+       deux thèmes, seul le texte posé dessus (--onhue) est toujours foncé. */
+    --goal-apricot: #F2A15C;
+    --goal-sprout: #86C98D;
+    --goal-wheat: #E8C25A;
+    --goal-spring: #7FB8C4;
+    --goal-brick: #DE7A64;
+    --goal-mulberry: #B79ED4;
+    --goal-linden: #A8B96A;
+    --onhue: #14190F;
 
     --in: #FFFFFF;
-    --aiglow: 0 1px 2px rgba(16, 20, 32, .06);
-    --gradient-signature: linear-gradient(135deg, #3A5BD9, #6D4AE0);
-    --card-shadow: 0 1px 2px rgba(16, 20, 32, .05);
+}
+
+/* ——— Mouvement ———————————————————————————————————————————————————————
+
+   La direction « Tenue » n'a qu'une seule métaphore physique : le bouton plein
+   s'enfonce de 2px et son ombre dure disparaît sous le doigt. Toute l'animation
+   de l'app en découle. Rien ne flotte, rien ne rebondit, rien ne brille — c'est
+   la même règle que pour les ombres et les dégradés.
+
+   Trois durées, pas une de plus :
+   — `tap` est plus court que le seuil de perception, il confirme le clic ;
+   — `swap` accompagne un état qui bascule (coché, filtre allumé, jauge) ;
+   — `enter` porte ce qui apparaît vraiment (palette de capture, feuille mobile).
+
+   Le reste du mouvement de l'app est gratuit : Livewire *morphe* le DOM au lieu
+   de le remplacer, donc une classe qui change entre deux rendus (un fond, une
+   largeur de jauge, une opacité de ligne terminée) s'anime toute seule dès que
+   la propriété porte une transition. */
+:root {
+    --dur-tap: 90ms;
+    --dur-swap: 180ms;
+    --dur-enter: 240ms;
+    --ease: cubic-bezier(.2, .7, .3, 1);
 }
 
 @keyframes pulse-soft {
@@ -161,8 +192,73 @@
     50% { opacity: .45; }
 }
 
-.animate-pulse-soft {
-    animation: pulse-soft 1.6s ease-in-out infinite;
+/* Le ✓ arrive dans une case qui vient de se remplir : il part de rien et
+   s'installe. C'est le seul geste de l'app qui a le droit d'être satisfaisant. */
+@keyframes tick-in {
+    from { opacity: 0; transform: scale(.3); }
+    60%  { opacity: 1; transform: scale(1.12); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes veil-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes palette-in {
+    from { opacity: 0; transform: translateY(-10px) scale(.98); }
+    to   { opacity: 1; transform: none; }
+}
+
+@keyframes sheet-up {
+    from { transform: translateY(100%); }
+    to   { transform: none; }
+}
+
+@keyframes rise-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+}
+
+.animate-pulse-soft { animation: pulse-soft 1.6s ease-in-out infinite; }
+.animate-tick-in    { animation: tick-in var(--dur-swap) var(--ease) both; }
+.animate-veil-in    { animation: veil-in var(--dur-enter) var(--ease) both; }
+.animate-palette-in { animation: palette-in var(--dur-enter) var(--ease) both; }
+.animate-sheet-up   { animation: sheet-up var(--dur-enter) var(--ease) both; }
+.animate-rise-in    { animation: rise-in var(--dur-enter) var(--ease) both; }
+
+/* Retour au clic, deux variantes selon la forme de la cible.
+   `press` : les commandes compactes (pilules, pastilles, cases, vignettes) se
+   tassent légèrement — l'équivalent plat de l'ombre qui s'écrase.
+   `press-row` : les lignes pleine largeur ne peuvent pas se tasser sans
+   tressauter, elles s'assombrissent le temps du clic. */
+.press {
+    transition: scale var(--dur-tap) var(--ease), background-color var(--dur-swap) var(--ease), color var(--dur-swap) var(--ease);
+}
+
+.press:active {
+    scale: .96;
+}
+
+.press-row {
+    transition: background-color var(--dur-tap) var(--ease);
+}
+
+.press-row:active {
+    background-color: var(--surf2);
+}
+
+/* Sur un écran qui préfère moins de mouvement, il ne reste que les couleurs :
+   aucune information de l'app n'est portée par une animation seule. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
 
 html[data-theme] body {
@@ -191,36 +287,41 @@ html[data-theme] ::-webkit-scrollbar-thumb {
 
 /* Rendered vault markdown (⚡brain.blade.php) — no typography plugin installed,
    so headings/lists/code are styled directly against the design system tokens
-   rather than pulling in @tailwindcss/typography for a handful of elements. */
+   rather than pulling in @tailwindcss/typography for a handful of elements.
+   Le Cerveau est un registre de *lecture* : corps à 16px/1.75 dans une colonne
+   de 620px, titres en Outfit. C'est aussi l'une des deux seules zones de l'app
+   où le mono survit (les chemins de fichier) — voir aussi l'écran Agents. */
 .brain-content {
-    font-size: 14px;
-    line-height: 1.65;
+    font-size: 16px;
+    line-height: 1.75;
     color: var(--tx);
 }
 
 .brain-content :where(h1, h2, h3) {
     margin-top: 1.4em;
     margin-bottom: .5em;
+    font-family: var(--font-display);
     font-weight: 600;
+    letter-spacing: -.01em;
     color: var(--tx);
 }
 
-.brain-content h1 { font-size: 20px; }
-.brain-content h2 { font-size: 17px; }
-.brain-content h3 { font-size: 15px; }
+.brain-content h1 { font-size: 24px; }
+.brain-content h2 { font-size: 20px; }
+.brain-content h3 { font-size: 17px; }
 
 .brain-content p {
-    margin-top: .75em;
-    margin-bottom: .75em;
+    margin-top: .8em;
+    margin-bottom: .8em;
 }
 
 .brain-content :where(ul, ol) {
-    margin: .5em 0;
+    margin: .6em 0;
     padding-left: 1.4em;
 }
 
 .brain-content li {
-    margin: .25em 0;
+    margin: .3em 0;
 }
 
 .brain-content a {
@@ -233,13 +334,13 @@ html[data-theme] ::-webkit-scrollbar-thumb {
     background: var(--surf2);
     padding: .1em .35em;
     font-family: var(--font-mono);
-    font-size: 12.5px;
+    font-size: 13px;
 }
 
 .brain-content pre {
-    border-radius: 10px;
+    border-radius: 12px;
     background: var(--surf2);
-    padding: 12px 14px;
+    padding: 14px 16px;
     overflow-x: auto;
 }
 
@@ -252,6 +353,25 @@ html[data-theme] ::-webkit-scrollbar-thumb {
     border-left: 2px solid var(--bd2);
     padding-left: 12px;
     color: var(--mut);
+}
+
+.brain-content hr {
+    margin: 1.6em 0;
+    border: 0;
+    border-top: 1px solid var(--bd);
+}
+
+.brain-content :where(th, td) {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--bd);
+    text-align: left;
+}
+
+/* Registre « lecture » — Revue et Bilan de vie. Ces deux écrans ne sont pas de
+   l'interface mais du texte : colonne de 680px, corps à 17px/1.8. */
+.reading-body {
+    font-size: 17px;
+    line-height: 1.8;
 }
 
 [data-flux-field]:not(ui-radio, ui-checkbox) {

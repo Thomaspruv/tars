@@ -10,24 +10,23 @@ use App\Support\Brain\GitRepository;
 use App\Support\Brain\VaultIndexer;
 use App\Support\Curator\SuggestionApplier;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use League\CommonMark\CommonMarkConverter;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
-new #[Title('Cerveau')] class extends Component
+new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
 {
     #[Url]
     public ?string $path = null;
 
     #[Url]
     public string $search = '';
-
-    #[Url]
-    public string $activeTab = 'browse';
 
     public bool $isEditing = false;
 
@@ -43,6 +42,57 @@ new #[Title('Cerveau')] class extends Component
     public function configured(): bool
     {
         return app(BrainSettings::class)->isConfigured();
+    }
+
+    /**
+     * L'état git du vault, affiché en pied de l'arborescence.
+     *
+     * Mis en cache une minute : `git status` est un appel système, et cet
+     * écran se re-rend à chaque frappe dans la recherche.
+     */
+    #[Computed]
+    public function gitStatus(): GitSyncStatus
+    {
+        if (! $this->configured) {
+            return GitSyncStatus::Unknown;
+        }
+
+        return Cache::remember(
+            'brain.git-status',
+            now()->addMinute(),
+            fn (): GitSyncStatus => app(GitRepository::class)->status(app(BrainSettings::class)->localPath()),
+        );
+    }
+
+    #[Computed]
+    public function gitBranch(): string
+    {
+        return app(BrainSettings::class)->branch();
+    }
+
+    /**
+     * Les objets que cette note nomme — entités et objectifs résolus à
+     * l'indexation. C'est ce qui fait du vault autre chose qu'un dossier de
+     * fichiers.
+     *
+     * @return \Illuminate\Support\Collection<int, array{label: string, href: string}>
+     */
+    #[Computed]
+    public function documentLinks(): \Illuminate\Support\Collection
+    {
+        $document = $this->selectedDocument;
+
+        if ($document === null) {
+            return collect();
+        }
+
+        return collect($document->goals)
+            ->map(fn ($goal): array => ['label' => $goal->title, 'href' => route('goals.show', $goal)])
+            ->concat(
+                collect($document->entities)
+                    ->map(fn ($entity): array => ['label' => $entity->name, 'href' => route('entities.show', $entity)])
+            )
+            ->values();
     }
 
     #[Computed]
@@ -67,11 +117,6 @@ new #[Title('Cerveau')] class extends Component
             ->with('brainDocument')
             ->orderByDesc('created_at')
             ->get();
-    }
-
-    public function switchTab(string $tab): void
-    {
-        $this->activeTab = $tab;
     }
 
     public function acceptSuggestion(int $suggestionId): void
@@ -181,7 +226,7 @@ new #[Title('Cerveau')] class extends Component
     {
         $this->path = $documentPath;
         $this->isEditing = false;
-        unset($this->selectedDocument, $this->renderedContent);
+        unset($this->selectedDocument, $this->renderedContent, $this->documentLinks);
     }
 
     public function startEditing(): void
@@ -295,183 +340,191 @@ new #[Title('Cerveau')] class extends Component
 };
 ?>
 
-<div>
-    <x-screen-header treatment="work" title="Cerveau">
-        @if ($this->configured && $activeTab === 'browse')
-            <x-slot:actions>
-                <x-btn variant="primary" wire:click="openCreateModal">+ Nouvelle note</x-btn>
-            </x-slot:actions>
-        @endif
-    </x-screen-header>
+{{-- Trois colonnes : arborescence, note rendue, contexte du curateur. Cet
+     écran remplace la sidebar de l'app par la sienne — on vient y lire, pas y
+     naviguer. --}}
+<div class="flex min-h-screen">
+    <div class="hidden w-[232px] shrink-0 flex-col border-r border-(--bd) px-4 py-[22px] lg:flex">
+        <a href="{{ route('today') }}" wire:navigate class="mb-[18px] flex items-center gap-[11px] px-2.5">
+            <x-app-logo-icon class="size-[22px]" />
+            <span class="font-display text-[19px] font-bold tracking-[-.01em] text-(--tx)">TARS</span>
+        </a>
 
-    <div class="mt-4 flex gap-1 border-b border-(--bd)">
-        <button
-            type="button"
-            wire:click="switchTab('browse')"
-            class="border-b-2 px-3 py-2 text-sm font-medium transition-colors {{ $activeTab === 'browse' ? 'border-(--ac) text-(--ac)' : 'border-transparent text-(--mut) hover:text-(--tx)' }}"
-        >
-            Parcourir
-        </button>
-        <button
-            type="button"
-            wire:click="switchTab('rangement')"
-            class="flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors {{ $activeTab === 'rangement' ? 'border-(--ai) text-(--ai)' : 'border-transparent text-(--mut) hover:text-(--tx)' }}"
-        >
-            Rangement
-            @if ($this->pendingSuggestions->isNotEmpty())
-                <span class="rounded-full bg-(--aibg) px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-(--ai)">{{ $this->pendingSuggestions->count() }}</span>
+        <div class="mb-4 flex items-center gap-2.5 rounded-full bg-(--surf2) px-3 py-2 text-[14px] font-semibold text-(--tx)">
+            Cerveau
+            <a href="{{ route('today') }}" wire:navigate class="ml-auto text-[12px] font-normal text-(--mut) hover:text-(--tx)">← retour</a>
+        </div>
+
+        <input
+            type="text"
+            wire:model.live.debounce.400ms="search"
+            placeholder="Rechercher…"
+            class="mb-3 w-full rounded-full bg-(--surf2) px-3.5 py-2 text-[13px] text-(--tx) placeholder:text-(--mut) focus:outline-none"
+        />
+
+        <div class="min-h-0 flex-1 overflow-y-auto">
+            @if (trim($search) !== '')
+                <div class="flex flex-col gap-px">
+                    @forelse ($this->searchResults as $result)
+                        <button
+                            type="button"
+                            wire:click="selectDocument('{{ $result->path }}')"
+                            class="press block w-full truncate rounded-[8px] px-3 py-[7px] text-left text-[13px] {{ $path === $result->path ? 'bg-(--surf2) text-(--tx)' : 'text-(--mut) hover:bg-(--surf) hover:text-(--tx)' }}"
+                        >{{ $result->title }}</button>
+                    @empty
+                        <p class="px-3 py-2 text-[12px] text-(--mut)">Aucun résultat.</p>
+                    @endforelse
+                </div>
+            @else
+                <p class="px-3 pb-2.5 font-mono text-[11px] tracking-[.1em] text-(--mut) uppercase">Arborescence</p>
+                <x-brain-tree :tree="$this->tree" :selected-path="$path" />
             @endif
-        </button>
+        </div>
+
+        @if ($this->configured)
+            @php
+                $gitTone = match ($this->gitStatus) {
+                    \App\Enums\GitSyncStatus::Synced => ['text-(--ai)', 'bg-(--ai)', 'Git à jour'],
+                    \App\Enums\GitSyncStatus::Behind => ['text-(--warn)', 'bg-(--warn)', 'Git en retard'],
+                    \App\Enums\GitSyncStatus::Conflict => ['text-(--dgr)', 'bg-(--dgr)', 'Conflit git'],
+                    default => ['text-(--mut)', 'bg-(--mut)', 'État git inconnu'],
+                };
+            @endphp
+            <div class="mt-auto border-t border-(--bd) px-3 pt-3.5">
+                <p class="mb-1.5 flex items-center gap-2.5 text-[12px] {{ $gitTone[0] }}">
+                    <span class="size-[7px] rounded-full {{ $gitTone[1] }}" aria-hidden="true"></span>{{ $gitTone[2] }}
+                </p>
+                <p class="font-mono text-[11px] leading-[1.6] text-(--mut)">{{ $this->gitBranch }}</p>
+            </div>
+        @endif
     </div>
 
-    @if ($activeTab === 'rangement')
-        <div class="mt-6 space-y-8">
-            @error('acceptSuggestion')
-                <p class="rounded-[8px] border border-(--dgrbg) bg-(--dgrbg) px-3 py-2 text-sm text-(--dgr)">{{ $message }}</p>
-            @enderror
-
-            <div class="space-y-3">
-                @forelse ($this->pendingSuggestions as $suggestion)
-                    <div class="rounded-[12px] border border-(--bd) bg-(--surf) p-4 {{ $suggestion->deprioritized_at ? 'opacity-60' : '' }}" wire:key="suggestion-{{ $suggestion->id }}">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <p class="text-sm text-(--tx)">{{ $suggestion->reason }}</p>
-                                <p class="mt-1 font-mono text-[10.5px] text-(--mut)">{{ $suggestion->brainDocument->path }}</p>
-                            </div>
-                            <x-badge type="status" :value="$suggestion->confidence->value === 'high' ? 'active' : 'paused'" :label="$suggestion->confidence->value" />
-                        </div>
-
-                        <details class="mt-2">
-                            <summary class="cursor-pointer text-xs text-(--mut) hover:text-(--tx)">Détail</summary>
-                            <dl class="mt-2 space-y-1 rounded-[8px] bg-(--surf2) p-3 text-xs">
-                                <div class="flex gap-2"><dt class="text-(--mut)">Action</dt><dd class="text-(--tx)">{{ $suggestion->action->label() }}</dd></div>
-                                @if ($suggestion->target)
-                                    <div class="flex gap-2"><dt class="text-(--mut)">Cible</dt><dd class="text-(--tx)">{{ $suggestion->target }}</dd></div>
-                                @endif
-                                @if ($suggestion->frontmatter_patch)
-                                    <div class="flex gap-2"><dt class="text-(--mut)">Frontmatter</dt><dd class="text-(--tx)">{{ json_encode($suggestion->frontmatter_patch) }}</dd></div>
-                                @endif
-                                @if ($suggestion->merged_content)
-                                    <div class="flex gap-2"><dt class="shrink-0 text-(--mut)">Contenu fusionné</dt><dd class="whitespace-pre-wrap text-(--tx)">{{ $suggestion->merged_content }}</dd></div>
-                                @endif
-                            </dl>
-                        </details>
-
-                        <div class="mt-3 flex justify-end gap-2">
-                            <x-btn variant="ghost" class="!px-3 !py-1.5 text-xs" wire:click="deprioritizeSuggestion({{ $suggestion->id }})">Plus tard</x-btn>
-                            <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="rejectSuggestion({{ $suggestion->id }})">Refuser</x-btn>
-                            <x-btn variant="primary" class="!px-3 !py-1.5 text-xs" wire:click="acceptSuggestion({{ $suggestion->id }})">Accepter</x-btn>
-                        </div>
-                    </div>
-                @empty
-                    <p class="rounded-[12px] border border-(--bd) bg-(--surf) p-8 text-center text-sm text-(--mut)">Aucune suggestion en attente.</p>
-                @endforelse
+    <div class="min-w-0 flex-1 px-5 pt-4 pb-10 lg:px-9 lg:pt-[26px]">
+        @if (! $this->configured)
+            <x-card padding="22" class="max-w-[620px]">
+                <p class="mb-2 text-[15px] text-(--mut)">Le vault n'est pas configuré.</p>
+                <a href="{{ route('settings.index') }}" wire:navigate class="text-[15px] text-(--ac) hover:text-(--achov)">Le configurer dans les Réglages →</a>
+            </x-card>
+        @elseif (! $this->selectedDocument)
+            <div class="lg:hidden">
+                <p class="mb-3.5 font-mono text-[11px] tracking-[.1em] text-(--mut) uppercase">Arborescence</p>
+                <x-brain-tree :tree="$this->tree" :selected-path="$path" />
+            </div>
+            <p class="mt-6 text-[15px] text-(--mut)">Choisis une note dans l'arborescence.</p>
+        @else
+            <div class="mb-[22px] flex flex-wrap items-center gap-3.5">
+                <span class="font-mono text-[12px] text-(--mut)">{{ str_replace('/', ' / ', $this->selectedDocument->path) }}</span>
+                <div class="ml-auto flex gap-2">
+                    @unless ($isEditing)
+                        <x-btn variant="secondary" size="xs" wire:click="startEditing">Éditer</x-btn>
+                    @endunless
+                    <x-btn variant="secondary" size="xs" wire:click="openCreateModal">Nouvelle note</x-btn>
+                </div>
             </div>
 
-            @if ($this->recentAutoApplied->isNotEmpty())
-                <div>
-                    <h2 class="text-sm font-semibold text-(--tx)">Auto-appliqué récemment</h2>
-                    <div class="mt-3 space-y-2">
-                        @foreach ($this->recentAutoApplied as $suggestion)
-                            <div class="flex items-center justify-between gap-4 rounded-[10px] border border-(--ai)/25 bg-(--aibg) px-3 py-2" wire:key="auto-{{ $suggestion->id }}">
-                                <div>
-                                    <p class="text-xs text-(--tx)">◈ {{ $suggestion->reason }}</p>
-                                    <p class="font-mono text-[10.5px] text-(--mut)">{{ $suggestion->brainDocument->path }} — {{ $suggestion->created_at->translatedFormat('d M · H:i') }}</p>
-                                </div>
-                                <x-btn variant="ghost" class="!px-3 !py-1.5 text-xs" wire:click="cancelAutoApplied({{ $suggestion->id }})">Annuler</x-btn>
-                            </div>
-                        @endforeach
+            @error('save')
+                <p class="mb-4 max-w-[620px] text-[13px] text-(--dgr)">{{ $message }}</p>
+            @enderror
+
+            @if ($isEditing)
+                <div class="max-w-[620px]">
+                    <textarea
+                        wire:model="editContent"
+                        rows="24"
+                        class="w-full rounded-[18px] bg-(--surf) p-5 font-mono text-[13px] leading-[1.7] text-(--tx) focus:outline-none"
+                    ></textarea>
+                    <div class="mt-3 flex justify-end gap-2">
+                        <x-btn variant="ghost" wire:click="cancelEditing">Annuler</x-btn>
+                        <x-btn variant="primary" wire:click="save">Enregistrer</x-btn>
+                    </div>
+                </div>
+            @else
+                <div class="max-w-[620px]">
+                    <h1 class="font-display mb-2.5 text-[32px] leading-[1.15] font-bold tracking-[-.03em] text-(--tx)">{{ $this->selectedDocument->title }}</h1>
+                    <p class="mb-[26px] text-[13px] text-(--mut)">
+                        @if ($this->selectedDocument->mtime)
+                            Modifié {{ $this->selectedDocument->mtime->diffForHumans() }} ·
+                        @endif
+                        {{ number_format(str_word_count((string) $this->selectedDocument->content), 0, ',', ' ') }} mots
+                        @if ($this->documentLinks->isNotEmpty())
+                            · lié à {{ $this->documentLinks->count() }} {{ Str::plural('objet', $this->documentLinks->count()) }}
+                        @endif
+                    </p>
+
+                    <div class="brain-content animate-rise-in" wire:key="note-{{ $this->selectedDocument->id }}">
+                        {!! $this->renderedContent !!}
                     </div>
                 </div>
             @endif
-        </div>
-    @endif
+        @endif
+    </div>
 
-    @if ($activeTab === 'browse')
-    @if (! $this->configured)
-        <div class="mt-8 rounded-[12px] border border-(--bd) bg-(--surf) p-8 text-center">
-            <p class="text-sm text-(--mut)">Vault non configuré.</p>
-            <a href="{{ route('settings.index') }}" wire:navigate class="mt-2 inline-block text-sm text-(--ac) hover:text-(--achov)">
-                Configurer le vault dans les Réglages →
-            </a>
-        </div>
-    @else
-        <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
-            <div class="space-y-4">
-                <input
-                    type="text"
-                    wire:model.live.debounce.400ms="search"
-                    placeholder="Rechercher…"
-                    class="w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-1.5 text-sm text-(--tx)"
-                />
+    {{-- Colonne du curateur : ce qu'il propose, ce qu'il a fait tout seul, et
+         ce que la note touche. Tout y porte le vert. --}}
+    <div class="hidden w-[316px] shrink-0 py-[26px] pr-[26px] xl:block">
+        @error('acceptSuggestion')
+            <p class="mb-3.5 text-[13px] text-(--dgr)">{{ $message }}</p>
+        @enderror
 
-                @if (trim($search) !== '')
-                    <div class="space-y-0.5">
-                        @forelse ($this->searchResults as $result)
-                            <button
-                                type="button"
-                                wire:click="selectDocument('{{ $result->path }}')"
-                                class="block w-full truncate rounded-[6px] px-2 py-1 text-left text-sm {{ $path === $result->path ? 'bg-(--acbg) text-(--ac)' : 'text-(--mut) hover:bg-(--surf2) hover:text-(--tx)' }}"
-                            >
-                                {{ $result->title }}
-                            </button>
-                        @empty
-                            <p class="px-2 py-1 text-xs text-(--mut)">Aucun résultat.</p>
-                        @endforelse
-                    </div>
-                @else
-                    <x-brain-tree :tree="$this->tree" :selected-path="$path" />
-                @endif
+        @if ($this->pendingSuggestions->isNotEmpty())
+            <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--ai) uppercase">Le curateur propose</p>
+            <div class="mb-[26px] flex flex-col gap-3">
+                @foreach ($this->pendingSuggestions as $suggestion)
+                    <x-agent-block
+                        padding="16"
+                        rail="3"
+                        wire:key="suggestion-{{ $suggestion->id }}"
+                        class="!rounded-[16px] {{ $suggestion->deprioritized_at ? 'opacity-60' : '' }}"
+                    >
+                        <p class="mb-3 text-[14px] leading-[1.55] text-(--tx)">{{ $suggestion->reason }}</p>
+                        <p class="mb-3 font-mono text-[12px] text-(--mut)">{{ $suggestion->brainDocument?->path }}</p>
+                        <div class="flex flex-wrap gap-2">
+                            <x-btn variant="agent" size="xs" wire:click="acceptSuggestion({{ $suggestion->id }})">Valider</x-btn>
+                            <x-btn variant="secondary" size="xs" wire:click="rejectSuggestion({{ $suggestion->id }})">Corriger</x-btn>
+                            <x-btn variant="ghost" size="xs" wire:click="deprioritizeSuggestion({{ $suggestion->id }})">Plus tard</x-btn>
+                        </div>
+                    </x-agent-block>
+                @endforeach
             </div>
+        @endif
 
-            <div>
-                @if (! $this->selectedDocument)
-                    <div class="rounded-[12px] border border-(--bd) bg-(--surf) p-8 text-center">
-                        <p class="text-sm text-(--mut)">Sélectionne une note dans l'arborescence ou la recherche.</p>
-                    </div>
-                @else
-                    <div class="flex items-start justify-between gap-4">
+        @if ($this->recentAutoApplied->isNotEmpty())
+            <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Auto-appliqué récemment</p>
+            <div class="mb-[26px] flex flex-col gap-3">
+                @foreach ($this->recentAutoApplied as $suggestion)
+                    <div class="flex items-start gap-2.5 text-[13px] text-(--mut)" wire:key="auto-{{ $suggestion->id }}">
+                        <span class="mt-[6px] size-[6px] shrink-0 rounded-full bg-(--ai)" aria-hidden="true"></span>
                         <div>
-                            <h2 class="text-xl font-semibold text-(--tx)">{{ $this->selectedDocument->title }}</h2>
-                            <p class="mt-1 font-mono text-[10.5px] text-(--mut)">{{ $this->selectedDocument->path }}</p>
+                            {{ $suggestion->reason }}
+                            <button type="button" wire:click="cancelAutoApplied({{ $suggestion->id }})" class="ml-2 text-(--ai) hover:underline">Annuler</button>
                         </div>
-                        @unless ($isEditing)
-                            <x-btn variant="secondary" wire:click="startEditing">Éditer</x-btn>
-                        @endunless
                     </div>
-
-                    @error('save')
-                        <p class="mt-3 rounded-[8px] border border-(--dgrbg) bg-(--dgrbg) px-3 py-2 text-sm text-(--dgr)">{{ $message }}</p>
-                    @enderror
-
-                    @if ($isEditing)
-                        <textarea
-                            wire:model="editContent"
-                            rows="24"
-                            class="mt-4 w-full rounded-[10px] border border-(--bd2) bg-(--in) p-4 font-mono text-sm text-(--tx)"
-                        ></textarea>
-                        <div class="mt-3 flex justify-end gap-2">
-                            <x-btn variant="ghost" wire:click="cancelEditing">Annuler</x-btn>
-                            <x-btn variant="primary" wire:click="save">Enregistrer</x-btn>
-                        </div>
-                    @else
-                        <div class="brain-content mt-4">
-                            {!! $this->renderedContent !!}
-                        </div>
-                    @endif
-                @endif
+                @endforeach
             </div>
-        </div>
-    @endif
-    @endif
+        @endif
+
+        @if ($this->documentLinks->isNotEmpty())
+            <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Liens de cette note</p>
+            <div class="flex flex-wrap gap-2">
+                @foreach ($this->documentLinks as $link)
+                    <a
+                        href="{{ $link['href'] }}"
+                        wire:navigate
+                        wire:key="link-{{ $loop->index }}"
+                        class="press rounded-full bg-(--surf) px-3.5 py-[7px] text-[13px] text-(--tx) hover:bg-(--surf2)"
+                    >{{ $link['label'] }}</a>
+                @endforeach
+            </div>
+        @endif
+    </div>
 
     <flux:modal wire:model.self="showCreateModal" class="md:w-[420px]">
         <div class="space-y-5">
             <flux:heading size="lg">Nouvelle note</flux:heading>
 
             <div>
-                <label class="text-xs text-(--mut)">Dossier</label>
-                <select wire:model="newFolder" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)">
+                <label class="text-[12px] text-(--mut)">Dossier</label>
+                <select wire:model="newFolder" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 font-mono text-[13px] text-(--tx) focus:outline-none">
                     <option value="">Racine</option>
                     @foreach ($this->folders as $folder)
                         <option value="{{ $folder }}">{{ $folder }}</option>
@@ -480,9 +533,9 @@ new #[Title('Cerveau')] class extends Component
             </div>
 
             <div>
-                <label class="text-xs text-(--mut)">Titre</label>
-                <input type="text" wire:model="newTitle" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)" />
-                @error('newTitle') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                <label class="text-[12px] text-(--mut)">Titre</label>
+                <input type="text" wire:model="newTitle" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none" />
+                @error('newTitle') <p class="mt-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
             </div>
 
             <div class="flex justify-end gap-2">

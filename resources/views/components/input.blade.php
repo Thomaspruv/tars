@@ -1,9 +1,9 @@
-@props(['variant' => 'default']) {{-- default | technical --}}
+@props(['variant' => 'default']) {{-- default | technical (chemins, identifiants : le mono survit ici) --}}
 
 @php
     $classes = match ($variant) {
-        'technical' => 'rounded-[8px] border border-(--bd2) bg-(--in) px-[10px] py-[6px] font-mono text-[11px] text-(--tx) placeholder:text-(--mut) focus:border-(--ac) focus:outline-none',
-        default => 'rounded-[9px] border border-(--bd2) bg-(--in) px-3 py-2 text-[13px] text-(--tx) placeholder:text-(--mut) focus:border-(--ac) focus:outline-none',
+        'technical' => 'rounded-full bg-(--surf2) px-4 py-2.5 font-mono text-[13px] text-(--tx) placeholder:text-(--mut) focus:outline-none',
+        default => 'rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) placeholder:text-(--mut) focus:outline-none',
     };
 @endphp
 

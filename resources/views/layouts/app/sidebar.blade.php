@@ -2,170 +2,111 @@
 
 use App\Enums\BrainSuggestionStatus;
 use App\Models\BrainSuggestion;
+use App\Enums\OpenDecisionStatus;
 use App\Models\InboxItem;
+use App\Models\OpenDecision;
 use App\Models\QuestionnaireRun;
+use App\Models\Review;
 
 $inboxPendingCount = InboxItem::whereNull('processed_at')->count();
 $curatorPendingCount = BrainSuggestion::where('status', BrainSuggestionStatus::Pending->value)->count();
 $bilanPendingCount = QuestionnaireRun::where('status', 'pending')->count();
+$reviewIsPending = Review::whereNull('completed_at')->exists();
+$openDecisionCount = OpenDecision::where('status', OpenDecisionStatus::Open->value)->count();
 
-$theme = request()->cookie('la-theme') === 'light' ? 'light' : 'dark';
-
-$navItems = [
-    ['route' => 'today', 'label' => 'Aujourd\'hui', 'icon' => 'home'],
-    ['route' => 'inbox.index', 'label' => 'Inbox', 'icon' => 'inbox'],
-    ['route' => 'goals.index', 'label' => 'Objectifs', 'icon' => 'flag', 'alsoRouteIs' => 'goals.show'],
-    ['route' => 'entities.index', 'label' => 'Entités', 'icon' => 'building-office-2', 'alsoRouteIs' => 'entities.show'],
-    ['route' => 'lists.index', 'label' => 'Listes', 'icon' => 'list-bullet'],
-    ['route' => 'brain.index', 'label' => 'Cerveau', 'icon' => 'document-text'],
-    ['route' => 'tasks.index', 'label' => 'Tâches', 'icon' => 'check-circle'],
-    ['route' => 'calendar.index', 'label' => 'Calendrier', 'icon' => 'calendar'],
-    ['route' => 'review.index', 'label' => 'Revue', 'icon' => 'clipboard-document-check'],
-    ['route' => 'bilan.index', 'label' => 'Bilan de vie', 'icon' => 'chart-bar'],
+// Trois groupes, séparés par un filet : ce sur quoi je travaille, ce que je
+// consulte, ce que je lis. Pas d'icônes — à quatorze destinations nommées en
+// français, le texte seul se scanne plus vite qu'un pictogramme à décoder.
+$navGroups = [
+    [
+        ['route' => 'today', 'label' => 'Aujourd\'hui'],
+        ['route' => 'inbox.index', 'label' => 'Inbox', 'count' => $inboxPendingCount, 'tone' => 'agent'],
+        ['route' => 'tasks.index', 'label' => 'Tâches'],
+        ['route' => 'lists.index', 'label' => 'Listes'],
+        ['route' => 'calendar.index', 'label' => 'Calendrier'],
+    ],
+    [
+        ['route' => 'goals.index', 'label' => 'Objectifs', 'alsoRouteIs' => 'goals.show'],
+        ['route' => 'entities.index', 'label' => 'Entités', 'alsoRouteIs' => 'entities.show'],
+        ['route' => 'brain.index', 'label' => 'Cerveau', 'count' => $curatorPendingCount, 'tone' => 'agent'],
+        ['route' => 'decisions.index', 'label' => 'Décisions', 'alsoRouteIs' => 'decisions.show', 'count' => $openDecisionCount, 'tone' => 'mine'],
+    ],
+    [
+        ['route' => 'review.index', 'label' => 'Revue', 'dot' => $reviewIsPending],
+        ['route' => 'bilan.index', 'label' => 'Bilan de vie', 'count' => $bilanPendingCount, 'tone' => 'agent'],
+    ],
 ];
 ?>
-<!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-theme="{{ $theme }}" class="{{ $theme === 'dark' ? 'dark' : '' }}">
-    <head>
-        @include('partials.head')
-    </head>
-    <body class="min-h-screen bg-(--bg) text-(--tx) antialiased">
-        <flux:sidebar sticky collapsible="mobile" class="w-[216px] border-e border-(--bd) bg-(--surf)">
-            <flux:sidebar.header>
-                <a href="{{ route('today') }}" wire:navigate class="flex items-center gap-2.5">
-                    <x-app-logo-icon class="size-8" />
-                    <span class="font-mono font-semibold tracking-tight text-(--tx)">TARS</span>
-                </a>
-                <flux:sidebar.collapse class="lg:hidden" />
-            </flux:sidebar.header>
 
-            <nav class="flex flex-col gap-1 px-2">
-                @foreach ($navItems as $item)
-                    @php
-                        $isCurrent = request()->routeIs($item['route']) || (isset($item['alsoRouteIs']) && request()->routeIs($item['alsoRouteIs']));
-                    @endphp
-                    <a
-                        href="{{ route($item['route']) }}"
-                        wire:navigate
-                        class="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm transition-colors {{ $isCurrent ? 'bg-(--acbg) font-semibold text-(--ac)' : 'text-(--mut) hover:bg-(--surf2) hover:text-(--tx)' }}"
-                    >
-                        <flux:icon :name="$item['icon']" class="size-[18px] shrink-0" />
-                        <span class="flex-1">{{ $item['label'] }}</span>
-                        @if ($item['route'] === 'inbox.index' && $inboxPendingCount > 0)
-                            <span class="rounded-full bg-(--warnbg) px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-(--warn)">{{ $inboxPendingCount }}</span>
-                        @endif
-                        @if ($item['route'] === 'brain.index' && $curatorPendingCount > 0)
-                            <span class="rounded-full bg-(--aibg) px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-(--ai)">{{ $curatorPendingCount }}</span>
-                        @endif
-                        @if ($item['route'] === 'bilan.index' && $bilanPendingCount > 0)
-                            <span class="animate-pulse-soft rounded-full bg-(--acbg) px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-(--ac)">{{ $bilanPendingCount }}</span>
-                        @endif
-                    </a>
-                @endforeach
-            </nav>
+<aside class="fixed inset-y-0 left-0 z-20 hidden w-[232px] flex-col px-4 py-[22px] lg:flex">
+    <a href="{{ route('today') }}" wire:navigate class="mb-[22px] flex items-center gap-[11px] px-2.5">
+        <x-app-logo-icon class="size-[22px]" />
+        <span class="font-display text-[19px] font-bold tracking-[-.01em] text-(--tx)">TARS</span>
+    </a>
 
-            <flux:spacer />
+    {{-- La capture est le seul geste toujours disponible : elle a donc le seul
+         bouton abricot permanent de l'app. --}}
+    <button
+        type="button"
+        x-data
+        x-on:click="window.dispatchEvent(new CustomEvent('open-quick-add'))"
+        class="mb-[22px] flex items-center gap-2 rounded-full bg-(--ac) px-4 py-3 text-[14px] font-bold whitespace-nowrap text-(--acT) shadow-[0_2px_0_var(--acsh)] transition-[background-color,box-shadow,translate] duration-(--dur-tap) ease-(--ease) hover:bg-(--achov) active:translate-y-[2px] active:shadow-none"
+    >
+        <span aria-hidden="true" class="text-[17px] leading-none">+</span>
+        Poser quelque chose
+        <span class="ml-auto text-[12px] opacity-60">⌘K</span>
+    </button>
 
-            <nav class="flex flex-col gap-1 px-2 pb-2">
+    @foreach ($navGroups as $groupIndex => $group)
+        @if ($groupIndex > 0)
+            <div class="mx-3 my-[14px] h-px bg-(--bd)"></div>
+        @endif
+
+        <nav class="flex flex-col gap-[3px]">
+            @foreach ($group as $item)
+                @php
+                    $isCurrent = request()->routeIs($item['route'])
+                        || (isset($item['alsoRouteIs']) && request()->routeIs($item['alsoRouteIs']));
+                @endphp
                 <a
-                    href="{{ route('agents.index') }}"
+                    href="{{ route($item['route']) }}"
                     wire:navigate
-                    class="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm transition-colors {{ request()->routeIs('agents.index') ? 'bg-(--aibg) font-semibold text-(--ai)' : 'text-(--mut) hover:bg-(--surf2) hover:text-(--ai)' }}"
+                    @class([
+                        'press flex items-center rounded-full px-4 py-2.5 text-[14px]',
+                        'bg-(--surf2) font-semibold text-(--tx)' => $isCurrent,
+                        'text-(--tx) hover:bg-(--surf)' => ! $isCurrent,
+                    ])
                 >
-                    <flux:icon name="cpu-chip" class="size-[18px] shrink-0" />
-                    <span class="flex-1">Agents</span>
+                    <span class="flex-1">{{ $item['label'] }}</span>
+
+                    @if (($item['count'] ?? 0) > 0)
+                        {{-- Le vert est le compte de l'agent, l'abricot le mien : une
+                             décision à trancher n'attend personne d'autre que moi. --}}
+                        <span class="font-display rounded-full px-[9px] py-0.5 text-[12px] font-semibold {{ ($item['tone'] ?? 'agent') === 'mine' ? 'bg-(--acbg) text-(--ac)' : 'bg-(--aibg) text-(--ai)' }}">{{ $item['count'] }}</span>
+                    @elseif ($item['dot'] ?? false)
+                        <span class="size-[8px] rounded-full bg-(--ai)" aria-hidden="true"></span>
+                        <span class="sr-only">une revue vous attend</span>
+                    @endif
                 </a>
-                <a
-                    href="{{ route('settings.index') }}"
-                    wire:navigate
-                    class="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm transition-colors {{ request()->routeIs('settings.index') ? 'bg-(--acbg) font-semibold text-(--ac)' : 'text-(--mut) hover:bg-(--surf2) hover:text-(--tx)' }}"
-                >
-                    <flux:icon name="cog-6-tooth" class="size-[18px] shrink-0" />
-                    <span class="flex-1">Réglages</span>
-                </a>
+            @endforeach
+        </nav>
+    @endforeach
 
-                <button
-                    type="button"
-                    x-data
-                    x-on:click="
-                        let next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-                        document.documentElement.dataset.theme = next;
-                        document.documentElement.classList.toggle('dark', next === 'dark');
-                        document.cookie = 'la-theme=' + next + '; path=/; max-age=31536000; SameSite=Lax';
-                    "
-                    class="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm text-(--mut) transition-colors hover:bg-(--surf2) hover:text-(--tx)"
-                >
-                    <flux:icon name="sun" data-theme-icon="sun" class="size-[18px] shrink-0" />
-                    <flux:icon name="moon" data-theme-icon="moon" class="size-[18px] shrink-0" />
-                    <span class="flex-1 text-left">Thème</span>
-                </button>
-            </nav>
+    <div class="mt-auto">
+        <nav class="mb-3 flex flex-col gap-[3px]">
+            <a
+                href="{{ route('agents.index') }}"
+                wire:navigate
+                class="press rounded-full px-4 py-[9px] text-[13px] {{ request()->routeIs('agents.index') ? 'bg-(--surf2) font-semibold text-(--tx)' : 'text-(--mut) hover:text-(--tx)' }}"
+            >Agents</a>
+            <a
+                href="{{ route('settings.index') }}"
+                wire:navigate
+                class="press rounded-full px-4 py-[9px] text-[13px] {{ request()->routeIs('settings.index') ? 'bg-(--surf2) font-semibold text-(--tx)' : 'text-(--mut) hover:text-(--tx)' }}"
+            >Réglages</a>
+            <x-theme-toggle class="press rounded-full px-4 py-[9px] text-left text-[13px] text-(--mut) hover:text-(--tx)" />
+        </nav>
 
-            <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
-        </flux:sidebar>
-
-        <flux:header class="border-b border-(--bd) bg-(--surf) lg:hidden">
-            <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
-
-            <flux:spacer />
-
-            <flux:dropdown position="top" align="end">
-                <flux:profile
-                    :initials="auth()->user()->initials()"
-                    icon-trailing="chevron-down"
-                />
-
-                <flux:menu>
-                    <flux:menu.radio.group>
-                        <div class="p-0 text-sm font-normal">
-                            <div class="flex items-center gap-2 px-1 py-1.5 text-start text-sm">
-                                <flux:avatar
-                                    :name="auth()->user()->name"
-                                    :initials="auth()->user()->initials()"
-                                />
-
-                                <div class="grid flex-1 text-start text-sm leading-tight">
-                                    <flux:heading class="truncate">{{ auth()->user()->name }}</flux:heading>
-                                    <flux:text class="truncate">{{ auth()->user()->email }}</flux:text>
-                                </div>
-                            </div>
-                        </div>
-                    </flux:menu.radio.group>
-
-                    <flux:menu.separator />
-
-                    <flux:menu.radio.group>
-                        <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>
-                            {{ __('Settings') }}
-                        </flux:menu.item>
-                    </flux:menu.radio.group>
-
-                    <flux:menu.separator />
-
-                    <form method="POST" action="{{ route('logout') }}" class="w-full">
-                        @csrf
-                        <flux:menu.item
-                            as="button"
-                            type="submit"
-                            icon="arrow-right-start-on-rectangle"
-                            class="w-full cursor-pointer"
-                            data-test="logout-button"
-                        >
-                            {{ __('Log out') }}
-                        </flux:menu.item>
-                    </form>
-                </flux:menu>
-            </flux:dropdown>
-        </flux:header>
-
-        {{ $slot }}
-
-        @persist('toast')
-            <flux:toast.group>
-                <flux:toast />
-            </flux:toast.group>
-        @endpersist
-
-        @fluxScripts
-    </body>
-</html>
+        <x-desktop-user-menu />
+    </div>
+</aside>

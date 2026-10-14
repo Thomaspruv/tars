@@ -20,6 +20,36 @@ new #[Title('Objectifs')] class extends Component
 
     public ?string $targetDate = null;
 
+    /**
+     * Les objectifs sont groupés par état, pas par domaine : « où j'en suis »
+     * se lit d'abord dans ce qui avance, ce qui dort et ce qui est fini.
+     *
+     * @return array<string, Collection>
+     */
+    #[Computed]
+    public function groupedGoals(): array
+    {
+        $groups = [
+            'En cours' => $this->goals->where('status', GoalStatus::Active),
+            'En pause' => $this->goals->where('status', GoalStatus::Paused),
+            'Atteints' => $this->goals->where('status', GoalStatus::Done),
+        ];
+
+        return array_filter($groups, fn (Collection $goals): bool => $goals->isNotEmpty());
+    }
+
+    #[Computed]
+    public function headerCounts(): string
+    {
+        $parts = [];
+
+        foreach ($this->groupedGoals as $label => $goals) {
+            $parts[] = $goals->count().' '.mb_strtolower($label);
+        }
+
+        return $parts === [] ? 'aucun objectif' : implode(' · ', $parts);
+    }
+
     #[Computed]
     public function goals(): Collection
     {
@@ -82,15 +112,20 @@ new #[Title('Objectifs')] class extends Component
 ?>
 
 <div>
-    <x-screen-header treatment="work" title="Objectifs">
+    <x-screen-header :kicker="$this->headerCounts" title="Objectifs" class="mb-[22px]">
         <x-slot:actions>
-            <x-btn variant="primary" wire:click="openCreateModal">+ Nouvel objectif</x-btn>
+            <x-btn variant="secondary" wire:click="openCreateModal">Nouvel objectif</x-btn>
         </x-slot:actions>
     </x-screen-header>
 
-    <div class="mt-8">
-        <div class="grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))">
-            @foreach ($this->goals as $goal)
+    @forelse ($this->groupedGoals as $label => $goals)
+        <div class="mb-3 flex items-center gap-2.5" wire:key="group-{{ Str::slug($label) }}">
+            <h2 class="font-display text-[17px] font-semibold {{ $label === 'En pause' ? 'text-(--mut)' : 'text-(--tx)' }}">{{ $label }}</h2>
+            <span class="text-[13px] text-(--mut)">{{ $goals->count() }} {{ Str::plural('objectif', $goals->count()) }}</span>
+        </div>
+
+        <div class="mb-6 grid items-start gap-3.5" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr))">
+            @foreach ($goals as $goal)
                 <x-card-goal
                     :goal="$goal"
                     :weekly-activity="$this->weeklyActivityFor($goal)"
@@ -99,25 +134,28 @@ new #[Title('Objectifs')] class extends Component
                 />
             @endforeach
         </div>
-
-        @if ($this->goals->isEmpty())
-            <p class="p-8 text-center text-sm text-(--mut)">Aucun objectif pour l'instant.</p>
-        @endif
-    </div>
+    @empty
+        <x-card tone="dashed" padding="18" class="max-w-[520px]">
+            <p class="text-[14px] leading-[1.6] text-(--mut)">
+                Aucun objectif ouvert. Poser un objectif est la façon la plus simple de faire remonter une jauge de saison.
+            </p>
+            <x-btn variant="secondary" class="mt-3.5 self-start" wire:click="openCreateModal">Poser un objectif</x-btn>
+        </x-card>
+    @endforelse
 
     <flux:modal wire:model.self="showCreateModal" class="md:w-[420px]">
         <div class="space-y-5">
             <flux:heading size="lg">Nouvel objectif</flux:heading>
 
             <div>
-                <label class="text-xs text-(--mut)">Titre</label>
-                <input type="text" wire:model="title" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)" />
-                @error('title') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                <label class="text-[12px] text-(--mut)">Titre</label>
+                <input type="text" wire:model="title" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none" />
+                @error('title') <p class="mt-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
             </div>
 
             <div>
-                <label class="text-xs text-(--mut)">Entité liée (optionnel)</label>
-                <select wire:model="entityId" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)">
+                <label class="text-[12px] text-(--mut)">Entité liée (optionnel)</label>
+                <select wire:model="entityId" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none">
                     <option value="">—</option>
                     @foreach ($this->allEntities as $entity)
                         <option value="{{ $entity->id }}">{{ $entity->name }}</option>
@@ -126,13 +164,13 @@ new #[Title('Objectifs')] class extends Component
             </div>
 
             <div>
-                <label class="text-xs text-(--mut)">Échéance (optionnel)</label>
-                <input type="date" wire:model="targetDate" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)" />
+                <label class="text-[12px] text-(--mut)">Échéance (optionnel)</label>
+                <input type="date" wire:model="targetDate" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none" />
             </div>
 
             <div>
-                <label class="text-xs text-(--mut)">Description (optionnel)</label>
-                <textarea wire:model="description" rows="3" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)"></textarea>
+                <label class="text-[12px] text-(--mut)">Description (optionnel)</label>
+                <textarea wire:model="description" rows="3" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none"></textarea>
             </div>
 
             <div class="flex justify-end gap-2">

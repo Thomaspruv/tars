@@ -19,7 +19,9 @@ test('it lists goals', function () {
 test('it shows an empty state when there are no goals', function () {
     $this->actingAs(User::factory()->create());
 
-    $this->get(route('goals.index'))->assertSee("Aucun objectif pour l'instant.", false);
+    $this->get(route('goals.index'))
+        ->assertSee('Aucun objectif ouvert.', false)
+        ->assertSee('Poser un objectif');
 });
 
 test('it creates a goal', function () {

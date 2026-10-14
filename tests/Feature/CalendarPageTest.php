@@ -130,7 +130,7 @@ test('hovering an event shows its date range and goal in a tooltip', function ()
 
     Livewire::test('pages::calendar')
         ->assertSee('05 août à 14:00')
-        ->assertSee('#refonte-site');
+        ->assertSee('Refonte site');
 });
 
 test('opening the edit modal populates the form from the event', function () {

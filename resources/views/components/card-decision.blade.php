@@ -2,21 +2,36 @@
 
 @php
     $responseLabels = ['oui' => 'Oui', 'non' => 'Non', 'plus_tard' => 'Reporté'];
+    $context = collect([$decision['goal'] ?? null, $decision['entity'] ?? null])->filter()->implode(' · ');
 @endphp
 
-<div
-    {{ $attributes->merge(['class' => 'rounded-[10px] border-l-2 bg-(--surf) p-4 '.($decision['response'] ? 'border-(--ok) opacity-60' : 'border-(--ac)')]) }}
+{{-- Les décisions cassent la lecture en cartes larges. Elles sont vertes comme
+     tout le reste de la revue : c'est l'agent qui pose la question, mais la
+     réponse, elle, est tracée dans le journal des décisions. --}}
+<x-card
+    tone="agent"
+    padding="22"
+    {{ $attributes->merge(['class' => $decision['response'] ? 'opacity-60' : '']) }}
 >
-    <p class="font-mono text-[10.5px] font-semibold tracking-[.08em] text-(--ac) uppercase">Décision {{ $index + 1 }}/{{ $total }}</p>
-    <p class="mt-1 text-[14.5px] font-medium leading-[1.45] text-(--tx)">{{ $decision['question'] }}</p>
+    <p class="mb-2.5 text-[11px] tracking-[.12em] text-(--ai) uppercase">
+        Décision {{ $index + 1 }} sur {{ $total }}@if ($context) · {{ $context }} @endif
+    </p>
+
+    <p class="font-display mb-2 text-[20px] leading-[1.35] font-semibold text-(--tx)">{{ $decision['question'] }}</p>
+
+    @if (! empty($decision['rationale']))
+        <p class="mb-[18px] text-[15px] leading-[1.7] text-(--mut)">{{ $decision['rationale'] }}</p>
+    @endif
 
     @if ($decision['response'])
-        <p class="mt-2 text-xs text-(--ok)">✓ {{ $responseLabels[$decision['response']] ?? $decision['response'] }} — enregistré au journal de décisions</p>
+        <p class="text-[14px] text-(--ai)">
+            ✓ {{ $responseLabels[$decision['response']] ?? $decision['response'] }} — tracé au journal des décisions
+        </p>
     @else
-        <div class="mt-3 flex gap-2">
-            <x-btn variant="primary" size="sm" wire:click="answerDecision({{ $index }}, 'oui')">Oui</x-btn>
-            <x-btn variant="secondary" size="sm" wire:click="answerDecision({{ $index }}, 'non')">Non</x-btn>
-            <x-btn variant="ghost" size="sm" wire:click="answerDecision({{ $index }}, 'plus_tard')">Plus tard</x-btn>
+        <div class="flex flex-wrap gap-2.5">
+            <x-btn variant="agent" size="md" wire:click="answerDecision({{ $index }}, 'oui')">Oui</x-btn>
+            <x-btn variant="secondary" size="md" wire:click="answerDecision({{ $index }}, 'non')">Non</x-btn>
+            <x-btn variant="ghost" size="md" wire:click="answerDecision({{ $index }}, 'plus_tard')">Plus tard</x-btn>
         </div>
     @endif
-</div>
+</x-card>

@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\QuestionnaireRunStatus;
 use App\Models\JournalEntry;
 use App\Models\Questionnaire;
 use App\Models\QuestionnaireRun;
@@ -9,17 +10,15 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
-new #[Title('Bilan de vie')] class extends Component
+new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Component
 {
-    #[Url]
-    public string $activeTab = 'journal';
-
-    #[Url]
-    public int $curveDays = 30;
+    #[Url(as: 'run')]
+    public ?int $runId = null;
 
     public bool $showEntryModal = false;
 
@@ -113,47 +112,66 @@ new #[Title('Bilan de vie')] class extends Component
     }
 
     /**
-     * @return list<array{date: Carbon, mood: int|null}>
+     * L'humeur mois par mois, sur neuf mois. C'est *ma* donnée : elle
+     * s'affiche en abricot, jamais en vert.
+     *
+     * @return list<array{label: string, average: float|null, isCurrent: bool}>
      */
     #[Computed]
-    public function moodCurve(): array
+    public function monthlyMood(): array
     {
-        $days = $this->normalizedCurveDays();
-        $start = today()->subDays($days - 1);
+        $start = today()->startOfMonth()->subMonths(8);
 
-        $entries = JournalEntry::whereBetween('date', [$start->toDateString(), today()->toDateString()])
+        $entries = JournalEntry::whereNotNull('mood')
+            ->where('date', '>=', $start->toDateString())
             ->get()
-            ->keyBy(fn (JournalEntry $entry): string => $entry->date->toDateString());
+            ->groupBy(fn (JournalEntry $entry): string => $entry->date->format('Y-m'));
 
-        $points = [];
+        $months = [];
 
-        for ($i = 0; $i < $days; $i++) {
-            $date = $start->copy()->addDays($i);
-            $entry = $entries->get($date->toDateString());
-            $points[] = ['date' => $date, 'mood' => $entry?->mood];
+        for ($index = 0; $index < 9; $index++) {
+            $month = $start->copy()->addMonths($index);
+            $moods = $entries->get($month->format('Y-m'));
+
+            $months[] = [
+                'label' => $month->translatedFormat('M'),
+                'average' => $moods?->avg('mood'),
+                'isCurrent' => $month->isSameMonth(today()),
+            ];
         }
 
-        return $points;
+        return $months;
     }
 
     /**
-     * @return list<array{date: Carbon, average: float|null}>
+     * Les bilans, du plus récent au plus ancien — c'est la colonne de gauche.
+     *
+     * @return Collection<int, QuestionnaireRun>
      */
     #[Computed]
-    public function moodMovingAverage(): array
+    public function runHistory(): Collection
     {
-        $points = $this->moodCurve;
-        $result = [];
+        return QuestionnaireRun::with(['questionnaire', 'answers'])
+            ->orderByDesc('due_date')
+            ->limit(24)
+            ->get();
+    }
 
-        foreach ($points as $index => $point) {
-            $windowStart = max(0, $index - 6);
-            $window = array_slice($points, $windowStart, $index - $windowStart + 1);
-            $moods = array_values(array_filter(array_column($window, 'mood'), fn (?int $mood): bool => $mood !== null));
-
-            $result[] = ['date' => $point['date'], 'average' => $moods !== [] ? array_sum($moods) / count($moods) : null];
+    #[Computed]
+    public function selectedRun(): ?QuestionnaireRun
+    {
+        if ($this->runId !== null) {
+            return $this->runHistory->firstWhere('id', $this->runId);
         }
 
-        return $result;
+        return $this->pendingRun ?? $this->runHistory->firstWhere('status', QuestionnaireRunStatus::Completed);
+    }
+
+    public function selectRun(int $runId): void
+    {
+        $this->runId = $runId;
+
+        unset($this->selectedRun);
     }
 
     #[Computed]
@@ -166,27 +184,6 @@ new #[Title('Bilan de vie')] class extends Component
     public function questionnaires(): Collection
     {
         return Questionnaire::withCount('runs')->orderByDesc('is_active')->orderBy('name')->get();
-    }
-
-    #[Computed]
-    public function completedRuns(): Collection
-    {
-        return QuestionnaireRun::where('status', 'completed')
-            ->with(['questionnaire', 'answers'])
-            ->orderByDesc('completed_at')
-            ->limit(20)
-            ->get();
-    }
-
-    public function setTab(string $tab): void
-    {
-        $this->activeTab = in_array($tab, ['journal', 'bilans'], true) ? $tab : 'journal';
-    }
-
-    public function setCurveDays(int $days): void
-    {
-        $this->curveDays = $days;
-        unset($this->moodCurve, $this->moodMovingAverage);
     }
 
     public function openEntryModal(?string $date = null): void
@@ -255,8 +252,9 @@ new #[Title('Bilan de vie')] class extends Component
         $this->showEntryModal = false;
 
         unset(
-            $this->moodCurve, $this->moodMovingAverage, $this->timeline, $this->todayEntry,
+            $this->timeline, $this->todayEntry,
             $this->regularity30d, $this->moodAverage7d, $this->moodAveragePrior7d, $this->moodDelta,
+            $this->monthlyMood,
         );
     }
 
@@ -281,11 +279,6 @@ new #[Title('Bilan de vie')] class extends Component
         $this->redirect(route('bilan.questionnaire.edit', $questionnaire), navigate: true);
     }
 
-    private function normalizedCurveDays(): int
-    {
-        return in_array($this->curveDays, [30, 90, 365], true) ? $this->curveDays : 30;
-    }
-
     private function averageMood(CarbonInterface $start, CarbonInterface $end): ?float
     {
         $moods = JournalEntry::whereBetween('date', [$start->toDateString(), $end->toDateString()])
@@ -297,266 +290,234 @@ new #[Title('Bilan de vie')] class extends Component
 };
 ?>
 
+{{-- Même gabarit de lecture que la Revue. Différence de fond : le journal est
+     *mon* texte, il ne porte donc aucun marqueur vert — seules les questions
+     posées par l'agent en portent. La courbe d'humeur est en abricot, pas en
+     vert : c'est ma donnée, pas la sienne. --}}
 <div>
-    <x-screen-header treatment="work" title="Bilan de vie" />
+<div class="flex min-h-screen">
+    <div class="hidden w-[236px] shrink-0 flex-col border-r border-(--bd) px-5 py-[26px] lg:flex">
+        <a href="{{ route('today') }}" wire:navigate class="mb-[26px] text-[13px] text-(--mut) hover:text-(--tx)">← Aujourd'hui</a>
 
-    <div class="mt-5 flex flex-wrap items-center gap-2">
-        @foreach (['journal' => 'Journal', 'bilans' => 'Bilans'] as $value => $label)
-            <button
-                type="button"
-                wire:click="setTab('{{ $value }}')"
-                class="rounded-full px-3 py-1.5 text-xs font-medium {{ $activeTab === $value ? 'bg-(--acbg) text-(--ac)' : 'bg-(--surf2) text-(--mut) hover:text-(--tx)' }}"
-            >
-                {{ $label }}
+        <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Bilans</p>
+
+        <div class="mb-5 flex flex-col gap-0.5">
+            @forelse ($this->runHistory as $run)
+                @php $isCurrent = $this->selectedRun?->id === $run->id; @endphp
+                <button
+                    type="button"
+                    wire:click="selectRun({{ $run->id }})"
+                    wire:key="run-nav-{{ $run->id }}"
+                    class="press rounded-[12px] px-3.5 py-2.5 text-left {{ $isCurrent ? 'bg-(--surf2)' : 'hover:bg-(--surf)' }}"
+                >
+                    <span class="block text-[14px] {{ $isCurrent ? 'font-semibold text-(--tx)' : 'text-(--tx)' }}">
+                        {{ ucfirst($run->due_date->translatedFormat('F Y')) }}
+                    </span>
+                    <span class="block text-[12px] {{ $run->status === \App\Enums\QuestionnaireRunStatus::Pending ? 'text-(--warn)' : 'text-(--mut)' }}">
+                        {{ $run->status === \App\Enums\QuestionnaireRunStatus::Pending ? 'à remplir' : $run->questionnaire->name }}
+                    </span>
+                </button>
+            @empty
+                <p class="text-[13px] text-(--mut)">Aucun bilan pour l'instant.</p>
+            @endforelse
+        </div>
+
+        <p class="mb-3 text-[11px] tracking-[.12em] text-(--mut) uppercase">Questionnaires</p>
+        <div class="flex flex-col gap-2.5">
+            @foreach ($this->questionnaires as $questionnaire)
+                <div class="flex items-center gap-2.5" wire:key="questionnaire-{{ $questionnaire->id }}">
+                    <a
+                        href="{{ route('bilan.questionnaire.edit', $questionnaire) }}"
+                        wire:navigate
+                        class="min-w-0 flex-1 truncate text-[13px] {{ $questionnaire->is_active ? 'text-(--tx)' : 'text-(--mut)' }} hover:underline"
+                    >{{ $questionnaire->name }}</a>
+                    <x-toggle
+                        size="sm"
+                        wire:click="toggleQuestionnaire({{ $questionnaire->id }})"
+                        :checked="$questionnaire->is_active"
+                    />
+                </div>
+            @endforeach
+
+            <button type="button" wire:click="createQuestionnaire" class="mt-1 text-left text-[13px] text-(--mut) hover:text-(--tx)">
+                + Nouveau questionnaire
             </button>
-        @endforeach
-    </div>
-
-    <div class="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]">
-        <div>
-            @if ($activeTab === 'journal')
-                <div>
-                    <x-card>
-                        <div class="flex items-center justify-between">
-                            <h2 class="text-sm font-semibold text-(--tx)">Courbe de mood</h2>
-                            <div class="flex gap-1">
-                                @foreach ([30 => '30j', 90 => '90j', 365 => '365j'] as $days => $label)
-                                    <button
-                                        type="button"
-                                        wire:click="setCurveDays({{ $days }})"
-                                        class="rounded-full px-2.5 py-1 font-mono text-[11px] {{ $this->normalizedCurveDays() === $days ? 'bg-(--acbg) text-(--ac)' : 'bg-(--surf2) text-(--mut) hover:text-(--tx)' }}"
-                                    >
-                                        {{ $label }}
-                                    </button>
-                                @endforeach
-                            </div>
-                        </div>
-
-                        <div class="mt-4 overflow-x-auto">
-                            @php
-                                $points = $this->moodCurve;
-                                $averages = $this->moodMovingAverage;
-                                $count = count($points);
-                                $width = max(300, $count * 8);
-                                $height = 110;
-
-                                $x = fn (int $index): float => $count > 1 ? ($index / ($count - 1)) * ($width - 8) + 4 : $width / 2;
-                                $y = fn (int $mood): float => 10 + (10 - $mood) * 9;
-
-                                $palier = fn (int $mood): string => match (true) {
-                                    $mood <= 3 => 'var(--dgr)',
-                                    $mood <= 6 => 'var(--mut)',
-                                    default => 'var(--ok)',
-                                };
-
-                                $averagePoints = collect($averages)
-                                    ->values()
-                                    ->map(fn (array $point, int $index): ?string => $point['average'] !== null ? $x($index).','.$y((int) round($point['average'])) : null)
-                                    ->filter()
-                                    ->implode(' ');
-                            @endphp
-
-                            <svg viewBox="0 0 {{ $width }} {{ $height }}" width="{{ $width }}" height="{{ $height }}" class="min-w-full">
-                                @if ($averagePoints !== '')
-                                    <polyline points="{{ $averagePoints }}" fill="none" stroke="var(--cy, #5EC8D8)" stroke-width="1.5" />
-                                @endif
-
-                                @foreach ($points as $index => $point)
-                                    @if ($point['mood'] !== null)
-                                        <circle
-                                            cx="{{ $x($index) }}"
-                                            cy="{{ $y($point['mood']) }}"
-                                            r="3"
-                                            fill="{{ $palier($point['mood']) }}"
-                                        >
-                                            <title>{{ $point['date']->translatedFormat('d M') }} — mood {{ $point['mood'] }}/10</title>
-                                        </circle>
-                                    @endif
-                                @endforeach
-                            </svg>
-                        </div>
-                    </x-card>
-
-                    <div class="mt-6 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
-                        @if (! $this->todayEntry)
-                            <div class="flex items-center justify-between gap-3 border-l-2 border-dashed border-(--bd) px-4 py-3">
-                                <p class="text-sm text-(--mut)">
-                                    Aujourd'hui — rien encore. Raconte ta journée à Hermes ce soir, ou
-                                    <button type="button" wire:click="openEntryModal" class="text-(--ac) underline underline-offset-2">écris-la ici</button>.
-                                </p>
-                            </div>
-                        @endif
-
-                        @forelse ($this->timeline as $entry)
-                            <button
-                                type="button"
-                                wire:click="openEntryModal('{{ $entry->date->toDateString() }}')"
-                                wire:key="entry-{{ $entry->id }}"
-                                class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-(--surf2)"
-                            >
-                                <time class="w-14 shrink-0 font-mono text-xs text-(--mut)" datetime="{{ $entry->date->toDateString() }}">
-                                    {{ $entry->date->translatedFormat('d M') }}
-                                </time>
-
-                                @if ($entry->mood !== null)
-                                    <span
-                                        class="shrink-0 rounded-full px-2 py-0.5 font-mono text-[11px]"
-                                        style="background: {{ $entry->mood <= 3 ? 'var(--dgrbg)' : ($entry->mood <= 6 ? 'var(--surf2)' : 'var(--okbg)') }}; color: {{ $entry->mood <= 3 ? 'var(--dgr)' : ($entry->mood <= 6 ? 'var(--mut)' : 'var(--ok)') }}"
-                                    >
-                                        {{ $entry->mood }}
-                                    </span>
-                                @endif
-
-                                @if ($entry->mood_label)
-                                    <span class="shrink-0 font-mono text-[10.5px] text-(--mut)">{{ $entry->mood_label }}</span>
-                                @endif
-
-                                <span class="min-w-0 flex-1 truncate text-sm text-(--tx)">{{ $entry->summary }}</span>
-
-                                @if ($entry->source === 'hermes')
-                                    <span class="shrink-0 rounded-[5px] bg-(--surf2) px-1.5 py-0.5 font-mono text-[10px] text-(--mut)">via Hermes</span>
-                                @endif
-                            </button>
-                        @empty
-                            <div class="p-8 text-center">
-                                <p class="text-sm text-(--mut)">Ton journal est vide. Ce soir, raconte ta journée à Hermes — c'est tout.</p>
-                                <x-btn variant="secondary" wire:click="openEntryModal" class="mt-3">Écrire ma première entrée</x-btn>
-                            </div>
-                        @endforelse
-                    </div>
-                </div>
-            @else
-                <div>
-                    @if ($this->pendingRun)
-                        <div class="flex items-center justify-between rounded-[12px] border border-(--ac)/35 bg-(--acbg) px-[18px] py-3">
-                            <p class="text-sm text-(--tx)">
-                                <span class="font-semibold text-(--ac)">{{ $this->pendingRun->questionnaire->name }}</span>
-                                — en attente depuis le {{ $this->pendingRun->due_date->translatedFormat('d M') }}
-                            </p>
-                            <a href="{{ route('bilan.run.fill', $this->pendingRun) }}" wire:navigate class="text-sm text-(--ac) underline underline-offset-2">
-                                Le remplir →
-                            </a>
-                        </div>
-                    @endif
-
-                    <div class="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        @foreach ($this->questionnaires as $questionnaire)
-                            <x-card wire:key="questionnaire-{{ $questionnaire->id }}">
-                                <div class="flex items-start justify-between gap-2">
-                                    <h3 class="text-[15.5px] font-medium text-(--tx)">{{ $questionnaire->name }}</h3>
-                                    <x-toggle wire:click="toggleQuestionnaire({{ $questionnaire->id }})" :checked="$questionnaire->is_active" />
-                                </div>
-                                <div class="mt-2 flex items-center gap-2">
-                                    <span class="inline-flex items-center gap-1 rounded-[5px] bg-(--surf2) px-1.5 py-0.5 font-mono text-[10px] text-(--mut)">
-                                        <span aria-hidden="true">↻</span>{{ $questionnaire->frequency->label() }}
-                                    </span>
-                                    <span class="text-xs text-(--mut)">{{ count($questionnaire->questions) }} question(s)</span>
-                                </div>
-                                <a href="{{ route('bilan.questionnaire.edit', $questionnaire) }}" wire:navigate class="mt-3 inline-block text-xs text-(--mut) hover:text-(--tx)">
-                                    Modifier
-                                </a>
-                            </x-card>
-                        @endforeach
-
-                        <button
-                            type="button"
-                            wire:click="createQuestionnaire"
-                            class="flex min-h-[120px] items-center justify-center rounded-[12px] border border-dashed border-(--bd2) text-sm text-(--mut) hover:border-(--ac) hover:text-(--ac)"
-                        >
-                            + Nouveau questionnaire
-                        </button>
-                    </div>
-
-                    <div class="mt-8">
-                        <h2 class="text-sm font-semibold text-(--tx)">Historique</h2>
-                        <div class="mt-3 space-y-2">
-                            @forelse ($this->completedRuns as $run)
-                                <x-card wire:key="run-{{ $run->id }}" padding="14">
-                                    <div class="flex items-center justify-between">
-                                        <h3 class="text-sm font-medium text-(--tx)">{{ $run->questionnaire->name }}</h3>
-                                        <time class="font-mono text-xs text-(--mut)" datetime="{{ $run->completed_at?->toDateString() }}">
-                                            {{ $run->completed_at?->translatedFormat('d M Y') }}
-                                        </time>
-                                    </div>
-                                    <div class="mt-2 space-y-1.5">
-                                        @foreach ($run->answers as $answer)
-                                            <div class="flex items-center justify-between gap-3 text-sm">
-                                                <span class="text-xs text-(--mut)">{{ $answer->question_text }}</span>
-                                                <span class="shrink-0 font-mono text-(--tx)">
-                                                    {{ $answer->answer_numeric !== null ? $answer->answer_numeric.'/10' : $answer->answer_text }}
-                                                </span>
-                                            </div>
-                                        @endforeach
-                                    </div>
-                                </x-card>
-                            @empty
-                                <p class="rounded-[12px] border border-(--bd) bg-(--surf) p-5 text-center text-sm text-(--mut)">Aucun bilan complété pour l'instant.</p>
-                            @endforelse
-                        </div>
-                    </div>
-                </div>
-            @endif
         </div>
 
-        <div class="sticky top-6 self-start space-y-4">
-            <x-card>
-                <p class="font-mono text-[10.5px] font-semibold tracking-[.08em] text-(--mut) uppercase">Mood — 7 jours</p>
+        <div class="mt-auto border-t border-(--bd) pt-4">
+            <p class="text-[13px] leading-[1.6] text-(--mut)">
+                Journal rempli {{ $this->regularity30d['filled'] }} jours sur {{ $this->regularity30d['total'] }}.
+            </p>
+        </div>
+    </div>
+
+    <div class="flex min-w-0 flex-1 justify-center px-5 pt-6 pb-16 lg:px-10 lg:pt-10">
+        <div class="w-full max-w-[680px]">
+            <p class="mb-3 text-[12px] tracking-[.12em] text-(--mut) uppercase">
+                @if ($this->selectedRun)
+                    {{ $this->selectedRun->questionnaire->name }} · {{ count($this->selectedRun->questionnaire->questions) }} questions
+                @else
+                    Journal &amp; humeur
+                @endif
+            </p>
+
+            <h1 class="font-display mb-[30px] text-[42px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">
+                {{ ucfirst(($this->selectedRun?->due_date ?? today())->translatedFormat('F Y')) }}
+            </h1>
+
+            {{-- L'humeur du jour : dix pavés, un seul allumé, en abricot. --}}
+            <div class="mb-4 flex items-baseline gap-3">
+                <h2 class="font-display text-[22px] font-semibold text-(--tx)">Humeur du jour</h2>
+                <span class="text-[15px] text-(--mut)">de 1 à 10</span>
                 @if ($this->moodAverage7d !== null)
-                    <p class="mt-1 font-mono text-[26px] font-semibold text-(--tx)">
-                        {{ $this->moodAverage7d }}
-                        @if ($this->moodDelta !== null)
-                            <span class="text-xs font-normal {{ $this->moodDelta >= 0 ? 'text-(--ok)' : 'text-(--dgr)' }}">
-                                {{ $this->moodDelta >= 0 ? '+' : '' }}{{ $this->moodDelta }}
-                            </span>
-                        @endif
+                    <span class="ml-auto text-[13px] text-(--mut)">
+                        moyenne sur 7 jours : {{ $this->moodAverage7d }}@if ($this->moodDelta !== null) ({{ $this->moodDelta >= 0 ? '+' : '' }}{{ $this->moodDelta }}) @endif
+                    </span>
+                @endif
+            </div>
+
+            @php $todayMood = $this->todayEntry?->mood; @endphp
+            <div class="mb-4 flex gap-[7px]">
+                @for ($i = 1; $i <= 10; $i++)
+                    <button
+                        type="button"
+                        wire:click="openEntryModal"
+                        wire:key="mood-{{ $i }}"
+                        @class([
+                            'press flex h-[44px] flex-1 items-center justify-center rounded-[10px] text-[14px]',
+                            'font-display bg-(--ac) text-[16px] font-bold text-(--acT)' => $todayMood === $i,
+                            'bg-(--surf) text-(--mut)' => $todayMood !== $i,
+                        ])
+                    >{{ $i }}</button>
+                @endfor
+            </div>
+
+            <x-card padding="18" class="mb-8">
+                <div class="mb-2.5 flex h-[70px] items-end gap-2">
+                    @php $maxMood = 10; @endphp
+                    @foreach ($this->monthlyMood as $month)
+                        <div
+                            class="flex-1 rounded-t-[4px] transition-[height,background-color] duration-(--dur-enter) ease-(--ease) {{ $month['isCurrent'] ? 'bg-(--ac)' : 'bg-(--bd2)' }}"
+                            style="height: {{ $month['average'] !== null ? max(8, (int) round(($month['average'] / $maxMood) * 100)) : 4 }}%"
+                            aria-hidden="true"
+                        ></div>
+                    @endforeach
+                </div>
+                <div class="flex justify-between text-[12px] text-(--mut)">
+                    @foreach ($this->monthlyMood as $month)
+                        <span wire:key="month-{{ $loop->index }}">{{ $month['label'] }}</span>
+                    @endforeach
+                </div>
+            </x-card>
+
+            {{-- Les questions du mois portent le vert : c'est l'agent qui les
+                 pose. Les réponses, elles, sont les miennes. --}}
+            @if ($this->selectedRun)
+                <div class="mb-[18px] flex flex-wrap items-baseline gap-3">
+                    <h2 class="font-display text-[22px] font-semibold text-(--tx)">Les questions du mois</h2>
+                    @if ($this->selectedRun->status === \App\Enums\QuestionnaireRunStatus::Pending)
+                        <x-btn variant="agent" class="ml-auto" :href="route('bilan.run.fill', $this->selectedRun)" wire:navigate>Remplir ce bilan</x-btn>
+                    @endif
+                </div>
+
+                <div class="mb-[34px] flex flex-col gap-[22px]">
+                    @foreach ($this->selectedRun->questionnaire->questions as $question)
+                        @php
+                            $label = is_array($question) ? ($question['text'] ?? '') : (string) $question;
+                            $answer = $this->selectedRun->answers->firstWhere('question_text', $label);
+                        @endphp
+                        <div wire:key="question-{{ $loop->index }}">
+                            <div class="mb-2.5 flex items-center gap-2.5">
+                                <span class="size-[7px] rounded-full bg-(--ai)" aria-hidden="true"></span>
+                                <span class="text-[13px] text-(--ai)">Question d'Hermès</span>
+                            </div>
+                            <p class="mb-3 text-[17px] leading-[1.6] text-(--tx)">{{ $label }}</p>
+                            <x-card padding="16" class="!rounded-[14px]">
+                                <p class="reading-body {{ $answer ? 'text-(--tx)' : 'text-(--mut)' }}">
+                                    @if ($answer)
+                                        {{ $answer->answer_numeric !== null ? $answer->answer_numeric.' / 10' : $answer->answer_text }}
+                                    @else
+                                        Pas encore répondu.
+                                    @endif
+                                </p>
+                            </x-card>
+                        </div>
+                    @endforeach
+                </div>
+            @elseif ($this->nextBilanPreview)
+                <x-card padding="18" class="mb-[34px]">
+                    <p class="text-[15px] text-(--mut)">
+                        Prochain bilan : <span class="text-(--tx)">{{ $this->nextBilanPreview['name'] }}</span>,
+                        le {{ $this->nextBilanPreview['date']->translatedFormat('j F Y') }}.
                     </p>
-                @else
-                    <p class="mt-1 text-sm text-(--mut)">Pas encore de données.</p>
-                @endif
-            </x-card>
-
-            <x-card>
-                <p class="font-mono text-[10.5px] font-semibold tracking-[.08em] text-(--mut) uppercase">Régularité</p>
-                <p class="mt-1 font-mono text-sm text-(--tx)">{{ $this->regularity30d['filled'] }}/{{ $this->regularity30d['total'] }} jours</p>
-            </x-card>
-
-            <x-card>
-                <p class="font-mono text-[10.5px] font-semibold tracking-[.08em] text-(--mut) uppercase">Prochain bilan</p>
-                @if ($this->pendingRun)
-                    <p class="mt-1 text-sm text-(--warn)">{{ $this->pendingRun->questionnaire->name }} — en attente</p>
-                    <x-btn variant="secondary" size="sm" href="{{ route('bilan.run.fill', $this->pendingRun) }}" wire:navigate class="mt-2">Le remplir</x-btn>
-                @elseif ($this->nextBilanPreview)
-                    <p class="mt-1 text-sm text-(--tx)">{{ $this->nextBilanPreview['name'] }}</p>
-                    <p class="font-mono text-xs text-(--mut)">{{ $this->nextBilanPreview['date']->translatedFormat('d M Y') }}</p>
-                @else
-                    <p class="mt-1 text-sm text-(--mut)">Aucun questionnaire actif.</p>
-                @endif
-            </x-card>
-
-            @if (! $this->todayEntry)
-                <x-btn variant="secondary" wire:click="openEntryModal" class="w-full">Écrire l'entrée du jour</x-btn>
+                </x-card>
             @endif
+
+            <div class="mb-[30px] h-px bg-(--bd)"></div>
+
+            <div class="mb-1.5 flex flex-wrap items-baseline gap-3">
+                <h2 class="font-display text-[22px] font-semibold text-(--tx)">Journal</h2>
+                <span class="text-[14px] text-(--mut)">mon texte, jamais touché par un agent</span>
+            </div>
+
+            <p class="mb-5 text-[15px] text-(--mut)">
+                @if ($this->timeline->isEmpty())
+                    Aucune entrée pour l'instant.
+                @else
+                    {{ $this->timeline->count() }} {{ Str::plural('entrée', $this->timeline->count()) }} ·
+                    dernière {{ $this->timeline->first()->date->diffForHumans() }}
+                @endif
+            </p>
+
+            <div class="mb-[30px] flex flex-col gap-4">
+                @forelse ($this->timeline->take(20) as $entry)
+                    <button
+                        type="button"
+                        wire:click="openEntryModal('{{ $entry->date->toDateString() }}')"
+                        wire:key="entry-{{ $entry->id }}"
+                        class="press-row -mx-3 rounded-[14px] px-3 py-2 text-left"
+                    >
+                        <p class="mb-2 flex items-center gap-2.5 text-[13px] text-(--mut)">
+                            {{ ucfirst($entry->date->translatedFormat('l j F')) }}
+                            @if ($entry->mood !== null)
+                                <span class="rounded-full bg-(--surf) px-2.5 py-0.5 text-[12px] text-(--tx)">{{ $entry->mood }}</span>
+                            @endif
+                            @if ($entry->source === 'hermes')
+                                <span class="text-[12px] text-(--ai)">noté avec Hermès</span>
+                            @endif
+                        </p>
+                        <p class="reading-body text-(--tx)">{{ $entry->summary }}</p>
+                    </button>
+                @empty
+                    <p class="reading-body text-(--mut)">Ton journal est vide. Ce soir, raconte ta journée à Hermes — c'est tout.</p>
+                @endforelse
+            </div>
+
+            <x-btn variant="primary" size="lg" wire:click="openEntryModal">
+                {{ $this->todayEntry ? "Compléter l'entrée du jour" : "Écrire l'entrée du jour" }}
+            </x-btn>
         </div>
     </div>
+</div>
 
     <flux:modal wire:model.self="showEntryModal" class="md:w-[480px]">
         <div class="space-y-5">
             <flux:heading size="lg">{{ $entryDateHasExistingEntry ? 'Ajouter à cette journée' : 'Nouvelle entrée' }}</flux:heading>
 
             <div>
-                <label class="text-xs text-(--mut)">Date</label>
+                <label class="text-[12px] text-(--mut)">Date</label>
                 <input
                     type="date"
                     wire:model="entryDate"
                     max="{{ today()->toDateString() }}"
                     @disabled($entryDateHasExistingEntry)
-                    class="mt-1 w-full rounded-[9px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx) disabled:opacity-50"
+                    class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none disabled:opacity-50"
                 />
-                @error('entryDate') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                @error('entryDate') <p class="mt-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
             </div>
 
             <div>
-                <label class="text-xs text-(--mut)">Mood</label>
+                <label class="text-[12px] text-(--mut)">Mood</label>
                 <div class="mt-1.5 flex flex-wrap gap-1">
                     @for ($i = 1; $i <= 10; $i++)
                         <button
@@ -571,18 +532,18 @@ new #[Title('Bilan de vie')] class extends Component
             </div>
 
             <div>
-                <label class="text-xs text-(--mut)">Libellé</label>
-                <input type="text" wire:model="entryMoodLabel" placeholder="calme, dense, fatigué…" class="mt-1 w-full rounded-[9px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)" />
+                <label class="text-[12px] text-(--mut)">Libellé</label>
+                <input type="text" wire:model="entryMoodLabel" placeholder="calme, dense, fatigué…" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none" />
             </div>
 
             <div>
-                <label class="text-xs text-(--mut)">Résumé</label>
-                <textarea wire:model="entrySummary" rows="4" class="mt-1 w-full rounded-[9px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)"></textarea>
-                @error('entrySummary') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                <label class="text-[12px] text-(--mut)">Résumé</label>
+                <textarea wire:model="entrySummary" rows="4" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none"></textarea>
+                @error('entrySummary') <p class="mt-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
             </div>
 
             <div>
-                <label class="text-xs text-(--mut)">Moments</label>
+                <label class="text-[12px] text-(--mut)">Moments</label>
                 <div class="mt-1.5 space-y-1">
                     @foreach ($entryHighlights as $index => $highlight)
                         <div class="flex items-center gap-2 text-sm text-(--tx)" wire:key="highlight-{{ $index }}">
@@ -592,7 +553,7 @@ new #[Title('Bilan de vie')] class extends Component
                     @endforeach
                 </div>
                 <div class="mt-1.5 flex gap-2">
-                    <input type="text" wire:model="newHighlight" wire:keydown.enter.prevent="addHighlight" placeholder="Un moment marquant…" class="flex-1 rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-1.5 text-sm text-(--tx)" />
+                    <input type="text" wire:model="newHighlight" wire:keydown.enter.prevent="addHighlight" placeholder="Un moment marquant…" class="flex-1 rounded-full bg-(--surf2) px-4 py-2 text-[14px] text-(--tx) focus:outline-none" />
                     <x-btn variant="secondary" size="sm" wire:click="addHighlight">Ajouter</x-btn>
                 </div>
             </div>

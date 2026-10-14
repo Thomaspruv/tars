@@ -2,7 +2,9 @@
 
 use App\Models\Entity;
 use App\Models\Event;
+use App\Models\GoogleCalendarConnection;
 use App\Models\Goal;
+use App\Support\Palette;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
@@ -14,17 +16,6 @@ use Livewire\Component;
 new #[Title('Calendrier')] class extends Component
 {
     private const int MAX_LANES = 3;
-
-    /**
-     * Categorical hues events are colored by — blue is skipped (it's the
-     * app's main accent, used everywhere else) and violet is skipped (reads
-     * as the --ai agent color elsewhere in the app). Order matters: it's the
-     * CVD-safe adjacent ordering from the dataviz skill's reference palette,
-     * validated against this app's actual surfaces.
-     *
-     * @var list<string>
-     */
-    private const array EVENT_COLOR_SLOTS = ['green', 'magenta', 'yellow', 'aqua', 'orange', 'violet', 'red'];
 
     #[Url]
     public ?string $month = null;
@@ -72,17 +63,50 @@ new #[Title('Calendrier')] class extends Component
     }
 
     /**
-     * Every event gets a color — deterministic, so it's stable across
-     * renders. Events sharing a goal share a color (seeded by goal_id);
-     * goal-less events are seeded by their own id instead, so they still
-     * stand apart from each other rather than all collapsing into one
-     * "default" hue.
+     * La teinte de saison d'un événement. Un événement rattaché à un objectif
+     * porte *la* teinte de cet objectif — la même qu'aux Tâches, aux Objectifs
+     * et dans la bande d'état. Les événements sans objectif sont semés par
+     * leur propre id, pour rester distincts les uns des autres au lieu de
+     * s'agglomérer dans une teinte « par défaut ».
      */
     private function eventColorSlot(Event $event): string
     {
-        $seed = $event->goal_id ?? $event->id;
+        return $event->goal?->color_slot ?? Palette::slot($event->id);
+    }
 
-        return self::EVENT_COLOR_SLOTS[$seed % count(self::EVENT_COLOR_SLOTS)];
+    /**
+     * La légende du mois : une entrée par objectif réellement présent à
+     * l'écran, pour qu'une couleur ne soit jamais lue seule.
+     *
+     * @return \Illuminate\Support\Collection<int, Goal>
+     */
+    #[Computed]
+    public function legendGoals(): \Illuminate\Support\Collection
+    {
+        return $this->visibleEvents()
+            ->pluck('goal')
+            ->filter()
+            ->unique('id')
+            ->sortBy('title')
+            ->values();
+    }
+
+    #[Computed]
+    public function syncLabel(): string
+    {
+        $connection = GoogleCalendarConnection::first();
+
+        if ($connection === null) {
+            return 'Google Calendar non connecté';
+        }
+
+        if ($connection->needs_reconnect) {
+            return 'Google Calendar à reconnecter';
+        }
+
+        return $connection->last_synced_at === null
+            ? 'Google Calendar connecté, pas encore synchronisé'
+            : 'Google Calendar synchronisé '.$connection->last_synced_at->diffForHumans();
     }
 
     private function eventDateRange(Event $event): string
@@ -327,98 +351,130 @@ new #[Title('Calendrier')] class extends Component
 };
 ?>
 
-<div>
-    <x-screen-header treatment="work" title="Calendrier">
+<div class="flex min-h-[calc(100vh-120px)] flex-col">
+    <x-screen-header :kicker="$this->syncLabel" :title="$this->monthLabel" class="mb-3.5">
         <x-slot:actions>
-            <x-btn variant="secondary" class="!px-3 !py-1.5" wire:click="previousMonth">←</x-btn>
-            <x-btn variant="secondary" wire:click="goToToday">Aujourd'hui</x-btn>
-            <x-btn variant="secondary" class="!px-3 !py-1.5" wire:click="nextMonth">→</x-btn>
+            <x-btn variant="secondary" class="!px-3.5" wire:click="previousMonth" aria-label="Mois précédent">←</x-btn>
+            <button
+                type="button"
+                wire:click="goToToday"
+                class="press rounded-full bg-(--acbg) px-4 py-2 text-[13px] font-semibold text-(--ac)"
+            >Aujourd'hui</button>
+            <x-btn variant="secondary" class="!px-3.5" wire:click="nextMonth" aria-label="Mois suivant">→</x-btn>
         </x-slot:actions>
     </x-screen-header>
 
-    <h2 class="mt-5 text-lg font-semibold text-(--tx)">{{ $this->monthLabel }}</h2>
+    {{-- La légende d'abord : une teinte ne se lit jamais seule, elle se lit
+         avec le nom de l'objectif qui la porte. --}}
+    @if ($this->legendGoals->isNotEmpty())
+        <div class="mb-3.5 flex flex-wrap gap-x-4 gap-y-2 border-b border-(--bd) pb-3.5 text-[12px] text-(--mut)">
+            @foreach ($this->legendGoals as $goal)
+                <span class="flex items-center gap-[7px]" wire:key="legend-{{ $goal->id }}">
+                    <span class="size-[10px] rounded-[3px]" style="background: var(--goal-{{ $goal->color_slot }})"></span>{{ $goal->title }}
+                </span>
+            @endforeach
+        </div>
+    @endif
 
-    <div class="mt-3 grid grid-cols-7 overflow-hidden rounded-[12px] border border-(--bd)">
-        @foreach (['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as $i => $label)
-            <div class="border-b border-(--bd) bg-(--surf2) px-2 py-1.5 text-center font-mono text-[10.5px] font-semibold text-(--mut) uppercase {{ $i < 6 ? 'border-r' : '' }}">
-                {{ $label }}
-            </div>
+    <div class="mb-1.5 grid grid-cols-7 gap-1.5 text-[11px] tracking-[.1em] text-(--mut) uppercase">
+        @foreach (['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as $label)
+            <div class="pl-1">{{ $label }}</div>
         @endforeach
+    </div>
 
+    <div class="flex min-h-[560px] flex-1 flex-col gap-1.5 pb-6">
         @foreach ($this->weeks as $week)
-            @php $isFirstDayOfWeekCurrentMonth = $week['days'][0]->toDateString(); @endphp
+            @php $weekKey = $week['days'][0]->toDateString(); @endphp
 
-            {{-- day-number row --}}
-            @foreach ($week['days'] as $i => $day)
-                @php $isCurrentMonth = $day->month === $this->monthStart()->month; @endphp
-                <div
-                    wire:key="daynum-{{ $day->toDateString() }}"
-                    class="border-t border-(--bd) bg-(--surf) px-1.5 pt-1.5 pb-0.5 {{ $i < 6 ? 'border-r' : '' }} {{ $isCurrentMonth ? '' : 'opacity-40' }}"
-                >
-                    <span class="inline-flex size-5 items-center justify-center rounded-full font-mono text-[11px] {{ $day->isToday() ? 'bg-(--ac) text-white' : 'text-(--mut)' }}">
-                        {{ $day->day }}
-                    </span>
-                </div>
-            @endforeach
-
-            {{-- event bars, one row per lane --}}
-            @foreach ($week['laneRows'] as $laneIndex => $row)
-                @foreach ($row as $col => $slot)
-                    @continue($slot === 'covered')
-
-                    @if ($slot === null)
+            {{-- Chaque semaine est une couche de fond (sept cartes de jour) et
+                 une couche de contenu par-dessus, dans la même grille. C'est ce
+                 qui permet à une barre multi-jours de traverser les gouttières
+                 sans casser les cartes : la continuité reste visible. --}}
+            <div class="relative min-h-[92px] flex-1" wire:key="week-{{ $weekKey }}">
+                <div class="absolute inset-0 grid grid-cols-7 gap-1.5" aria-hidden="true">
+                    @foreach ($week['days'] as $day)
+                        @php $isCurrentMonth = $day->month === $this->monthStart()->month; @endphp
                         <div
-                            wire:key="filler-{{ $isFirstDayOfWeekCurrentMonth }}-{{ $laneIndex }}-{{ $col }}"
-                            class="h-[23px] bg-(--surf) {{ $col < 6 ? 'border-r border-(--bd)' : '' }}"
+                            @class([
+                                'rounded-[10px]',
+                                'bg-(--surf)' => $isCurrentMonth && ! $day->isWeekend(),
+                                'bg-(--sunk)' => ! $isCurrentMonth || $day->isWeekend(),
+                                'opacity-40' => ! $isCurrentMonth,
+                                'outline-2 -outline-offset-2 outline-(--ac)' => $day->isToday(),
+                            ])
                         ></div>
-                    @else
-                        @php
-                            $colorSlot = $this->eventColorSlot($slot['event']);
-                            $bgVar = "--goal-{$colorSlot}-bg";
-                            $textVar = "--goal-{$colorSlot}";
-                        @endphp
-                        <div
-                            wire:key="bar-{{ $slot['event']->id }}-{{ $isFirstDayOfWeekCurrentMonth }}-{{ $laneIndex }}"
-                            class="group/bar relative h-[23px] bg-(--surf) px-0.5 pb-0.5 {{ $col + $slot['colSpan'] > 6 ? '' : 'border-r border-(--bd)' }}"
-                            style="grid-column: span {{ $slot['colSpan'] }};"
-                        >
-                            <div
-                                wire:click="openEditEventModal({{ $slot['event']->id }})"
-                                class="cursor-pointer truncate px-1.5 py-1 text-[11px] leading-[13px] transition-[filter,box-shadow] duration-100 hover:shadow-[inset_0_0_0_1px_var(--bar-color)] hover:brightness-110 {{ $slot['isStart'] ? 'rounded-l-[4px]' : '' }} {{ $slot['isEnd'] ? 'rounded-r-[4px]' : '' }}"
-                                style="background-color: var({{ $bgVar }}); color: var({{ $textVar }}); --bar-color: var({{ $textVar }});"
-                            >
-                                @if ($slot['colSpan'] === 1 && $slot['isStart'])
-                                    <span class="font-mono text-[10px] opacity-70">{{ $slot['event']->starts_at->format('H:i') }}</span>
-                                @endif
-                                {{ $slot['event']->title }}
-                            </div>
-
-                            <div class="pointer-events-none invisible absolute bottom-full left-0 z-50 mb-1.5 w-max max-w-64 rounded-[8px] border border-(--bd2) bg-(--surf2) px-2.5 py-2 opacity-0 shadow-lg transition-opacity duration-100 group-hover/bar:visible group-hover/bar:opacity-100">
-                                <p class="text-xs font-medium text-(--tx)">{{ $slot['event']->title }}</p>
-                                <p class="mt-0.5 font-mono text-[10.5px] text-(--mut)">{{ $this->eventDateRange($slot['event']) }}</p>
-                                @if ($slot['event']->goal || $slot['event']->entity)
-                                    <div class="mt-1 flex flex-wrap gap-1.5">
-                                        <x-badge type="goal" :goal="$slot['event']->goal" />
-                                        <x-badge type="entity" :entity="$slot['event']->entity" />
-                                    </div>
-                                @endif
-                            </div>
-                        </div>
-                    @endif
-                @endforeach
-            @endforeach
-
-            {{-- overflow indicators — always rendered (even blank) so every week is the same height --}}
-            @foreach ($week['days'] as $i => $day)
-                <div
-                    wire:key="overflow-{{ $day->toDateString() }}"
-                    class="h-[18px] bg-(--surf) px-1.5 {{ $i < 6 ? 'border-r border-(--bd)' : '' }}"
-                >
-                    @if ($count = $week['overflow'][$day->toDateString()] ?? 0)
-                        <span class="text-[10px] text-(--mut)">+{{ $count }} de plus</span>
-                    @endif
+                    @endforeach
                 </div>
-            @endforeach
+
+                <div class="relative grid h-full grid-cols-7 content-start gap-x-1.5 gap-y-1 py-2">
+                    @foreach ($week['days'] as $day)
+                        @php $isCurrentMonth = $day->month === $this->monthStart()->month; @endphp
+                        <div class="px-[9px]" wire:key="daynum-{{ $day->toDateString() }}">
+                            <span @class([
+                                'font-display text-[15px]',
+                                'font-bold text-(--tx)' => $day->isToday(),
+                                'font-medium text-(--mut)' => ! $day->isToday(),
+                                'opacity-40' => ! $isCurrentMonth,
+                            ])>{{ $day->day }}</span>
+                        </div>
+                    @endforeach
+
+                    @foreach ($week['laneRows'] as $laneIndex => $row)
+                        @foreach ($row as $col => $slot)
+                            @continue($slot === 'covered')
+
+                            @if ($slot === null)
+                                <div wire:key="filler-{{ $weekKey }}-{{ $laneIndex }}-{{ $col }}" class="h-[21px]"></div>
+                            @else
+                                @php $hue = 'var(--goal-'.$this->eventColorSlot($slot['event']).')'; @endphp
+                                <div
+                                    wire:key="bar-{{ $slot['event']->id }}-{{ $weekKey }}-{{ $laneIndex }}"
+                                    class="group/bar relative px-[9px]"
+                                    style="grid-column: span {{ $slot['colSpan'] }};"
+                                >
+                                    {{-- Aplat plein + texte foncé : la couleur
+                                         porte l'information, jamais un simple
+                                         liseré. --}}
+                                    <button
+                                        type="button"
+                                        wire:click="openEditEventModal({{ $slot['event']->id }})"
+                                        @class([
+                                            'press block h-[21px] w-full cursor-pointer truncate px-1.5 py-[3px] text-left text-[11px] leading-[15px] hover:brightness-110',
+                                            'rounded-l-[4px]' => $slot['isStart'],
+                                            'rounded-r-[4px]' => $slot['isEnd'],
+                                        ])
+                                        style="background-color: {{ $hue }}; color: var(--onhue);"
+                                    >
+                                        @if ($slot['colSpan'] === 1 && $slot['isStart'])
+                                            {{ $slot['event']->starts_at->format('H:i') }}
+                                        @endif
+                                        {{ $slot['event']->title }}
+                                    </button>
+
+                                    <div class="pointer-events-none invisible absolute bottom-full left-[9px] z-50 mb-1.5 w-max max-w-64 rounded-[12px] bg-(--surf2) px-3 py-2.5 opacity-0 transition-opacity duration-100 group-hover/bar:visible group-hover/bar:opacity-100">
+                                        <p class="text-[13px] font-medium text-(--tx)">{{ $slot['event']->title }}</p>
+                                        <p class="mt-0.5 text-[12px] text-(--mut)">{{ $this->eventDateRange($slot['event']) }}</p>
+                                        @if ($slot['event']->goal || $slot['event']->entity)
+                                            <div class="mt-1.5 flex flex-wrap gap-2">
+                                                <x-badge type="goal" :goal="$slot['event']->goal" />
+                                                <x-badge type="entity" :entity="$slot['event']->entity" />
+                                            </div>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endif
+                        @endforeach
+                    @endforeach
+
+                    @foreach ($week['days'] as $day)
+                        <div class="h-[16px] px-[9px]" wire:key="overflow-{{ $day->toDateString() }}">
+                            @if ($count = $week['overflow'][$day->toDateString()] ?? 0)
+                                <span class="text-[11px] text-(--mut)">+{{ $count }} de plus</span>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            </div>
         @endforeach
     </div>
 

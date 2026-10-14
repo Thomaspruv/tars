@@ -1,17 +1,18 @@
 <?php
 
+use App\Enums\GoalStatus;
 use App\Enums\TaskStatus;
 use App\Models\Checklist;
 use App\Models\ChecklistItem;
 use App\Models\Event;
+use App\Models\Goal;
 use App\Models\InboxItem;
 use App\Models\QuestionnaireRun;
 use App\Models\Review;
 use App\Models\Task;
-use App\Support\Review\ReviewSettings;
+use App\Support\Momentum\MomentumCalculator;
+use App\Support\Momentum\MomentumSettings;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -31,30 +32,33 @@ new #[Title('Aujourd\'hui')] class extends Component
     }
 
     #[Computed]
-    public function overdueTasks(): Collection
+    public function openTodayTasks(): Collection
     {
-        return $this->tasksToday->filter(
-            fn (Task $task): bool => $task->status !== TaskStatus::Done
-                && $task->due_date !== null
-                && $task->due_date->isPast()
-                && ! $task->due_date->isToday(),
-        );
-    }
-
-    #[Computed]
-    public function dueTodayTasks(): Collection
-    {
-        $overdueIds = $this->overdueTasks->modelKeys();
-
-        return $this->tasksToday->reject(
-            fn (Task $task): bool => $task->status === TaskStatus::Done || in_array($task->id, $overdueIds, true),
-        );
+        return $this->tasksToday->where('status', '!=', TaskStatus::Done);
     }
 
     #[Computed]
     public function doneTodayTasks(): Collection
     {
         return $this->tasksToday->where('status', TaskStatus::Done);
+    }
+
+    /**
+     * « La suivante » : une seule tâche isolée du reste, celle qui vient.
+     * L'écran ne demande pas de choisir — il propose.
+     */
+    #[Computed]
+    public function nextTask(): ?Task
+    {
+        return $this->openTodayTasks->first();
+    }
+
+    #[Computed]
+    public function restOfDay(): Collection
+    {
+        $next = $this->nextTask;
+
+        return $this->tasksToday->reject(fn (Task $task): bool => $next !== null && $task->id === $next->id);
     }
 
     #[Computed]
@@ -64,10 +68,57 @@ new #[Title('Aujourd\'hui')] class extends Component
             ->topLevel()
             ->whereNull('scheduled_date')
             ->whereNull('due_date')
-            ->with(['goal', 'entity', 'subtasks.goal', 'subtasks.entity'])
+            ->with(['goal', 'entity'])
             ->orderBy('priority')
             ->orderBy('created_at')
             ->get();
+    }
+
+    #[Computed]
+    public function streakEnabled(): bool
+    {
+        return app(MomentumSettings::class)->streakEnabled();
+    }
+
+    #[Computed]
+    public function streak(): int
+    {
+        return $this->streakEnabled ? app(MomentumCalculator::class)->streakDays() : 0;
+    }
+
+    #[Computed]
+    public function nextStreakTier(): ?int
+    {
+        return app(MomentumCalculator::class)->nextStreakTier($this->streak);
+    }
+
+    #[Computed]
+    public function gauges(): \Illuminate\Support\Collection
+    {
+        return app(MomentumSettings::class)->gaugesEnabled()
+            ? app(MomentumCalculator::class)->bandGauges()
+            : collect();
+    }
+
+    /**
+     * Le titre de la journée est la série elle-même : c'est la seule chose
+     * qu'on lit avant d'agir.
+     */
+    #[Computed]
+    public function dayTitle(): string
+    {
+        $ordinals = [
+            2 => 'Deuxième', 3 => 'Troisième', 4 => 'Quatrième', 5 => 'Cinquième',
+            6 => 'Sixième', 7 => 'Septième', 8 => 'Huitième', 9 => 'Neuvième', 10 => 'Dixième',
+        ];
+
+        return match (true) {
+            ! $this->streakEnabled => 'Aujourd\'hui',
+            $this->streak === 0 => 'On repart aujourd\'hui',
+            $this->streak === 1 => 'Premier jour',
+            isset($ordinals[$this->streak]) => $ordinals[$this->streak].' jour d\'affilée',
+            default => $this->streak.'e jour d\'affilée',
+        };
     }
 
     #[Computed]
@@ -82,6 +133,7 @@ new #[Title('Aujourd\'hui')] class extends Component
         return Event::whereBetween('starts_at', [today(), today()->addDays(7)->endOfDay()])
             ->with(['goal', 'entity'])
             ->orderBy('starts_at')
+            ->limit(6)
             ->get();
     }
 
@@ -97,7 +149,7 @@ new #[Title('Aujourd\'hui')] class extends Component
     public function unpinnedLists(): Collection
     {
         return Checklist::where('is_pinned', false)
-            ->with(['items' => fn ($query) => $query->orderBy('position')])
+            ->withCount(['items as open_items_count' => fn ($query) => $query->whereNull('checked_at')])
             ->orderBy('name')
             ->get();
     }
@@ -114,20 +166,34 @@ new #[Title('Aujourd\'hui')] class extends Component
         return QuestionnaireRun::where('status', 'pending')->orderBy('due_date')->with('questionnaire')->first();
     }
 
+    /**
+     * La célébration : un objectif fermé dans les dernières 48 h prend la tête
+     * de l'écran, une fois, puis disparaît.
+     */
     #[Computed]
-    public function daysUntilReview(): int
+    public function celebratedGoal(): ?Goal
     {
-        $weeklyTime = app(ReviewSettings::class)->weeklyTime();
-        $today = today();
-        $todayIsDue = $today->isSunday() && now()->format('H:i') < $weeklyTime;
-        $nextReview = $todayIsDue ? $today->copy() : $today->copy()->next(Carbon::SUNDAY);
+        if (! app(MomentumSettings::class)->celebrationEnabled()) {
+            return null;
+        }
 
-        return $today->diffInDays($nextReview);
+        return Goal::where('status', GoalStatus::Done->value)
+            ->where('updated_at', '>=', now()->subDays(2))
+            ->withCount(['milestones', 'tasks'])
+            ->orderByDesc('updated_at')
+            ->first();
     }
 
     public function toggleTask(int $taskId): void
     {
         Task::findOrFail($taskId)->toggleCompletion();
+
+        unset($this->tasksToday, $this->streak, $this->gauges, $this->dayTitle);
+    }
+
+    public function postponeTask(int $taskId): void
+    {
+        Task::findOrFail($taskId)->update(['scheduled_date' => today()->addDay()]);
 
         unset($this->tasksToday);
     }
@@ -135,6 +201,17 @@ new #[Title('Aujourd\'hui')] class extends Component
     public function scheduleForToday(int $taskId): void
     {
         Task::findOrFail($taskId)->update(['scheduled_date' => today()]);
+
+        unset($this->tasksToday, $this->unscheduledTasks);
+    }
+
+    public function scheduleAllForToday(): void
+    {
+        Task::open()
+            ->topLevel()
+            ->whereNull('scheduled_date')
+            ->whereNull('due_date')
+            ->update(['scheduled_date' => today()]);
 
         unset($this->tasksToday, $this->unscheduledTasks);
     }
@@ -160,223 +237,232 @@ new #[Title('Aujourd\'hui')] class extends Component
         unset($this->pinnedLists, $this->unpinnedLists);
     }
 
-    public function pinList(int $listId): void
+    public function addListItem(int $listId, string $content): void
     {
-        Checklist::findOrFail($listId)->update(['is_pinned' => true]);
+        $content = trim($content);
+
+        if ($content === '') {
+            return;
+        }
+
+        $list = Checklist::findOrFail($listId);
+        $list->items()->create(['content' => $content, 'position' => (int) $list->items()->max('position') + 1]);
 
         unset($this->pinnedLists, $this->unpinnedLists);
+    }
+
+    public function archiveGoal(int $goalId): void
+    {
+        Goal::findOrFail($goalId)->update(['status' => GoalStatus::Abandoned->value]);
+
+        unset($this->celebratedGoal);
     }
 };
 ?>
 
 <div>
-    @php
-        $reviewSubtitle = $this->pendingReview
-            ? null
-            : ($this->daysUntilReview === 0
-                ? "Prochaine revue aujourd'hui"
-                : 'Prochaine revue dans '.$this->daysUntilReview.' '.Str::plural('jour', $this->daysUntilReview));
-    @endphp
+    <x-screen-header :kicker="ucfirst(now()->translatedFormat('l j F'))" :title="$this->dayTitle" class="mb-[18px]" />
 
-    <x-screen-header treatment="work" title="Aujourd'hui" :subtitle="$reviewSubtitle" />
+    <x-status-band :gauges="$this->gauges" :streak="$this->streak" :next-tier="$this->nextStreakTier" />
 
-    @if ($this->pendingReview || $this->pendingBilan || $this->inboxPendingCount > 0)
-        <div class="mt-4 flex flex-wrap items-center gap-2">
-            @if ($this->pendingReview)
-                <a
-                    href="{{ route('review.index') }}"
-                    wire:navigate
-                    class="animate-pulse-soft flex items-center gap-1.5 rounded-full border border-(--aibd2) bg-(--aibg) px-3 py-1.5 text-[12.5px] text-(--ai)"
-                >
-                    <span aria-hidden="true">◈</span> Revue prête à lire
-                </a>
-            @endif
-
-            @if ($this->pendingBilan)
-                <a
-                    href="{{ route('bilan.index', ['activeTab' => 'bilans']) }}"
-                    wire:navigate
-                    class="flex items-center gap-1.5 rounded-full border border-(--ac)/35 bg-(--acbg) px-3 py-1.5 text-[12.5px] text-(--ac)"
-                >
-                    Bilan en attente : {{ $this->pendingBilan->questionnaire->name }}
-                </a>
-            @endif
-
-            @if ($this->inboxPendingCount > 0)
-                <a
-                    href="{{ route('inbox.index') }}"
-                    wire:navigate
-                    class="flex items-center gap-1.5 rounded-full border border-(--warn)/35 bg-(--warnbg) px-3 py-1.5 text-[12.5px] text-(--warn)"
-                >
-                    {{ $this->inboxPendingCount }} {{ Str::plural('élément', $this->inboxPendingCount) }} en inbox
-                </a>
-            @endif
-        </div>
-    @endif
-
-    <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1.5fr_1fr]">
+    <div class="grid grid-cols-1 items-start gap-5 xl:grid-cols-[1fr_306px]">
         <div>
-            <div class="flex items-center justify-between">
-                <h2 class="text-base font-semibold text-(--tx)">Tâches du jour</h2>
-                <span class="font-mono text-xs text-(--mut)">
-                    {{ $this->doneTodayTasks->count() }}/{{ $this->tasksToday->count() }}
-                </span>
-            </div>
-
-            @php
-                $tasksTodayTotal = $this->tasksToday->count();
-                $tasksTodayPercent = $tasksTodayTotal > 0
-                    ? (int) round(($this->doneTodayTasks->count() / $tasksTodayTotal) * 100)
-                    : 0;
-            @endphp
-
-            @if ($tasksTodayTotal > 0)
-                <div class="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-(--surf2)">
-                    <div class="h-full rounded-full" style="width: {{ $tasksTodayPercent }}%; background: var(--gradient-signature)"></div>
-                </div>
+            @if ($this->celebratedGoal)
+                <x-card tone="agent" padding="20" class="mb-3.5 flex flex-wrap items-center gap-5">
+                    <div class="min-w-0">
+                        <p class="mb-2 text-[11px] tracking-[.14em] text-(--ai) uppercase">Objectif atteint</p>
+                        <p class="font-display mb-1 text-[23px] font-bold tracking-[-.02em] text-(--tx)">{{ $this->celebratedGoal->title }}</p>
+                        <p class="text-[13px] text-(--mut)">
+                            {{ $this->celebratedGoal->milestones_count }} {{ Str::plural('jalon', $this->celebratedGoal->milestones_count) }} ·
+                            {{ $this->celebratedGoal->tasks_count }} {{ Str::plural('tâche', $this->celebratedGoal->tasks_count) }}
+                        </p>
+                    </div>
+                    <x-btn variant="agent" class="ml-auto" wire:click="archiveGoal({{ $this->celebratedGoal->id }})">Archiver</x-btn>
+                </x-card>
             @endif
 
-            <div class="mt-3 rounded-[12px] border border-(--bd) bg-(--surf)">
-                @if ($this->tasksToday->isEmpty())
-                    <p class="p-8 text-center text-sm text-(--mut)">Rien à faire aujourd'hui.</p>
-                @else
-                    @if ($this->overdueTasks->isNotEmpty())
-                        <p class="px-4 pt-3 pb-1 font-mono text-[10.5px] font-semibold tracking-[.06em] text-(--warn) uppercase">En retard</p>
-                        <div class="divide-y divide-(--bd)">
-                            @foreach ($this->overdueTasks as $task)
-                                <x-task-row :task="$task" wire:key="task-{{ $task->id }}" />
-                            @endforeach
-                        </div>
-                    @endif
+            {{-- La carte du jour : le compte, la rangée de segments, et une
+                 seule tâche mise en avant. Rien d'autre au-dessus de la ligne
+                 de flottaison. --}}
+            <x-card padding="22" class="mb-3.5">
+                <div class="mb-3 flex flex-wrap items-baseline gap-3">
+                    <span class="font-display text-[28px] leading-none font-bold text-(--tx)">{{ $this->doneTodayTasks->count() }}</span>
+                    <span class="text-[14px] text-(--mut)">
+                        @if ($this->tasksToday->isEmpty())
+                            aucune tâche posée aujourd'hui — la capture est en ⌘K
+                        @else
+                            {{ Str::plural('tâche', $this->doneTodayTasks->count()) }} sur {{ $this->tasksToday->count() }} · une seule suffit pour tenir la série
+                        @endif
+                    </span>
+                </div>
 
-                    @if ($this->dueTodayTasks->isNotEmpty())
-                        <div class="divide-y divide-(--bd) {{ $this->overdueTasks->isNotEmpty() ? 'border-t border-(--bd)' : '' }}">
-                            @foreach ($this->dueTodayTasks as $task)
-                                <x-task-row :task="$task" wire:key="task-{{ $task->id }}" />
-                            @endforeach
-                        </div>
-                    @endif
-
-                    @if ($this->doneTodayTasks->isNotEmpty())
-                        <div x-data="{ open: false }" class="border-t border-(--bd)">
-                            <button
-                                type="button"
-                                @click="open = !open"
-                                class="flex w-full items-center gap-1.5 px-4 py-2.5 text-left font-mono text-[10.5px] font-semibold tracking-[.06em] text-(--mut) uppercase hover:text-(--tx)"
-                            >
-                                <span aria-hidden="true" class="inline-block text-[10px]" :class="open && 'rotate-180'">▾</span>
-                                Terminées aujourd'hui ({{ $this->doneTodayTasks->count() }})
-                            </button>
-                            <div x-show="open" x-cloak class="divide-y divide-(--bd) border-t border-(--bd)">
-                                @foreach ($this->doneTodayTasks as $task)
-                                    <x-task-row :task="$task" wire:key="task-{{ $task->id }}" />
-                                @endforeach
-                            </div>
-                        </div>
-                    @endif
-                @endif
-            </div>
-
-            @if ($this->unscheduledTasks->isNotEmpty())
-                <div class="mt-6">
-                    <div class="flex items-center justify-between">
-                        <h2 class="text-base font-semibold text-(--tx)">Sans date</h2>
-                        <span class="font-mono text-xs text-(--mut)">{{ $this->unscheduledTasks->count() }}</span>
-                    </div>
-
-                    <div class="mt-3 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
-                        @foreach ($this->unscheduledTasks as $task)
-                            <x-task-row :task="$task" wire:key="unscheduled-{{ $task->id }}">
-                                <x-slot:actions>
-                                    <x-btn variant="secondary" wire:click="scheduleForToday({{ $task->id }})" class="!px-2.5 !py-1 text-xs">Planifier aujourd'hui</x-btn>
-                                </x-slot:actions>
-                            </x-task-row>
+                @if ($this->tasksToday->isNotEmpty())
+                    <div class="mb-[22px] flex gap-1.5">
+                        @foreach ($this->tasksToday->take(10) as $task)
+                            <div
+                                class="h-[14px] flex-1 rounded-full transition-colors duration-(--dur-swap) ease-(--ease) {{ $task->status === \App\Enums\TaskStatus::Done ? 'bg-(--ac)' : 'bg-(--bd2)' }}"
+                                wire:key="segment-{{ $task->id }}"
+                                aria-hidden="true"
+                            ></div>
                         @endforeach
                     </div>
+                @endif
+
+                @if ($this->nextTask)
+                    <p class="mb-2 text-[11px] tracking-[.12em] text-(--ac) uppercase">La suivante</p>
+                    <div class="flex flex-wrap items-center gap-4">
+                        <p class="font-display min-w-0 flex-1 text-[23px] leading-[1.2] font-semibold text-(--tx)">{{ $this->nextTask->title }}</p>
+                        <div class="ml-auto flex shrink-0 gap-2.5">
+                            <x-btn variant="primary" size="md" wire:click="toggleTask({{ $this->nextTask->id }})">C'est fait</x-btn>
+                            <x-btn variant="secondary" size="md" wire:click="postponeTask({{ $this->nextTask->id }})">Demain</x-btn>
+                        </div>
+                    </div>
+                @elseif ($this->tasksToday->isNotEmpty())
+                    <p class="text-[15px] text-(--ai)">Tout est posé. La journée est tenue.</p>
+                @endif
+            </x-card>
+
+            @if ($this->restOfDay->isNotEmpty())
+                <div class="mb-2.5 flex items-center gap-3 px-1">
+                    <h2 class="font-display text-[17px] font-semibold text-(--tx)">Le reste de la journée</h2>
+                    <span class="text-[13px] text-(--mut)">{{ $this->restOfDay->count() }}</span>
+                </div>
+
+                <x-card padding="0" class="mb-4 overflow-hidden rounded-[16px]">
+                    @foreach ($this->restOfDay as $task)
+                        <x-task-row
+                            :task="$task"
+                            wire:key="task-{{ $task->id }}"
+                            @class(['border-t border-(--bd)' => ! $loop->first])
+                        />
+                    @endforeach
+                </x-card>
+            @endif
+
+            {{-- La réserve : ce qui n'a pas de date. En pilules, pas en lignes
+                 — ce n'est pas une liste de travail, c'est un stock. --}}
+            @if ($this->unscheduledTasks->isNotEmpty())
+                <div class="flex flex-wrap items-center gap-3 px-1 pb-2.5">
+                    <h2 class="font-display text-[17px] font-semibold text-(--tx)">En réserve</h2>
+                    <span class="text-[13px] text-(--mut)">{{ $this->unscheduledTasks->count() }} sans date</span>
+                    <x-btn variant="secondary" class="ml-auto" wire:click="scheduleAllForToday">Tout poser sur aujourd'hui</x-btn>
+                </div>
+
+                <div class="flex flex-wrap gap-2.5">
+                    @foreach ($this->unscheduledTasks->take(8) as $task)
+                        <button
+                            type="button"
+                            wire:click="scheduleForToday({{ $task->id }})"
+                            wire:key="reserve-{{ $task->id }}"
+                            title="Poser sur aujourd'hui"
+                            class="press rounded-full bg-(--surf) px-4 py-2.5 text-[14px] text-(--mut) hover:bg-(--surf2) hover:text-(--tx)"
+                        >{{ $task->title }}</button>
+                    @endforeach
+
+                    @if ($this->unscheduledTasks->count() > 8)
+                        <a href="{{ route('tasks.index') }}" wire:navigate class="press rounded-full bg-(--surf) px-4 py-2.5 text-[14px] text-(--mut) hover:bg-(--surf2) hover:text-(--tx)">
+                            + {{ $this->unscheduledTasks->count() - 8 }} autres
+                        </a>
+                    @endif
                 </div>
             @endif
         </div>
 
-        <div class="space-y-6">
-            <div>
-                <h2 class="text-base font-semibold text-(--tx)">Événements — 7 jours</h2>
-                <div class="mt-3 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
-                    @forelse ($this->upcomingEvents as $event)
-                        <div class="flex items-center gap-3 px-4 py-3" wire:key="event-{{ $event->id }}">
-                            <time class="w-14 shrink-0 font-mono text-xs {{ $event->starts_at->isToday() ? 'text-(--warn)' : 'text-(--mut)' }}" datetime="{{ $event->starts_at->toDateString() }}">
-                                {{ $event->starts_at->translatedFormat('D d') }}
-                            </time>
-                            <div class="min-w-0 flex-1">
-                                <p class="truncate text-sm text-(--tx)">{{ $event->title }}</p>
+        {{-- Colonne de droite : l'agent parle à un seul endroit, tout en haut,
+             puis viennent les événements et les listes épinglées. --}}
+        <div class="space-y-3.5">
+            @if ($this->pendingReview)
+                <x-agent-block title="Revue prête">
+                    <p class="mb-1.5 text-[14px] leading-[1.5] text-(--tx)">Douze minutes, trois décisions.</p>
+                    @if ($this->inboxPendingCount > 0)
+                        <p class="mb-3 text-[13px] text-(--mut)">{{ $this->inboxPendingCount }} {{ Str::plural('item', $this->inboxPendingCount) }} en inbox, non {{ Str::plural('trié', $this->inboxPendingCount) }}.</p>
+                    @endif
+                    <x-btn variant="agent" :href="route('review.index')" wire:navigate>Lire</x-btn>
+                </x-agent-block>
+            @elseif ($this->pendingBilan)
+                <x-agent-block title="Bilan en attente">
+                    <p class="mb-3 text-[14px] leading-[1.5] text-(--tx)">{{ $this->pendingBilan->questionnaire->name }}</p>
+                    <x-btn variant="agent" :href="route('bilan.run.fill', $this->pendingBilan)" wire:navigate>Remplir</x-btn>
+                </x-agent-block>
+            @elseif ($this->inboxPendingCount > 0)
+                <x-agent-block title="Inbox à trier">
+                    <p class="mb-3 text-[14px] leading-[1.5] text-(--tx)">{{ $this->inboxPendingCount }} {{ Str::plural('item', $this->inboxPendingCount) }} en attente.</p>
+                    <x-btn variant="agent" :href="route('inbox.index')" wire:navigate>Trier</x-btn>
+                </x-agent-block>
+            @endif
+
+            @if ($this->upcomingEvents->isNotEmpty())
+                <x-card padding="18">
+                    <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Sept jours</p>
+                    <div class="flex flex-col gap-[13px]">
+                        @foreach ($this->upcomingEvents as $event)
+                            <div class="flex items-center gap-3" wire:key="event-{{ $event->id }}">
+                                <span
+                                    class="size-[10px] shrink-0 rounded-[3px]"
+                                    style="background: var(--goal-{{ $event->goal?->color_slot ?? \App\Support\Palette::slot($event->id) }})"
+                                    aria-hidden="true"
+                                ></span>
+                                <div class="min-w-0">
+                                    <p class="truncate text-[14px] text-(--tx)">{{ $event->title }}</p>
+                                    <p class="text-[12px] text-(--mut)">{{ $event->starts_at->translatedFormat('l · H:i') }}</p>
+                                </div>
                             </div>
-                            <x-badge type="entity" :entity="$event->entity" />
-                            <x-badge type="goal" :goal="$event->goal" />
-                        </div>
-                    @empty
-                        <p class="p-8 text-center text-sm text-(--mut)">Aucun événement à venir.</p>
-                    @endforelse
-                </div>
-            </div>
+                        @endforeach
+                    </div>
+                </x-card>
+            @endif
 
             @foreach ($this->pinnedLists as $list)
-                <div wire:key="list-{{ $list->id }}">
-                    <h2 class="text-base font-semibold text-(--tx)">{{ $list->name }}</h2>
-                    <div class="mt-3 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf) p-2">
-                        @foreach ($list->items as $item)
-                            <div class="flex items-center gap-[10px] px-[10px] py-[8px] hover:bg-(--surf2)">
-                                <x-checkbox
-                                    shape="round"
-                                    wire:click="toggleListItem({{ $item->id }})"
-                                    @checked($item->checked_at)
-                                />
-                                <span class="text-[13.5px] {{ $item->checked_at ? 'text-(--mut) line-through opacity-45' : 'text-(--tx)' }}">
-                                    {{ $item->content }}
-                                </span>
-                            </div>
-                        @endforeach
+                <x-card padding="18" wire:key="pinned-list-{{ $list->id }}">
+                    <div class="mb-3.5 flex items-center gap-2.5">
+                        <h2 class="font-display text-[16px] font-semibold text-(--tx)">{{ $list->name }}</h2>
+                        <x-badge type="pill" tone="mine" class="!text-[11px]">épinglée</x-badge>
                     </div>
-                </div>
+
+                    @php $openItems = $list->items->whereNull('checked_at'); @endphp
+
+                    @if ($list->items->isNotEmpty() && $openItems->isEmpty())
+                        <p class="mb-3.5 text-[14px] text-(--ai)">Vide — tout est fait.</p>
+                    @else
+                        <div class="flex flex-col gap-3">
+                            @foreach ($openItems->take(5) as $item)
+                                <div class="flex items-center gap-3 text-[14px]" wire:key="item-{{ $item->id }}">
+                                    <x-checkbox
+                                        shape="round"
+                                        size="18"
+                                        wire:click="toggleListItem({{ $item->id }})"
+                                        target="toggleListItem({{ $item->id }})"
+                                    />
+                                    <span class="text-(--tx)">{{ $item->content }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    <form
+                        x-data="{ content: '' }"
+                        @submit.prevent="$wire.addListItem({{ $list->id }}, content); content = ''"
+                        class="mt-3 flex items-center gap-3 border-t border-(--bd) pt-3"
+                    >
+                        <span aria-hidden="true" class="w-[18px] shrink-0 text-center text-(--mut)">+</span>
+                        <input
+                            type="text"
+                            x-model="content"
+                            placeholder="Ajouter"
+                            class="w-full bg-transparent text-[14px] text-(--tx) placeholder:text-(--mut) focus:outline-none"
+                        />
+                    </form>
+                </x-card>
             @endforeach
 
             @if ($this->unpinnedLists->isNotEmpty())
-                <div>
-                    <div class="flex items-center justify-between">
-                        <h2 class="text-base font-semibold text-(--tx)">Autres listes</h2>
-                        <span class="font-mono text-xs text-(--mut)">{{ $this->unpinnedLists->count() }}</span>
-                    </div>
-                    <div class="mt-3 space-y-3">
-                        @foreach ($this->unpinnedLists as $list)
-                            <div class="rounded-[12px] border border-(--bd) bg-(--surf) p-2" wire:key="unpinned-list-{{ $list->id }}">
-                                <div class="flex items-center justify-between gap-2 px-[10px] pt-1">
-                                    <p class="text-[13.5px] font-medium text-(--tx)">{{ $list->name }}</p>
-                                    <button
-                                        type="button"
-                                        wire:click="pinList({{ $list->id }})"
-                                        class="shrink-0 text-[11px] text-(--mut) hover:text-(--ac)"
-                                    >
-                                        Épingler
-                                    </button>
-                                </div>
-                                <div class="mt-1 divide-y divide-(--bd)">
-                                    @forelse ($list->items as $item)
-                                        <div class="flex items-center gap-[10px] px-[10px] py-[8px] hover:bg-(--surf2)">
-                                            <x-checkbox
-                                                shape="round"
-                                                wire:click="toggleListItem({{ $item->id }})"
-                                                @checked($item->checked_at)
-                                            />
-                                            <span class="text-[13.5px] {{ $item->checked_at ? 'text-(--mut) line-through opacity-45' : 'text-(--tx)' }}">
-                                                {{ $item->content }}
-                                            </span>
-                                        </div>
-                                    @empty
-                                        <p class="px-[10px] py-2 text-xs text-(--mut)">Liste vide.</p>
-                                    @endforelse
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                </div>
+                <x-card padding="16" class="text-[13px] leading-[1.9] text-(--mut)">
+                    @foreach ($this->unpinnedLists as $list)
+                        <a href="{{ route('lists.index') }}" wire:navigate class="block transition-colors duration-(--dur-swap) ease-(--ease) hover:text-(--tx)" wire:key="other-list-{{ $list->id }}">
+                            {{ $list->name }} — @if ($list->open_items_count === 0)<span class="text-(--ai)">vide</span>@else{{ $list->open_items_count }}@endif
+                        </a>
+                    @endforeach
+                </x-card>
             @endif
         </div>
     </div>

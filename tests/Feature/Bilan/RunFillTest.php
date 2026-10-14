@@ -45,7 +45,7 @@ test('answers already given via Hermes are pre-filled and badged', function () {
     ]);
 
     Livewire::test('pages::bilan.run', ['run' => $this->run])
-        ->assertSee('répondu via Hermes')
+        ->assertSee('répondu via Hermès')
         ->assertSet('answers.0', '8');
 });
 

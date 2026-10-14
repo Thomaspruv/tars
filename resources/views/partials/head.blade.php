@@ -1,5 +1,6 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="csrf-token" content="{{ csrf_token() }}">
 
 <title>{{ config('app.name', 'Laravel') }}</title>
 
@@ -7,10 +8,23 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+{{-- L'app s'installe : le manifeste porte l'icône, les raccourcis et la cible
+     de partage (« Partager vers Tars » depuis n'importe quelle app Android,
+     et depuis un raccourci iOS qui ouvre /partager). --}}
+<link rel="manifest" href="/manifest.webmanifest">
+{{-- La barre du navigateur suit le thème de l'app, pas celui du système :
+     c'est le cookie `la-theme` qui fait foi partout ailleurs. --}}
+<meta name="theme-color" content="{{ request()->cookie('la-theme') === 'light' ? '#F3F5EE' : '#0F1310' }}">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+{{-- `black` plutôt que `black-translucent` : le translucide fait passer le
+     contenu *sous* l'horloge, ce qui masquerait l'en-tête mobile tant qu'on
+     n'a pas repris toutes les marges en safe-area. --}}
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Tars">
 
+{{-- Les polices sont auto-hébergées par le plugin `fonts` de laravel-vite
+     (voir vite.config.js) : aucun appel à un CDN de police au runtime. --}}
 @fonts
 
 @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -35,15 +49,3 @@
     })();
 </script>
 
-<script data-navigate-once>
-    document.addEventListener('keydown', function (event) {
-        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-            var input = document.getElementById('quick-add-input');
-
-            if (input) {
-                event.preventDefault();
-                input.focus();
-            }
-        }
-    });
-</script>

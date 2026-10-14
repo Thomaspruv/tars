@@ -82,3 +82,28 @@ test('it toggles a task', function () {
 
     expect($task->fresh()->status)->toBe(TaskStatus::Done);
 });
+
+test('it filters tasks on a search term, in the title or the notes', function () {
+    $this->actingAs(User::factory()->create());
+
+    Task::factory()->create(['title' => 'Relancer le syndic']);
+    Task::factory()->create(['title' => 'Acheter du pain', 'notes' => 'demander au syndic']);
+    Task::factory()->create(['title' => 'Sans rapport']);
+
+    Livewire::test('pages::tasks')
+        ->set('search', 'syndic')
+        ->assertSee('Relancer le syndic')
+        ->assertSee('Acheter du pain')
+        ->assertDontSee('Sans rapport');
+});
+
+test('it lands on the task list already filtered when the palette sends a term', function () {
+    $this->actingAs(User::factory()->create());
+
+    Task::factory()->create(['title' => 'Relancer le syndic']);
+    Task::factory()->create(['title' => 'Sans rapport']);
+
+    $this->get(route('tasks.index', ['search' => 'syndic']))
+        ->assertSee('Relancer le syndic')
+        ->assertDontSee('Sans rapport');
+});

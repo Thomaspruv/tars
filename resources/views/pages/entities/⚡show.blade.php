@@ -156,114 +156,176 @@ new #[Title('Entité')] class extends Component
 };
 ?>
 
+@php
+    $typeLabels = ['company' => 'Société', 'property' => 'Bien', 'vehicle' => 'Véhicule', 'other' => 'Autre'];
+    $entityType = $entity->type instanceof \App\Enums\EntityType ? $entity->type->value : $entity->type;
+    $initials = collect(preg_split('/[\s\-]+/', (string) $entity->name))
+        ->filter()
+        ->take(2)
+        ->map(fn (string $word): string => mb_strtoupper(mb_substr($word, 0, 1)))
+        ->implode('');
+    $linkedGoal = $entity->goals->first();
+@endphp
+
+{{-- Même gabarit que la fiche objectif, contenu différent : là où l'objectif a
+     des jalons et un rythme, l'entité a des échéances qui reviennent et des
+     champs. Aucune barre de progression nulle part. --}}
 <div>
-    <x-screen-header
-        treatment="record"
-        :title="$entity->name"
-        :back="['label' => 'Entités', 'href' => route('entities.index')]"
-    >
-        <x-slot:actions>
+    <div class="mb-[26px] flex max-w-[1200px] flex-wrap items-center gap-3.5">
+        <a href="{{ route('entities.index') }}" wire:navigate class="text-[13px] text-(--mut) hover:text-(--tx)">← Entités</a>
+
+        <div class="ml-auto flex flex-wrap gap-2">
             <x-btn variant="secondary" wire:click="openEditModal">Modifier</x-btn>
             <x-btn variant="danger" wire:click="archive" wire:confirm="Archiver cette entité ?">Archiver</x-btn>
-        </x-slot:actions>
-    </x-screen-header>
+        </div>
+    </div>
 
-    <div class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <div class="space-y-8">
-            @if ($this->filledDetails !== [])
-                <div>
-                    <h2 class="text-base font-semibold text-(--tx)">Informations</h2>
-                    <dl class="mt-3 space-y-2 rounded-[12px] border border-(--bd) bg-(--surf) p-4 text-sm">
-                        @foreach ($this->filledDetails as $pair)
-                            <div class="flex items-center justify-between gap-4">
-                                <dt class="text-(--mut)">{{ $pair['label'] }}</dt>
-                                <dd class="text-right text-(--tx)">{{ $pair['value'] }}</dd>
-                            </div>
-                        @endforeach
-                    </dl>
+    <div class="grid max-w-[1200px] grid-cols-1 gap-8 xl:grid-cols-[1fr_320px] xl:gap-12">
+        <div class="max-w-[620px]">
+            <div class="mb-[18px] flex items-center gap-4">
+                <span
+                    class="font-display inline-flex size-[52px] shrink-0 items-center justify-center rounded-[14px] bg-(--acbg) text-[18px] font-bold text-(--ac)"
+                    aria-hidden="true"
+                >{{ $initials }}</span>
+                <div class="min-w-0">
+                    <h1 class="font-display text-[34px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">{{ $entity->name }}</h1>
+                    <p class="mt-1 text-[13px] text-(--mut)">
+                        {{ $typeLabels[$entityType] ?? ucfirst((string) $entityType) }} · créée en {{ $entity->created_at->translatedFormat('F Y') }}
+                    </p>
                 </div>
+            </div>
+
+            @if ($this->filledDetails !== [] || $linkedGoal)
+                <dl class="mb-8 grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+                    @foreach ($this->filledDetails as $pair)
+                        <div class="border-b border-(--bd) py-3">
+                            <dt class="mb-1 text-[12px] text-(--mut)">{{ $pair['label'] }}</dt>
+                            <dd class="text-[15px] text-(--tx)">{{ $pair['value'] }}</dd>
+                        </div>
+                    @endforeach
+
+                    @if ($linkedGoal)
+                        <div class="border-b border-(--bd) py-3">
+                            <dt class="mb-1 text-[12px] text-(--mut)">Objectif rattaché</dt>
+                            <dd class="text-[15px]">
+                                <a href="{{ route('goals.show', $linkedGoal) }}" wire:navigate class="flex items-center gap-2 text-(--tx) hover:underline">
+                                    <span class="size-[8px] rounded-full" style="background: var(--goal-{{ $linkedGoal->color_slot }})" aria-hidden="true"></span>
+                                    {{ $linkedGoal->title }}
+                                </a>
+                            </dd>
+                        </div>
+                    @endif
+                </dl>
             @endif
 
             @if ($this->recurringTasks->isNotEmpty())
-                <div>
-                    <h2 class="text-base font-semibold text-(--tx)">Échéances récurrentes</h2>
-                    <div class="mt-3 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
-                        @foreach ($this->recurringTasks as $task)
-                            <x-task-row :task="$task" wire:key="recurring-{{ $task->id }}" />
-                        @endforeach
-                    </div>
+                <div class="mb-3 flex items-baseline gap-3">
+                    <h2 class="font-display text-[20px] font-semibold text-(--tx)">Échéances récurrentes</h2>
+                    <span class="text-[13px] text-(--mut)">{{ $this->recurringTasks->count() }}</span>
+                </div>
+
+                <div class="mb-8 flex flex-col">
+                    @foreach ($this->recurringTasks as $task)
+                        @php $due = $task->due_date ?? $task->scheduled_date; @endphp
+                        <div class="flex flex-wrap items-center gap-4 border-b border-(--bd) px-1 py-[13px]" wire:key="recurring-{{ $task->id }}">
+                            <span class="min-w-0 flex-1 text-[15px] text-(--tx)">{{ $task->title }}</span>
+                            <x-badge type="recur" :recurrence="$task->recurrence" class="ml-auto" />
+                            @if ($due)
+                                <time
+                                    class="w-[120px] text-right text-[13px] {{ $due->lte(today()->addDays(30)) ? 'text-(--warn)' : 'text-(--mut)' }}"
+                                    datetime="{{ $due->toDateString() }}"
+                                >{{ $due->translatedFormat('j F') }}</time>
+                            @endif
+                        </div>
+                    @endforeach
                 </div>
             @endif
 
-            <div>
-                <h2 class="text-base font-semibold text-(--tx)">Tâches ouvertes</h2>
-                <div class="mt-3 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
-                    @forelse ($this->openTasks as $task)
-                        <x-task-row :task="$task" wire:key="task-{{ $task->id }}" />
-                    @empty
-                        <p class="p-5 text-center text-sm text-(--mut)">Aucune tâche ouverte.</p>
-                    @endforelse
-                </div>
+            {{-- Les notes mélangent les miennes et les synthèses d'Hermès ;
+                 seules les secondes portent le filet vert et leur date de
+                 génération. --}}
+            <div class="mb-3.5 flex items-baseline gap-3">
+                <h2 class="font-display text-[20px] font-semibold text-(--tx)">Notes</h2>
+                @php $agentNotes = $this->notes->where('source', \App\Enums\NoteSource::Agent)->count(); @endphp
+                <span class="text-[13px] text-(--mut)">
+                    {{ $this->notes->count() }}@if ($agentNotes > 0) · dont {{ $agentNotes }} {{ Str::plural('synthèse', $agentNotes) }} d'Hermès @endif
+                </span>
             </div>
+
+            <div class="mb-4 flex flex-col gap-3">
+                @forelse ($this->notes as $note)
+                    @if ($note->source === \App\Enums\NoteSource::Agent)
+                        <x-agent-block padding="16" rail="3" class="!rounded-[14px]" wire:key="note-{{ $note->id }}">
+                            <p class="mb-1.5 text-[12px] text-(--ai)">Synthèse d'Hermès · générée le {{ $note->created_at->translatedFormat('j F') }}</p>
+                            <p class="text-[14px] leading-[1.6] text-(--tx)">{{ $note->content }}</p>
+                        </x-agent-block>
+                    @else
+                        <x-card padding="16" class="!rounded-[14px]" wire:key="note-{{ $note->id }}">
+                            <p class="mb-1.5 text-[12px] text-(--mut)">{{ $note->created_at->translatedFormat('j F') }} · ma note</p>
+                            <p class="text-[14px] leading-[1.6] text-(--tx)">{{ $note->content }}</p>
+                        </x-card>
+                    @endif
+                @empty
+                    <p class="text-[14px] text-(--mut)">Aucune note.</p>
+                @endforelse
+            </div>
+
+            <form wire:submit="addNote" class="flex items-center gap-3 border-t border-(--bd) pt-3">
+                <span aria-hidden="true" class="w-[17px] shrink-0 text-center text-(--mut)">+</span>
+                <input
+                    type="text"
+                    wire:model="newNoteContent"
+                    placeholder="Ajouter une note"
+                    class="w-full bg-transparent text-[15px] text-(--tx) placeholder:text-(--mut) focus:outline-none"
+                />
+            </form>
+            @error('newNoteContent') <p class="mt-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
         </div>
 
-        <div class="space-y-8">
-            @if ($entity->goals->isNotEmpty())
-                <div>
-                    <h2 class="text-base font-semibold text-(--tx)">Objectif rattaché</h2>
-                    <div class="mt-3 space-y-3">
-                        @foreach ($entity->goals as $goal)
-                            <x-card-goal :goal="$goal" wire:key="goal-{{ $goal->id }}" />
-                        @endforeach
+        <div>
+            <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Tâches ouvertes</p>
+            <div class="mb-[30px] flex flex-col gap-3">
+                @foreach ($this->openTasks as $task)
+                    @php
+                        $due = $task->due_date ?? $task->scheduled_date;
+                        $isOverdue = $due && $due->isPast() && ! $due->isToday();
+                    @endphp
+                    <div class="flex items-center gap-3 text-[14px]" wire:key="task-{{ $task->id }}">
+                        <button
+                            type="button"
+                            wire:click="toggleTask({{ $task->id }})"
+                            wire:target="toggleTask({{ $task->id }})"
+                            wire:loading.attr="disabled"
+                            wire:loading.class="scale-90 opacity-60"
+                            aria-label="Marquer terminée"
+                            class="size-[17px] shrink-0 rounded-[6px] border-2 transition-[border-color,scale] duration-(--dur-swap) ease-(--ease) active:scale-[.88] {{ $isOverdue ? 'border-(--dgr)' : 'border-(--bd3)' }}"
+                        ></button>
+                        <span class="min-w-0 flex-1 text-(--tx)">{{ $task->title }}</span>
                     </div>
-                </div>
-            @endif
+                @endforeach
+
+                @if ($this->openTasks->isEmpty())
+                    <p class="text-[14px] text-(--mut)">Aucune tâche ouverte.</p>
+                @endif
+            </div>
 
             @if ($this->relations->isNotEmpty() || $this->relatedFrom->isNotEmpty())
-                <div>
-                    <h2 class="text-base font-semibold text-(--tx)">Relations</h2>
-                    <div class="mt-3 space-y-2 text-sm">
-                        @foreach ($this->relations as $relation)
-                            <div class="flex items-center justify-between rounded-[10px] border border-(--bd) bg-(--surf) px-3 py-2" wire:key="relation-{{ $relation->id }}">
-                                <span class="font-mono text-[10.5px] text-(--mut)">{{ $relation->relation_type->label() }}</span>
-                                <a href="{{ route('entities.show', $relation->relatedEntity) }}" wire:navigate class="text-(--ac)">{{ $relation->relatedEntity->name }}</a>
-                            </div>
-                        @endforeach
-                        @foreach ($this->relatedFrom as $relation)
-                            <div class="flex items-center justify-between rounded-[10px] border border-(--bd) bg-(--surf) px-3 py-2" wire:key="related-from-{{ $relation->id }}">
-                                <a href="{{ route('entities.show', $relation->entity) }}" wire:navigate class="text-(--ac)">{{ $relation->entity->name }}</a>
-                                <span class="font-mono text-[10.5px] text-(--mut)">{{ $relation->relation_type->label() }} (entrant)</span>
-                            </div>
-                        @endforeach
-                    </div>
+                <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Relations</p>
+                <div class="mb-[30px] flex flex-col gap-2.5 text-[13px]">
+                    @foreach ($this->relations as $relation)
+                        <div class="press rounded-[12px] bg-(--surf) px-3.5 py-2.5" wire:key="relation-{{ $relation->id }}">
+                            <p class="mb-0.5 text-[12px] text-(--mut)">{{ $relation->relation_type->label() }}</p>
+                            <a href="{{ route('entities.show', $relation->relatedEntity) }}" wire:navigate class="text-(--tx) hover:underline">{{ $relation->relatedEntity->name }}</a>
+                        </div>
+                    @endforeach
+                    @foreach ($this->relatedFrom as $relation)
+                        <div class="press rounded-[12px] bg-(--surf) px-3.5 py-2.5" wire:key="related-from-{{ $relation->id }}">
+                            <p class="mb-0.5 text-[12px] text-(--mut)">{{ $relation->relation_type->label() }} (entrant)</p>
+                            <a href="{{ route('entities.show', $relation->entity) }}" wire:navigate class="text-(--tx) hover:underline">{{ $relation->entity->name }}</a>
+                        </div>
+                    @endforeach
                 </div>
             @endif
-
-            <div>
-                <h2 class="text-base font-semibold text-(--tx)">Notes</h2>
-                <div class="mt-3 space-y-2">
-                    @forelse ($this->notes as $note)
-                        <div class="rounded-[10px] border border-(--bd) bg-(--surf) p-3" wire:key="note-{{ $note->id }}">
-                            @if ($note->source === \App\Enums\NoteSource::Agent)
-                                <span class="font-mono text-[10px] font-semibold text-(--ai)">◈ AGENT</span>
-                            @endif
-                            <p class="mt-1 text-sm text-(--tx)">{{ $note->content }}</p>
-                            <p class="mt-1 font-mono text-[10.5px] text-(--mut)">{{ $note->created_at->translatedFormat('d M · H:i') }}</p>
-                        </div>
-                    @empty
-                        <p class="rounded-[12px] border border-(--bd) bg-(--surf) p-5 text-center text-sm text-(--mut)">Aucune note.</p>
-                    @endforelse
-                </div>
-                <form wire:submit="addNote" class="mt-2 flex gap-2">
-                    <input
-                        type="text"
-                        wire:model="newNoteContent"
-                        placeholder="Ajouter une note…"
-                        class="flex-1 rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-1.5 text-sm text-(--tx)"
-                    />
-                    <x-btn variant="secondary" type="submit" class="!px-3 !py-1.5 text-xs">Ajouter</x-btn>
-                </form>
-            </div>
 
             @if ($this->brainConfigured)
                 <x-brain-notes :documents="$this->brainDocuments" />
@@ -276,14 +338,14 @@ new #[Title('Entité')] class extends Component
             <flux:heading size="lg">Modifier l'entité</flux:heading>
 
             <div>
-                <label class="text-xs text-(--mut)">Nom</label>
-                <input type="text" wire:model="editName" wire:loading.attr="disabled" wire:target="saveEdit" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)" />
-                @error('editName') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                <label class="text-[12px] text-(--mut)">Nom</label>
+                <input type="text" wire:model="editName" wire:loading.attr="disabled" wire:target="saveEdit" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none" />
+                @error('editName') <p class="mt-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
             </div>
 
             <div>
-                <label class="text-xs text-(--mut)">Notes</label>
-                <textarea wire:model="editNotes" wire:loading.attr="disabled" wire:target="saveEdit" rows="3" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)"></textarea>
+                <label class="text-[12px] text-(--mut)">Notes</label>
+                <textarea wire:model="editNotes" wire:loading.attr="disabled" wire:target="saveEdit" rows="3" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none"></textarea>
             </div>
 
             <x-entity-detail-fields :fields="$this->detailFields" prefix="editDetails" target="saveEdit" />

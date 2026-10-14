@@ -65,7 +65,7 @@ new #[Title('Remplir le bilan')] class extends Component
 
         $completer->complete($this->run);
 
-        $this->redirect(route('bilan.index', ['activeTab' => 'bilans']), navigate: true);
+        $this->redirect(route('bilan.index'), navigate: true);
     }
 
     private function persistAnswers(QuestionAnswerNormalizer $normalizer): void
@@ -93,11 +93,11 @@ new #[Title('Remplir le bilan')] class extends Component
 ?>
 
 <div class="mx-auto max-w-xl">
-    <x-screen-header
-        treatment="record"
-        :title="$run->questionnaire->name"
-        :back="['label' => 'Bilan de vie', 'href' => route('bilan.index', ['activeTab' => 'bilans'])]"
-    />
+    <div class="mb-[26px] flex flex-wrap items-center gap-3.5">
+        <a href="{{ route('bilan.index') }}" wire:navigate class="text-[13px] text-(--mut) hover:text-(--tx)">← Bilan de vie</a>
+    </div>
+
+    <h1 class="font-display mb-6 text-[34px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">{{ $run->questionnaire->name }}</h1>
 
     <div class="mt-6 space-y-4">
         @foreach ($run->questionnaire->questions as $index => $question)
@@ -110,7 +110,7 @@ new #[Title('Remplir le bilan')] class extends Component
                 <div class="flex items-center justify-between gap-2">
                     <p class="text-sm text-(--tx)">{{ $question['text'] }}</p>
                     @if (in_array($question['text'], $answeredViaHermes, true))
-                        <span class="shrink-0 rounded-[5px] bg-(--surf2) px-1.5 py-0.5 font-mono text-[10px] text-(--mut)">répondu via Hermes</span>
+                        <span class="shrink-0 rounded-full bg-(--aibg) px-2.5 py-1 text-[12px] text-(--ai)">répondu via Hermès</span>
                     @endif
                 </div>
 
@@ -121,7 +121,7 @@ new #[Title('Remplir le bilan')] class extends Component
                                 <button
                                     type="button"
                                     wire:click="$set('answers.{{ $index }}', '{{ $i }}')"
-                                    class="flex size-7 items-center justify-center rounded-[6px] font-mono text-[11px] {{ ($answers[$index] ?? '') == $i ? 'bg-(--acbg) text-(--ac)' : 'bg-(--surf2) text-(--mut) hover:text-(--tx)' }}"
+                                    class="flex size-9 items-center justify-center rounded-[10px] text-[13px] {{ ($answers[$index] ?? '') == $i ? 'bg-(--ac) font-bold text-(--acT)' : 'bg-(--surf2) text-(--mut) hover:text-(--tx)' }}"
                                 >
                                     {{ $i }}
                                 </button>
@@ -133,9 +133,9 @@ new #[Title('Remplir le bilan')] class extends Component
                             <x-btn variant="{{ ($answers[$index] ?? '') === 'non' ? 'primary' : 'secondary' }}" size="sm" wire:click="$set('answers.{{ $index }}', 'non')">Non</x-btn>
                         </div>
                     @elseif ($type === 'number')
-                        <input type="number" wire:model.live.debounce.500ms="answers.{{ $index }}" class="w-32 rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-1.5 font-mono text-sm text-(--tx)" />
+                        <input type="number" wire:model.live.debounce.500ms="answers.{{ $index }}" class="w-32 rounded-full bg-(--surf2) px-4 py-2 text-[14px] text-(--tx) focus:outline-none" />
                     @else
-                        <textarea wire:model.live.debounce.500ms="answers.{{ $index }}" rows="3" class="w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)"></textarea>
+                        <textarea wire:model.live.debounce.500ms="answers.{{ $index }}" rows="3" class="w-full rounded-[18px] bg-(--surf2) px-4 py-3 text-[14px] text-(--tx) focus:outline-none"></textarea>
                     @endif
                 </div>
             </x-card>

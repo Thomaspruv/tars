@@ -26,7 +26,7 @@ test('shows an empty state when the vault is not configured', function () {
     config(['brain.remote_url' => null]);
     $this->actingAs(User::factory()->create());
 
-    $this->get(route('brain.index'))->assertSee('Vault non configuré');
+    $this->get(route('brain.index'))->assertSee("Le vault n'est pas configuré.", false);
 });
 
 test('browses the indexed document tree by folder and filename', function () {
@@ -123,6 +123,7 @@ test('creates a note, commits it, and indexes it', function () {
 
     $this->mock(GitRepository::class, function ($mock): void {
         $mock->shouldReceive('commit')->once()->with($this->vaultPath, 'nouvelle-note.md', 'tars: create nouvelle-note.md');
+        $mock->shouldReceive('status')->andReturn(GitSyncStatus::Synced);
     });
 
     Livewire::test('pages::brain')

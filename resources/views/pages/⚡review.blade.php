@@ -4,16 +4,18 @@ use App\Enums\DecisionSource;
 use App\Models\Decision;
 use App\Models\Entity;
 use App\Models\Goal;
+use App\Enums\ReviewType;
 use App\Models\Review;
 use App\Support\FuzzyMatcher;
 use Illuminate\Database\Eloquent\Collection;
 use League\CommonMark\CommonMarkConverter;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
-new #[Title('Revue')] class extends Component
+new #[Layout('layouts::reading')] #[Title('Revue')] class extends Component
 {
     #[Url(as: 'review')]
     public ?int $reviewId = null;
@@ -37,6 +39,36 @@ new #[Title('Revue')] class extends Component
     public function reviewHistory(): Collection
     {
         return Review::orderByDesc('period_end')->orderByDesc('id')->limit(20)->get();
+    }
+
+    /**
+     * Le titre d'une revue est sa période dite en français : « Semaine 35 »
+     * ou « Août 2026 ». Personne ne cherche une revue par sa date de début.
+     */
+    public function reviewLabel(Review $review): string
+    {
+        return $review->type === ReviewType::Monthly
+            ? ucfirst($review->period_end->translatedFormat('F Y'))
+            : 'Semaine '.$review->period_end->isoWeek();
+    }
+
+    #[Computed]
+    public function decisionJournal(): array
+    {
+        $total = Decision::count();
+
+        return [
+            'total' => $total,
+            'since' => $total > 0 ? Decision::min('decided_at') : null,
+        ];
+    }
+
+    #[Computed]
+    public function answeredCount(): int
+    {
+        return collect($this->currentReview?->proposed_decisions ?? [])
+            ->filter(fn (array $decision): bool => ($decision['response'] ?? null) !== null)
+            ->count();
     }
 
     #[Computed]
@@ -90,7 +122,7 @@ new #[Title('Revue')] class extends Component
         $decisions[$index]['answered_at'] = now()->toIso8601String();
         $review->update(['proposed_decisions' => $decisions]);
 
-        unset($this->currentReview);
+        unset($this->currentReview, $this->answeredCount, $this->decisionJournal);
     }
 
     public function updatedUserNotes(string $value): void
@@ -107,75 +139,128 @@ new #[Title('Revue')] class extends Component
 };
 ?>
 
-<div class="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_260px]">
-    <div>
-        <x-screen-header
-            treatment="ai"
-            title="Revue"
-            :kicker="$this->currentReview ? 'générée '.$this->currentReview->created_at->translatedFormat('D. H:i') : null"
-        />
+{{-- Le seul écran sans la sidebar de l'app : elle est remplacée par
+     l'historique des revues, et le contenu passe en colonne de lecture. Tout
+     l'écran est une parole d'agent — il n'a donc pas besoin de filet vert,
+     c'est le document entier qui l'est. --}}
+<div class="flex min-h-screen">
+    <div class="hidden w-[236px] shrink-0 flex-col border-r border-(--bd) px-5 py-[26px] lg:flex">
+        <a href="{{ route('today') }}" wire:navigate class="mb-[26px] text-[13px] text-(--mut) hover:text-(--tx)">← Aujourd'hui</a>
 
-        @if (! $this->currentReview)
-            <p class="mt-6 rounded-[12px] border border-(--bd) bg-(--surf) p-8 text-center text-sm text-(--mut)">
-                Aucune revue pour l'instant. Configure l'agent <span class="font-mono text-(--ai)">reviewer</span> dans l'écran Agents puis lance-la manuellement.
-            </p>
-        @else
-            <div class="brain-content mt-6 rounded-[12px] border border-(--bd) bg-(--surf) p-6">
-                {!! $this->renderedMarkdown !!}
-            </div>
+        <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Revues</p>
 
-            @if (! empty($this->currentReview->proposed_decisions))
-                <div class="mt-6 space-y-3">
-                    @foreach ($this->currentReview->proposed_decisions as $index => $decision)
-                        <x-card-decision
-                            :decision="$decision"
-                            :index="$index"
-                            :total="count($this->currentReview->proposed_decisions)"
-                            wire:key="decision-{{ $index }}"
-                        />
-                    @endforeach
-                </div>
-            @endif
-
-            <div class="mt-6">
-                <label class="text-xs font-semibold text-(--mut)">Notes</label>
-                <textarea
-                    wire:model.blur="userNotes"
-                    rows="3"
-                    placeholder="Tes propres notes sur cette revue…"
-                    class="mt-1.5 w-full rounded-[10px] border border-(--bd2) bg-(--in) p-3 text-sm text-(--tx)"
-                ></textarea>
-            </div>
-
-            <div class="mt-4 flex justify-end">
-                @if ($this->currentReview->completed_at)
-                    <span class="text-xs text-(--mut)">✓ Marquée comme faite le {{ $this->currentReview->completed_at->translatedFormat('d M à H:i') }}</span>
-                @else
-                    <x-btn variant="primary" wire:click="markDone">Marquer comme faite</x-btn>
-                @endif
-            </div>
-        @endif
-    </div>
-
-    <div class="sticky top-6 self-start">
-        <h2 class="text-sm font-semibold text-(--tx)">Historique</h2>
-        <div class="mt-3 space-y-1">
+        <div class="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
             @forelse ($this->reviewHistory as $review)
+                @php $isCurrent = $this->currentReview?->id === $review->id; @endphp
                 <button
                     type="button"
                     wire:click="selectReview({{ $review->id }})"
                     wire:key="history-{{ $review->id }}"
-                    class="block w-full rounded-[8px] px-2.5 py-2 text-left text-xs {{ $this->currentReview?->id === $review->id ? 'bg-(--acbg) text-(--ac)' : 'text-(--mut) hover:bg-(--surf2)' }}"
+                    class="press rounded-[12px] px-3.5 py-2.5 text-left {{ $isCurrent ? 'bg-(--aibg)' : 'hover:bg-(--surf)' }}"
                 >
-                    <span class="font-mono">{{ $review->period_start->translatedFormat('d M') }} → {{ $review->period_end->translatedFormat('d M') }}</span>
-                    <span class="ml-1">{{ $review->type->value === 'monthly' ? '· mensuelle' : '' }}</span>
-                    @if (! $review->completed_at)
-                        <span class="ml-1 text-(--warn)">●</span>
-                    @endif
+                    <span class="block text-[14px] {{ $isCurrent ? 'font-semibold text-(--ai)' : 'text-(--tx)' }}">{{ $this->reviewLabel($review) }}</span>
+                    <span class="block text-[12px] text-(--mut)">
+                        {{ $review->period_end->translatedFormat('j M') }} ·
+                        @if (! $review->completed_at)
+                            non lue
+                        @else
+                            {{ count($review->proposed_decisions ?? []) }} {{ Str::plural('décision', count($review->proposed_decisions ?? [])) }}
+                        @endif
+                    </span>
                 </button>
             @empty
-                <p class="px-2.5 py-2 text-xs text-(--mut)">Aucune revue.</p>
+                <p class="text-[13px] text-(--mut)">Aucune revue.</p>
             @endforelse
+        </div>
+
+        <div class="mt-auto border-t border-(--bd) pt-4">
+            <p class="mb-2.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Journal des décisions</p>
+            <p class="text-[13px] leading-[1.6] text-(--mut)">
+                @if ($this->decisionJournal['total'] > 0)
+                    {{ $this->decisionJournal['total'] }} {{ Str::plural('décision', $this->decisionJournal['total']) }}
+                    {{ Str::plural('tracée', $this->decisionJournal['total']) }}
+                    @if ($this->decisionJournal['since'])
+                        depuis {{ \Illuminate\Support\Carbon::parse($this->decisionJournal['since'])->translatedFormat('F Y') }}
+                    @endif
+                @else
+                    Aucune décision tracée pour l'instant.
+                @endif
+            </p>
+        </div>
+    </div>
+
+    <div class="flex min-w-0 flex-1 justify-center px-5 pt-6 pb-16 lg:px-10 lg:pt-10">
+        <div class="w-full max-w-[680px]">
+            @if (! $this->currentReview)
+                <h1 class="font-display mb-3 text-[42px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">Aucune revue</h1>
+                <p class="reading-body text-(--mut)">
+                    L'agent qui les écrit s'active sur l'écran Agents. Une fois configuré, il passe le dimanche
+                    et la revue apparaît ici.
+                </p>
+                <x-btn variant="secondary" size="md" class="mt-6" :href="route('agents.index')" wire:navigate>Aller aux Agents</x-btn>
+            @else
+                <div class="mb-4 flex items-center gap-3">
+                    <span class="size-[9px] rounded-full bg-(--ai)" aria-hidden="true"></span>
+                    <span class="text-[13px] text-(--ai)">
+                        Générée par Hermès le {{ $this->currentReview->created_at->translatedFormat('l j F à H:i') }}
+                    </span>
+                </div>
+
+                <h1 class="font-display mb-3 text-[42px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">
+                    {{ $this->reviewLabel($this->currentReview) }}
+                </h1>
+
+                <p class="reading-body mb-[34px] text-(--mut)">
+                    Du {{ $this->currentReview->period_start->translatedFormat('j') }}
+                    au {{ $this->currentReview->period_end->translatedFormat('j F') }}
+                </p>
+
+                <div class="brain-content reading-body mb-8">
+                    {!! $this->renderedMarkdown !!}
+                </div>
+
+                @if (! empty($this->currentReview->proposed_decisions))
+                    @php $decisions = $this->currentReview->proposed_decisions; @endphp
+
+                    <div class="mb-[30px] h-px bg-(--bd)"></div>
+
+                    <h2 class="font-display mb-1.5 text-[22px] font-semibold text-(--tx)">
+                        {{ count($decisions) }} {{ Str::plural('décision', count($decisions)) }}
+                    </h2>
+                    <p class="mb-[18px] text-[15px] text-(--mut)">
+                        Réponse tracée dans le journal des décisions. « Plus tard » les reporte à la revue suivante.
+                    </p>
+
+                    <div class="mb-[30px] flex flex-col gap-3">
+                        @foreach ($decisions as $index => $decision)
+                            <x-card-decision
+                                :decision="$decision"
+                                :index="$index"
+                                :total="count($decisions)"
+                                wire:key="decision-{{ $index }}"
+                            />
+                        @endforeach
+                    </div>
+                @endif
+
+                {{-- Mes notes ne portent aucun marqueur vert : c'est mon texte,
+                     pas celui de l'agent. --}}
+                <h2 class="font-display mb-3 text-[22px] font-semibold text-(--tx)">Mes notes sur la semaine</h2>
+                <textarea
+                    wire:model.blur="userNotes"
+                    rows="4"
+                    placeholder="Écrire ici… ce que la semaine a vraiment donné, ce qui n'apparaît pas dans les tâches."
+                    class="reading-body mb-[26px] w-full rounded-[18px] bg-(--surf) px-[22px] py-5 text-(--tx) placeholder:text-(--mut) focus:outline-none"
+                ></textarea>
+
+                @if ($this->currentReview->completed_at)
+                    <p class="text-[15px] text-(--ai)">
+                        ✓ Revue faite le {{ $this->currentReview->completed_at->translatedFormat('j F à H:i') }}
+                    </p>
+                @else
+                    <x-btn variant="primary" size="lg" wire:click="markDone">Marquer la revue comme faite</x-btn>
+                @endif
+            @endif
         </div>
     </div>
 </div>

@@ -309,8 +309,48 @@ new #[Title('Agents')] class extends Component
     #[Computed]
     public function tokensThisMonth(): int
     {
-        return (int) AgentRun::whereMonth('started_at', now()->month)
-            ->whereYear('started_at', now()->year)
+        return $this->tokensForMonth(now());
+    }
+
+    #[Computed]
+    public function tokensLastMonth(): int
+    {
+        return $this->tokensForMonth(now()->subMonth());
+    }
+
+    /**
+     * La jauge de consommation suit la grammaire des jauges de saison — même
+     * composant, autre donnée. Faute d'un budget configuré, la référence est
+     * le mois précédent : c'est la seule comparaison honnête disponible.
+     *
+     * @return array{percent: int, label: string, tone: string}
+     */
+    #[Computed]
+    public function tokenBudget(): array
+    {
+        $reference = $this->tokensLastMonth;
+
+        if ($reference === 0) {
+            return ['percent' => 0, 'label' => 'premier mois mesuré', 'tone' => 'ai'];
+        }
+
+        $percent = (int) round(($this->tokensThisMonth / $reference) * 100);
+
+        return [
+            'percent' => min(100, $percent),
+            'label' => match (true) {
+                $percent <= 80 => 'sous le mois dernier',
+                $percent <= 110 => 'au rythme du mois dernier',
+                default => 'au-dessus du mois dernier',
+            },
+            'tone' => $percent <= 110 ? 'ai' : 'warn',
+        ];
+    }
+
+    private function tokensForMonth(\Carbon\CarbonInterface $month): int
+    {
+        return (int) AgentRun::whereMonth('started_at', $month->month)
+            ->whereYear('started_at', $month->year)
             ->selectRaw('COALESCE(SUM(tokens_in), 0) + COALESCE(SUM(tokens_out), 0) as total')
             ->value('total');
     }
@@ -318,56 +358,76 @@ new #[Title('Agents')] class extends Component
 ?>
 
 <div wire:poll.5s="$refresh">
-    <x-screen-header treatment="ai" title="Agents">
+    @php
+        $availableAgents = collect($this->agentNames())->filter(fn ($agent) => $agent->isAvailable());
+        $activeAgents = $availableAgents->filter(fn ($agent) => ! empty($enabled[$agent->value]))->count();
+    @endphp
+
+    <x-screen-header
+        :kicker="count($this->agentNames()).' agents · '.$activeAgents.' '.Str::plural('actif', $activeAgents)"
+        title="Agents"
+        class="mb-5"
+    >
         <x-slot:actions>
-            <p class="font-mono text-xs text-(--mut)">{{ number_format($this->tokensThisMonth) }} tokens ce mois-ci</p>
+            {{-- Même jauge que les jauges de saison : 6px, un aplat, un mot. --}}
+            <div class="w-[300px]">
+                <div class="mb-2 flex items-baseline gap-2">
+                    <span class="font-display text-[20px] font-bold text-(--tx)">{{ number_format($this->tokensThisMonth, 0, ',', ' ') }}</span>
+                    <span class="text-[13px] text-(--mut)">tokens ce mois-ci</span>
+                    <span class="ml-auto text-[12px] {{ $this->tokenBudget['tone'] === 'warn' ? 'text-(--warn)' : 'text-(--ai)' }}">{{ $this->tokenBudget['label'] }}</span>
+                </div>
+                <div class="h-[6px] rounded-full bg-(--surf2)">
+                    <div
+                        class="h-[6px] rounded-full {{ $this->tokenBudget['tone'] === 'warn' ? 'bg-(--warn)' : 'bg-(--ai)' }}"
+                        style="width: {{ $this->tokenBudget['percent'] }}%"
+                    ></div>
+                </div>
+            </div>
         </x-slot:actions>
     </x-screen-header>
 
-    <div class="mt-6 grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))">
+    <div class="mb-[26px] grid items-start gap-3.5" style="grid-template-columns: repeat(auto-fill, minmax(380px, 1fr))">
         @foreach ($this->agentNames() as $agentName)
             @if ($agentName->isAvailable())
                 @php
                     $name = $agentName->value;
                     $lastRun = $this->agentLastRun($name);
                 @endphp
-                <div class="rounded-[12px] border border-(--aibd2) bg-(--surf) p-[18px] shadow-(--card-shadow)">
-                    <div class="flex items-center gap-2.5">
-                        <span class="flex size-[30px] items-center justify-center rounded-[8px] bg-(--aibg) text-(--ai)">◈</span>
-                        <div>
-                            <p class="font-mono text-[13px] font-semibold text-(--tx)">{{ $agentName->value }}</p>
-                            <p class="text-[11.5px] text-(--mut)">{{ $agentName->description() }}</p>
-                        </div>
-                        <label class="ml-auto flex items-center gap-2 text-xs text-(--mut)">
-                            <x-toggle
-                                agent
-                                wire:model="enabled.{{ $name }}"
-                                wire:change="saveAgentConfig('{{ $name }}')"
-                                wire:loading.attr="disabled"
-                                wire:loading.class="opacity-50"
-                                wire:target="saveAgentConfig('{{ $name }}')"
-                            />
-                            Activé
-                        </label>
+                <x-card padding="22">
+                    <div class="mb-2 flex items-center gap-3">
+                        <span class="font-display text-[19px] font-semibold text-(--tx)">{{ $agentName->label() }}</span>
+                        <x-badge type="pill" :tone="! empty($enabled[$name]) ? 'agent' : 'sunk'" class="!text-[12px]">
+                            {{ ! empty($enabled[$name]) ? 'actif' : 'inactif' }}
+                        </x-badge>
+                        <x-toggle
+                            class="ml-auto"
+                            wire:model="enabled.{{ $name }}"
+                            wire:change="saveAgentConfig('{{ $name }}')"
+                            wire:loading.attr="disabled"
+                            wire:loading.class="opacity-50"
+                            wire:target="saveAgentConfig('{{ $name }}')"
+                        />
                     </div>
 
+                    <p class="mb-3.5 text-[14px] leading-[1.6] text-(--mut)">{{ $agentName->description() }}</p>
+
                     @php $knownModels = $this->knownModelsFor($name); @endphp
-                    <div class="mt-5 border-t border-(--bd) pt-4">
-                        <p class="font-mono text-[10px] font-semibold uppercase tracking-wide text-(--mut)">Configuration</p>
+                    <div class="border-t border-(--bd) pt-3.5">
+                        <p class="mb-3 text-[11px] tracking-[.12em] text-(--mut) uppercase">Configuration</p>
 
                         <div
-                            class="mt-3 grid grid-cols-2 gap-2"
+                            class="grid grid-cols-2 gap-2"
                             wire:loading.class="opacity-50"
                             wire:target="saveAgentConfig('{{ $name }}')"
                         >
-                            <select wire:model.live="providerId.{{ $name }}" wire:loading.attr="disabled" wire:target="saveAgentConfig('{{ $name }}')" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                            <select wire:model.live="providerId.{{ $name }}" wire:loading.attr="disabled" wire:target="saveAgentConfig('{{ $name }}')" class="rounded-full bg-(--surf2) px-3.5 py-2 text-[13px] text-(--tx) focus:outline-none">
                                 <option value="">Fournisseur…</option>
                                 @foreach ($this->activeProviders as $provider)
                                     <option value="{{ $provider->id }}">{{ $provider->name }}</option>
                                 @endforeach
                             </select>
                             @if (count($knownModels))
-                                <select wire:model="model.{{ $name }}" wire:loading.attr="disabled" wire:target="saveAgentConfig('{{ $name }}')" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                                <select wire:model="model.{{ $name }}" wire:loading.attr="disabled" wire:target="saveAgentConfig('{{ $name }}')" class="rounded-full bg-(--surf2) px-3.5 py-2 text-[13px] text-(--tx) focus:outline-none">
                                     <option value="">modèle…</option>
                                     @foreach ($knownModels as $modelId)
                                         <option value="{{ $modelId }}">{{ $modelId }}</option>
@@ -380,7 +440,7 @@ new #[Title('Agents')] class extends Component
                                     wire:loading.attr="disabled"
                                     wire:target="saveAgentConfig('{{ $name }}')"
                                     placeholder="modèle"
-                                    class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)"
+                                    class="rounded-full bg-(--surf2) px-3.5 py-2 text-[13px] text-(--tx) focus:outline-none"
                                 />
                             @endif
                         </div>
@@ -404,59 +464,58 @@ new #[Title('Agents')] class extends Component
                         </div>
                     </div>
 
-                    <div class="mt-5 border-t border-(--bd) pt-4">
-                        <p class="font-mono text-[10px] font-semibold uppercase tracking-wide text-(--mut)">Dernier run</p>
-
-                        <div class="mt-3 rounded-[8px] bg-(--surf2) px-3 py-2 font-mono text-[11px] text-(--mut)">
-                            @if ($lastRun)
-                                <x-badge type="agent-run" :value="$lastRun->status->value" />
-                                {{ $lastRun->started_at->translatedFormat('d M · H:i') }}
-                                @if ($lastRun->finished_at)
-                                    · {{ $lastRun->started_at->diffInSeconds($lastRun->finished_at) }}s
-                                @endif
-                                @if ($lastRun->tokens_in || $lastRun->tokens_out)
-                                    · {{ number_format(($lastRun->tokens_in ?? 0) + ($lastRun->tokens_out ?? 0)) }} tk
-                                @endif
-                            @else
-                                Aucun run pour l'instant.
-                            @endif
-                        </div>
+                    {{-- Le pied de carte est la ligne de vérité : quand est-ce
+                         passé, combien ça a coûté, et le bouton pour relancer.
+                         Les identifiants et les métriques restent en mono —
+                         c'est la deuxième et dernière exception du système. --}}
+                    <div class="mt-4 flex flex-wrap items-center gap-3 border-t border-(--bd) pt-3.5">
+                        @if ($lastRun)
+                            <span class="flex items-center gap-2 text-[13px] {{ $lastRun->status->value === 'failed' ? 'text-(--dgr)' : 'text-(--ai)' }}">
+                                <span class="size-[7px] rounded-full {{ $lastRun->status->value === 'failed' ? 'bg-(--dgr)' : 'bg-(--ai)' }}" aria-hidden="true"></span>
+                                {{ $lastRun->started_at->translatedFormat('D j M · H:i') }}
+                            </span>
+                            <span class="font-mono text-[12px] text-(--mut)">
+                                @if ($lastRun->finished_at){{ (int) $lastRun->started_at->diffInSeconds($lastRun->finished_at) }} s @endif
+                                @if ($lastRun->tokens_in || $lastRun->tokens_out)· {{ number_format(($lastRun->tokens_in ?? 0) + ($lastRun->tokens_out ?? 0), 0, ',', ' ') }} tk @endif
+                            </span>
+                        @else
+                            <span class="text-[13px] text-(--mut)">Aucun passage pour l'instant.</span>
+                        @endif
                     </div>
 
-                    <div class="mt-5 border-t border-(--bd) pt-4">
-                        <p class="font-mono text-[10px] font-semibold uppercase tracking-wide text-(--mut)">Lancer</p>
+                    <div class="mt-3.5">
 
                         @if ($name === 'reviewer')
                             <div class="mt-3 grid grid-cols-3 gap-2">
                                 <div>
-                                    <label class="text-[10.5px] text-(--mut)">Type</label>
-                                    <select wire:model="reviewType" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                                    <label class="text-[12px] text-(--mut)">Type</label>
+                                    <select wire:model="reviewType" class="mt-1.5 w-full rounded-full bg-(--surf2) px-3.5 py-2 text-[13px] text-(--tx) focus:outline-none">
                                         <option value="weekly">Hebdo</option>
                                         <option value="monthly">Mensuelle</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="text-[10.5px] text-(--mut)">Début</label>
-                                    <input type="date" wire:model="reviewPeriodStart" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)" />
+                                    <label class="text-[12px] text-(--mut)">Début</label>
+                                    <input type="date" wire:model="reviewPeriodStart" class="mt-1.5 w-full rounded-full bg-(--surf2) px-3.5 py-2 text-[13px] text-(--tx) focus:outline-none" />
                                 </div>
                                 <div>
-                                    <label class="text-[10.5px] text-(--mut)">Fin</label>
-                                    <input type="date" wire:model="reviewPeriodEnd" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)" />
+                                    <label class="text-[12px] text-(--mut)">Fin</label>
+                                    <input type="date" wire:model="reviewPeriodEnd" class="mt-1.5 w-full rounded-full bg-(--surf2) px-3.5 py-2 text-[13px] text-(--tx) focus:outline-none" />
                                 </div>
                             </div>
-                            <p class="mt-1.5 text-[10.5px] text-(--mut)">Début et fin laissés vides : période par défaut (depuis la dernière revue hebdo, ou 7 jours).</p>
+                            <p class="mt-2 text-[12px] text-(--mut)">Début et fin laissés vides : période par défaut (depuis la dernière revue hebdo, ou 7 jours).</p>
                         @elseif ($name === 'planner')
                             <div class="mt-3 grid grid-cols-2 gap-2">
                                 <div>
-                                    <label class="text-[10.5px] text-(--mut)">Début</label>
-                                    <input type="date" wire:model="plannerPeriodStart" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)" />
+                                    <label class="text-[12px] text-(--mut)">Début</label>
+                                    <input type="date" wire:model="plannerPeriodStart" class="mt-1.5 w-full rounded-full bg-(--surf2) px-3.5 py-2 text-[13px] text-(--tx) focus:outline-none" />
                                 </div>
                                 <div>
-                                    <label class="text-[10.5px] text-(--mut)">Fin</label>
-                                    <input type="date" wire:model="plannerPeriodEnd" class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)" />
+                                    <label class="text-[12px] text-(--mut)">Fin</label>
+                                    <input type="date" wire:model="plannerPeriodEnd" class="mt-1.5 w-full rounded-full bg-(--surf2) px-3.5 py-2 text-[13px] text-(--tx) focus:outline-none" />
                                 </div>
                             </div>
-                            <p class="mt-1.5 text-[10.5px] text-(--mut)">Début et fin laissés vides : la semaine à venir par défaut.</p>
+                            <p class="mt-2 text-[12px] text-(--mut)">Début et fin laissés vides : la semaine à venir par défaut.</p>
                         @endif
 
                         @error("run.{$name}") <p class="mt-2 text-xs text-(--dgr)">{{ $message }}</p> @enderror
@@ -498,63 +557,95 @@ new #[Title('Agents')] class extends Component
                             </div>
                         @endif
                     </div>
-                </div>
+                </x-card>
             @else
-                <div class="rounded-[12px] border border-(--bd) bg-(--surf) p-[18px] opacity-55">
-                    <div class="flex items-center gap-2.5">
-                        <span class="flex size-[30px] items-center justify-center rounded-[8px] bg-(--surf2) text-(--mut)">◈</span>
-                        <div>
-                            <p class="font-mono text-[13px] font-semibold text-(--tx)">{{ $agentName->value }}</p>
-                            <p class="text-[11.5px] text-(--mut)">{{ $agentName->description() }}</p>
-                        </div>
+                <x-card tone="sunk" padding="22">
+                    <div class="mb-2 flex items-center gap-3">
+                        <span class="font-display text-[19px] font-semibold text-(--mut)">{{ $agentName->label() }}</span>
+                        <x-badge type="pill" tone="sunk" class="!text-[12px]">inactif</x-badge>
+                        <x-toggle class="ml-auto pointer-events-none opacity-60" disabled />
                     </div>
-                    <p class="mt-4 font-mono text-[10.5px] uppercase tracking-wide text-(--mut)">À venir</p>
-                </div>
+                    <p class="mb-3.5 text-[14px] leading-[1.6] text-(--mut)">{{ $agentName->description() }}</p>
+                    <p class="font-mono text-[12px] text-(--mut)">non configuré</p>
+                </x-card>
             @endif
         @endforeach
     </div>
 
-    <div class="mt-8">
-        <h2 class="text-base font-semibold text-(--tx)">Historique des runs</h2>
+    <div class="mb-3 flex flex-wrap items-center gap-3">
+        <h2 class="font-display text-[17px] font-semibold text-(--tx)">Historique des runs</h2>
+        <span class="text-[13px] text-(--mut)">
+            {{ $this->runHistory->count() }} {{ Str::plural('run', $this->runHistory->count()) }} ·
+            {{ $this->runHistory->where('status.value', 'failed')->count() }} {{ Str::plural('échec', $this->runHistory->where('status.value', 'failed')->count()) }}
+        </span>
 
-        <div class="mt-3 flex flex-wrap gap-2">
-            <select wire:model.live="historyFilterAgent" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+        <div class="ml-auto flex flex-wrap gap-2">
+            <select wire:model.live="historyFilterAgent" class="rounded-full bg-(--surf) px-3.5 py-2 text-[13px] text-(--mut) focus:outline-none">
                 <option value="">Tous les agents</option>
                 @foreach ($this->historyAgents as $agentValue)
                     <option value="{{ $agentValue }}">{{ $agentValue }}</option>
                 @endforeach
             </select>
-            <select wire:model.live="historyFilterStatus" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+            <select wire:model.live="historyFilterStatus" class="rounded-full bg-(--surf) px-3.5 py-2 text-[13px] text-(--mut) focus:outline-none">
                 <option value="">Tous les statuts</option>
                 @foreach (\App\Enums\AgentRunStatus::cases() as $status)
                     <option value="{{ $status->value }}">{{ $status->value }}</option>
                 @endforeach
             </select>
-            <select wire:model.live="historyFilterPeriod" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+            <select wire:model.live="historyFilterPeriod" class="rounded-full bg-(--surf) px-3.5 py-2 text-[13px] text-(--mut) focus:outline-none">
                 <option value="">Toute période</option>
                 <option value="7">7 derniers jours</option>
                 <option value="30">30 derniers jours</option>
             </select>
         </div>
+    </div>
 
-        <div class="mt-3 max-h-96 space-y-1 overflow-y-auto rounded-[12px] border border-(--bd) bg-(--surf) p-2">
+    {{-- Le tableau d'historique est en mode compact, comme l'écran Tâches. --}}
+    <div class="overflow-x-auto pb-6">
+        <div class="min-w-[860px]">
+            <div class="flex items-center gap-4 border-b border-(--bd2) px-2 py-2 text-[11px] tracking-[.1em] text-(--mut) uppercase">
+                <span class="w-[20px]"></span>
+                <span class="w-[200px]">Agent</span>
+                <span class="w-[160px]">Quand</span>
+                <span class="w-[90px]">Durée</span>
+                <span class="w-[110px]">Tokens</span>
+                <span class="flex-1">Résultat</span>
+            </div>
+
             @forelse ($this->runHistory as $run)
+                @php
+                    $failed = $run->status->value === 'failed';
+                    $running = $run->status->value === 'running';
+                @endphp
                 <button
                     type="button"
                     wire:click="showRunDetail({{ $run->id }})"
-                    class="flex w-full items-center gap-2 rounded-[8px] px-2 py-1.5 text-left hover:bg-(--surf2)"
                     wire:key="run-{{ $run->id }}"
+                    class="press-row flex w-full items-center gap-4 border-b border-(--bd) px-2 py-[9px] text-left text-[14px] hover:bg-(--surf)"
                 >
-                    <span class="font-mono text-[10.5px] text-(--tx)">{{ $run->agent_name }}</span>
-                    <x-badge type="agent-run" :value="$run->status->value" />
-                    <span class="font-mono text-[10.5px] text-(--mut)">{{ $run->trigger->value }}</span>
-                    <span class="ml-auto font-mono text-[10.5px] text-(--mut)">
-                        {{ number_format(($run->tokens_in ?? 0) + ($run->tokens_out ?? 0)) }} tk
+                    <span
+                        @class([
+                            'w-[20px]',
+                            'text-(--dgr)' => $failed,
+                            'text-(--ai)' => ! $failed,
+                            'animate-pulse-soft' => $running,
+                        ])
+                        aria-hidden="true"
+                    >{{ $failed ? '✕' : ($running ? '●' : '✓') }}</span>
+                    <span class="w-[200px] truncate text-(--tx)">{{ $run->agent_name }}</span>
+                    <span class="w-[160px] text-[13px] text-(--mut)">{{ $run->started_at->translatedFormat('D j M · H:i') }}</span>
+                    <span class="w-[90px] font-mono text-[13px] text-(--mut)">
+                        @if ($run->finished_at){{ (int) $run->started_at->diffInSeconds($run->finished_at) }}s @else — @endif
                     </span>
-                    <span class="font-mono text-[10.5px] text-(--mut)">{{ $run->started_at->translatedFormat('d M H:i') }}</span>
+                    <span class="w-[110px] font-mono text-[13px] text-(--mut)">
+                        {{ number_format(($run->tokens_in ?? 0) + ($run->tokens_out ?? 0), 0, ',', ' ') }}
+                    </span>
+                    <span class="min-w-0 flex-1 truncate text-[13px] {{ $failed ? 'text-(--dgr)' : 'text-(--mut)' }}">
+                        {{ $failed ? Str::limit((string) $run->error, 80) : ($running ? 'en cours' : $run->trigger->value) }}
+                    </span>
                 </button>
             @empty
-                <p class="p-5 text-center text-sm text-(--mut)">Aucun run pour l'instant.</p>
+                <p class="py-8 text-[15px] text-(--mut)">Aucun run pour l'instant.</p>
             @endforelse
         </div>
     </div>

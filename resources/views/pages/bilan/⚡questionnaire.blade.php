@@ -89,7 +89,7 @@ new #[Title('Questionnaire')] class extends Component
             'questions' => $validated['questions'],
         ]);
 
-        $this->redirect(route('bilan.index', ['activeTab' => 'bilans']), navigate: true);
+        $this->redirect(route('bilan.index'), navigate: true);
     }
 
     public function delete(): void
@@ -100,7 +100,7 @@ new #[Title('Questionnaire')] class extends Component
 
         $this->questionnaire->delete();
 
-        $this->redirect(route('bilan.index', ['activeTab' => 'bilans']), navigate: true);
+        $this->redirect(route('bilan.index'), navigate: true);
     }
 
     private function swap(int $a, int $b): void
@@ -121,45 +121,45 @@ new #[Title('Questionnaire')] class extends Component
 ?>
 
 <div>
-    <x-screen-header
-        treatment="record"
-        title="Modifier le questionnaire"
-        :back="['label' => 'Bilan de vie', 'href' => route('bilan.index', ['activeTab' => 'bilans'])]"
-    />
+    <div class="mb-[26px] flex flex-wrap items-center gap-3.5">
+        <a href="{{ route('bilan.index') }}" wire:navigate class="text-[13px] text-(--mut) hover:text-(--tx)">← Bilan de vie</a>
+    </div>
+
+    <h1 class="font-display mb-6 text-[34px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">Modifier le questionnaire</h1>
 
     <div class="mt-6 max-w-xl space-y-5">
         <div>
-            <label class="text-xs text-(--mut)">Nom</label>
-            <input type="text" wire:model="name" class="mt-1 w-full rounded-[9px] border border-(--bd2) bg-(--in) px-3 py-2 text-sm text-(--tx)" />
-            @error('name') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+            <label class="text-[12px] text-(--mut)">Nom</label>
+            <input type="text" wire:model="name" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none" />
+            @error('name') <p class="mt-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
         </div>
 
         <div class="grid grid-cols-2 gap-3">
             <div>
-                <label class="text-xs text-(--mut)">Fréquence</label>
-                <select wire:model="frequency" class="mt-1 w-full rounded-[9px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)">
+                <label class="text-[12px] text-(--mut)">Fréquence</label>
+                <select wire:model="frequency" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none">
                     @foreach (QuestionnaireFrequency::cases() as $case)
                         <option value="{{ $case->value }}">{{ $case->label() }}</option>
                     @endforeach
                 </select>
-                @error('frequency') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                @error('frequency') <p class="mt-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
             </div>
 
             <div>
-                <label class="text-xs text-(--mut)">Ancre</label>
+                <label class="text-[12px] text-(--mut)">Ancre</label>
                 <input
                     type="text"
                     wire:model="anchor"
                     placeholder="ex. 1 (jour du mois), mon, 12-31"
-                    class="mt-1 w-full rounded-[9px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)"
+                    class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none"
                 />
-                @error('anchor') <p class="mt-1 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+                @error('anchor') <p class="mt-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
             </div>
         </div>
 
         <div>
             <div class="flex items-center justify-between">
-                <label class="text-xs text-(--mut)">Questions</label>
+                <label class="text-[12px] text-(--mut)">Questions</label>
                 <x-btn variant="secondary" size="sm" wire:click="addQuestion">+ Question</x-btn>
             </div>
 

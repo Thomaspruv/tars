@@ -14,9 +14,19 @@ export default defineConfig({
                 'resources/js/passkeys.js',
             ],
             refresh: true,
+            // Les trois familles du design system : Outfit pour les titres et
+            // les chiffres, Karla pour tout le reste, IBM Plex Mono pour les
+            // deux seules zones qui gardent du mono (chemins du Cerveau,
+            // identifiants de run sur l'écran Agents).
             fonts: [
-                bunny('Instrument Sans', {
-                    weights: [400, 500, 600],
+                bunny('Outfit', {
+                    weights: [400, 500, 600, 700],
+                }),
+                bunny('Karla', {
+                    weights: [400, 500, 600, 700],
+                }),
+                bunny('IBM Plex Mono', {
+                    weights: [400, 500],
                 }),
             ],
         }),

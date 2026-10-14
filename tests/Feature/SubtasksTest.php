@@ -42,7 +42,7 @@ test('subtasks are excluded from the today screen top-level query', function () 
     $component = Livewire::test('pages::today');
 
     expect($component->get('tasksToday'))->toHaveCount(1);
-    $component->assertSee('0/1');
+    $component->assertSee('Tache parente');
 });
 
 test('subtasks are excluded from the tasks screen top-level query and orphan ratio', function () {

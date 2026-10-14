@@ -55,7 +55,32 @@ test('it exposes the parsed preview as a computed property', function () {
 
     Livewire::test('quick-add')
         ->set('query', 'Appeler demain p2')
-        ->assertSee('demain')
-        ->assertSee('p2')
-        ->assertSee('↵ tâche');
+        ->assertSee(today()->addDay()->translatedFormat('D j M'))
+        ->assertSee('P2')
+        ->assertSee('Ça va créer')
+        ->assertSee('Entrée pour poser');
+});
+
+test('it shows what already exists while you type, without stealing the enter key', function () {
+    $this->actingAs(User::factory()->create());
+
+    $goal = Goal::factory()->create(['title' => 'Racheter les parts du syndic']);
+
+    Livewire::test('quick-add')
+        ->set('query', 'syndic')
+        ->assertSee('Racheter les parts du syndic')
+        ->assertSee(route('goals.show', $goal))
+        ->call('submit');
+
+    expect(InboxItem::where('content', 'syndic')->exists())->toBeTrue();
+});
+
+test('it shows no results for a term too short to mean anything', function () {
+    $this->actingAs(User::factory()->create());
+
+    Goal::factory()->create(['title' => 'Syndic']);
+
+    Livewire::test('quick-add')
+        ->set('query', 's')
+        ->assertDontSee('Syndic');
 });

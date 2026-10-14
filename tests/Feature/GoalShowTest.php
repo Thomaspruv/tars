@@ -116,7 +116,7 @@ test('it shows anchored vault documents when the vault is configured', function 
     $document = BrainDocument::factory()->create(['title' => 'Plan entraînement semi']);
     $goal->brainDocuments()->attach($document);
 
-    $this->get(route('goals.show', $goal))->assertSee('Plan entraînement semi');
+    $this->get(route('goals.show', $goal))->assertSee($document->path);
 });
 
 test('the vault notes section is hidden when the vault is not configured', function () {

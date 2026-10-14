@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\BrainSuggestionStatus;
+use App\Enums\GitSyncStatus;
 use App\Models\BrainDocument;
 use App\Models\BrainSuggestion;
 use App\Models\Task;
@@ -17,7 +18,7 @@ beforeEach(function () {
 
 afterEach(fn () => File::deleteDirectory($this->vaultPath));
 
-test('shows pending suggestions in the rangement tab with a reason and detail', function () {
+test('shows pending suggestions in the curator column with their reason and path', function () {
     $this->actingAs(User::factory()->create());
 
     $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md']);
@@ -28,7 +29,6 @@ test('shows pending suggestions in the rangement tab with a reason and detail', 
     ]);
 
     Livewire::test('pages::brain')
-        ->call('switchTab', 'rangement')
         ->assertSee('Cette note parle du plombier')
         ->assertSee('Notes/plombier.md');
 });
@@ -39,7 +39,10 @@ test('accepts an anchor suggestion, applies it, and removes it from the pending 
     File::put($this->vaultPath.'/Notes/plombier.md', "---\ntype: note\n---\n\nLe plombier passe mardi.");
     $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md', 'frontmatter' => ['type' => 'note']]);
 
-    $this->mock(GitRepository::class, fn ($mock) => $mock->shouldReceive('commit')->once());
+    $this->mock(GitRepository::class, function ($mock) {
+        $mock->shouldReceive('commit')->once();
+        $mock->shouldReceive('status')->andReturn(GitSyncStatus::Synced);
+    });
 
     $suggestion = BrainSuggestion::factory()->create([
         'brain_document_id' => $document->id,
@@ -48,7 +51,6 @@ test('accepts an anchor suggestion, applies it, and removes it from the pending 
     ]);
 
     Livewire::test('pages::brain')
-        ->call('switchTab', 'rangement')
         ->call('acceptSuggestion', $suggestion->id)
         ->assertHasNoErrors();
 
@@ -66,7 +68,6 @@ test('shows an inline error and leaves the suggestion pending when acceptance fa
     ]);
 
     Livewire::test('pages::brain')
-        ->call('switchTab', 'rangement')
         ->call('acceptSuggestion', $suggestion->id)
         ->assertHasErrors(['acceptSuggestion']);
 
@@ -80,7 +81,6 @@ test('rejects a suggestion', function () {
     $suggestion = BrainSuggestion::factory()->create(['brain_document_id' => $document->id]);
 
     Livewire::test('pages::brain')
-        ->call('switchTab', 'rangement')
         ->call('rejectSuggestion', $suggestion->id);
 
     expect($suggestion->fresh()->status)->toBe(BrainSuggestionStatus::Rejected);
@@ -93,7 +93,6 @@ test('deprioritizes a suggestion on plus tard without changing its status', func
     $suggestion = BrainSuggestion::factory()->create(['brain_document_id' => $document->id]);
 
     Livewire::test('pages::brain')
-        ->call('switchTab', 'rangement')
         ->call('deprioritizeSuggestion', $suggestion->id);
 
     $suggestion->refresh();
@@ -116,7 +115,6 @@ test('shows recently auto-applied suggestions and cancels one, deleting the crea
     ]);
 
     Livewire::test('pages::brain')
-        ->call('switchTab', 'rangement')
         ->assertSee('Action évidente.')
         ->call('cancelAutoApplied', $suggestion->id);
 
@@ -136,7 +134,6 @@ test('does not show auto-applied suggestions older than 7 days', function () {
     ]);
 
     Livewire::test('pages::brain')
-        ->call('switchTab', 'rangement')
         ->assertDontSee('Vieille action.');
 });
 
@@ -146,7 +143,9 @@ test('shows the sidebar badge count matching pending suggestions', function () {
     $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md']);
     BrainSuggestion::factory()->count(2)->create(['brain_document_id' => $document->id]);
 
-    $response = $this->get(route('brain.index'));
+    // Le Cerveau lui-même n'a plus la sidebar de l'app (il la remplace par son
+    // arborescence), donc la pastille se lit depuis n'importe quel autre écran.
+    $response = $this->get(route('today'));
 
     expect($response->getContent())->toMatch('/Cerveau<\/span>\s*<span[^>]*>2<\/span>/');
 });

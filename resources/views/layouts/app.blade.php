@@ -1,9 +1,11 @@
-<x-layouts::app.sidebar :title="$title ?? null">
-    <flux:main class="!p-0">
-        <x-topbar />
+<x-layouts::app.chrome :title="$title ?? null">
+    <x-layouts::app.sidebar />
 
-        <div class="mx-auto w-full max-w-[1080px] px-6 py-8 md:px-10">
+    <main class="min-h-screen pb-32 lg:ml-[232px] lg:pb-10">
+        <x-mobile-header />
+
+        <div class="px-5 pt-4 lg:px-[34px] lg:pt-[26px] lg:pl-[14px]">
             {{ $slot }}
         </div>
-    </flux:main>
-</x-layouts::app.sidebar>
+    </main>
+</x-layouts::app.chrome>
