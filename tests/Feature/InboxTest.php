@@ -99,13 +99,13 @@ test('it shows a pending triage suggestion and accepts it', function () {
         ->and($suggestion->fresh()->status)->toBe(InboxSuggestionStatus::Accepted);
 });
 
-test('it rejects a pending triage suggestion without touching the inbox item', function () {
+test('it dismisses a pending triage suggestion without touching the inbox item', function () {
     $this->actingAs(User::factory()->create());
 
     $item = InboxItem::factory()->create();
     $suggestion = InboxSuggestion::factory()->create(['inbox_item_id' => $item->id]);
 
-    Livewire::test('pages::inbox')->call('rejectSuggestion', $suggestion->id);
+    Livewire::test('pages::inbox')->call('dismissSuggestion', $suggestion->id);
 
     expect($suggestion->fresh()->status)->toBe(InboxSuggestionStatus::Rejected)
         ->and($item->fresh()->processed_at)->toBeNull();

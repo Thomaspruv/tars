@@ -46,11 +46,15 @@ Réponds uniquement en JSON, un objet par item en attente :
     "goal": "nom exact de l'objectif",
     "entity": "nom exact de l'entité"
   },
-  "confidence": "high|medium",
+  "confidence": "high|medium|low",
   "reason": "une phrase, en français, lisible par Thomas"
 }]
 ```
 
 N'inclus dans `suggested_fields` que les clés pertinentes pour le type
-choisi (`title` pour task/event/goal, `content` pour note, etc.). N'inclus
-que les suggestions de confiance `high` ou `medium`.
+choisi (`title` pour task/event/goal, `content` pour note, etc.).
+
+Mets `low` quand tu hésites vraiment entre deux types : l'écran dira « je ne
+suis pas sûr » et laissera Thomas choisir le type lui-même. C'est une sortie
+honnête, pas un échec — mieux vaut `low` qu'un `medium` approximatif, parce
+que `medium` se pose en lot d'un seul « Tout valider ».

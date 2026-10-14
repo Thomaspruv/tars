@@ -8,4 +8,14 @@ enum InboxConvertedType: string
     case Event = 'event';
     case Goal = 'goal';
     case Note = 'note';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Task => 'Tâche',
+            self::Event => 'Événement',
+            self::Goal => 'Objectif',
+            self::Note => 'Note',
+        };
+    }
 }
