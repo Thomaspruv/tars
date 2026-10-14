@@ -103,34 +103,40 @@ test('adds an item to a pinned list from the day screen', function () {
     expect($list->items()->pluck('content')->all())->toBe(['Pain']);
 });
 
-test('shows the agent block when an uncompleted review exists', function () {
+test('the rail proposes the review as long as it has not been read', function () {
     $this->actingAs(User::factory()->create());
-
-    Review::factory()->create(['completed_at' => null]);
-
-    $this->get(route('today'))->assertSee('Revue prête', false);
-});
-
-test('does not show the pending review block once completed', function () {
-    $this->actingAs(User::factory()->create());
-
-    Review::factory()->create(['completed_at' => now()]);
-
-    $this->get(route('today'))->assertDontSee('Revue prête', false);
-});
-
-test('the agent speaks in a single place: inbox is only nudged when no review is pending', function () {
-    $this->actingAs(User::factory()->create());
-
-    InboxItem::factory()->create(['processed_at' => null]);
-
-    $this->get(route('today'))->assertSee('Inbox à trier');
 
     Review::factory()->create(['completed_at' => null]);
 
     $this->get(route('today'))
-        ->assertSee('Revue prête', false)
-        ->assertDontSee('Inbox à trier');
+        ->assertSee('TARS propose')
+        ->assertSee("Je l'ouvre ?");
+});
+
+test('does not propose the review once completed', function () {
+    $this->actingAs(User::factory()->create());
+
+    Review::factory()->create(['completed_at' => now()]);
+
+    $this->get(route('today'))->assertDontSee("Je l'ouvre ?");
+});
+
+test('the agent speaks in a single place: everything it saw lands in the rail', function () {
+    $this->actingAs(User::factory()->create());
+
+    InboxItem::factory()->create(['processed_at' => null]);
+
+    $this->get(route('today'))
+        ->assertSee('TARS propose')
+        ->assertSee("Voir l'Inbox");
+
+    Review::factory()->create(['completed_at' => null]);
+
+    // Le rail dit les deux, l'un sous l'autre : plus de bloc qui en cache un
+    // autre selon l'ordre de priorité.
+    $this->get(route('today'))
+        ->assertSee("Je l'ouvre ?")
+        ->assertSee("Voir l'Inbox");
 });
 
 test('isolates the first open task as "la suivante" and leaves the others below', function () {

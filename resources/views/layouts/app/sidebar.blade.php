@@ -14,28 +14,39 @@ $bilanPendingCount = QuestionnaireRun::where('status', 'pending')->count();
 $reviewIsPending = Review::whereNull('completed_at')->exists();
 $openDecisionCount = OpenDecision::where('status', OpenDecisionStatus::Open->value)->count();
 
-// Trois groupes, séparés par un filet : ce sur quoi je travaille, ce que je
-// consulte, ce que je lis. Pas d'icônes — à quatorze destinations nommées en
-// français, le texte seul se scanne plus vite qu'un pictogramme à décoder.
+// Trois groupes nommés : ce que je fais maintenant, ce que je suis dans le
+// temps, ce que je prends le temps de penser. Pas d'icônes — à quatorze
+// destinations nommées en français, le texte seul se scanne plus vite qu'un
+// pictogramme à décoder.
 $navGroups = [
     [
-        ['route' => 'today', 'label' => 'Aujourd\'hui'],
-        ['route' => 'inbox.index', 'label' => 'Inbox', 'count' => $inboxPendingCount, 'tone' => 'agent'],
-        ['route' => 'tasks.index', 'label' => 'Tâches'],
-        ['route' => 'lists.index', 'label' => 'Listes'],
-        ['route' => 'calendar.index', 'label' => 'Calendrier'],
+        'kicker' => 'Faire',
+        'items' => [
+            ['route' => 'today', 'label' => 'Aujourd\'hui'],
+            ['route' => 'inbox.index', 'label' => 'Inbox', 'count' => $inboxPendingCount, 'tone' => 'agent'],
+            ['route' => 'tasks.index', 'label' => 'Tâches'],
+            ['route' => 'calendar.index', 'label' => 'Calendrier'],
+        ],
     ],
     [
-        ['route' => 'goals.index', 'label' => 'Objectifs', 'alsoRouteIs' => 'goals.show'],
-        ['route' => 'entities.index', 'label' => 'Entités', 'alsoRouteIs' => 'entities.show'],
-        ['route' => 'brain.index', 'label' => 'Cerveau', 'count' => $curatorPendingCount, 'tone' => 'agent'],
-        ['route' => 'decisions.index', 'label' => 'Décisions', 'alsoRouteIs' => 'decisions.show', 'count' => $openDecisionCount, 'tone' => 'mine'],
+        'kicker' => 'Suivre',
+        'items' => [
+            ['route' => 'goals.index', 'label' => 'Objectifs', 'alsoRouteIs' => 'goals.show'],
+            ['route' => 'entities.index', 'label' => 'Entités', 'alsoRouteIs' => 'entities.show'],
+            ['route' => 'lists.index', 'label' => 'Listes'],
+        ],
     ],
     [
-        ['route' => 'review.index', 'label' => 'Revue', 'dot' => $reviewIsPending],
-        ['route' => 'bilan.index', 'label' => 'Bilan de vie', 'count' => $bilanPendingCount, 'tone' => 'agent'],
+        'kicker' => 'Réfléchir',
+        'items' => [
+            ['route' => 'decisions.index', 'label' => 'Décisions', 'alsoRouteIs' => 'decisions.show', 'count' => $openDecisionCount, 'tone' => 'mine'],
+            ['route' => 'review.index', 'label' => 'Revue', 'dot' => $reviewIsPending],
+            ['route' => 'brain.index', 'label' => 'Cerveau', 'count' => $curatorPendingCount, 'tone' => 'agent'],
+            ['route' => 'bilan.index', 'label' => 'Bilan de vie', 'count' => $bilanPendingCount, 'tone' => 'agent'],
+        ],
     ],
 ];
+
 ?>
 
 <aside class="fixed inset-y-0 left-0 z-20 hidden w-[232px] flex-col px-4 py-[22px] lg:flex">
@@ -58,12 +69,10 @@ $navGroups = [
     </button>
 
     @foreach ($navGroups as $groupIndex => $group)
-        @if ($groupIndex > 0)
-            <div class="mx-3 my-[14px] h-px bg-(--bd)"></div>
-        @endif
+        <p class="mt-[18px] mb-[7px] px-4 text-[11px] tracking-[.12em] text-(--mut) uppercase {{ $groupIndex === 0 ? '!mt-0' : '' }}">{{ $group['kicker'] }}</p>
 
         <nav class="flex flex-col gap-[3px]">
-            @foreach ($group as $item)
+            @foreach ($group['items'] as $item)
                 @php
                     $isCurrent = request()->routeIs($item['route'])
                         || (isset($item['alsoRouteIs']) && request()->routeIs($item['alsoRouteIs']));

@@ -81,15 +81,12 @@
             <span class="shrink-0 text-[12px] text-(--mut)">{{ $task->subtasks->where('status', \App\Enums\TaskStatus::Done)->count() }}/{{ $task->subtasks->count() }}</span>
         @endif
 
-        {{-- Le retard est dit en français dans une pilule abricot, jamais par
-             un point d'exclamation rouge. --}}
-        @if ($isOverdue && ! $isCompact)
-            <span class="ml-auto shrink-0 rounded-full bg-(--acbg) px-[11px] py-1 text-[12px] text-(--ac)">
-                depuis {{ $dueDate->translatedFormat('l') }}
-            </span>
-        @elseif ($dueDate)
+        {{-- Le retard se lit au bord de la case, en brique. Pas de pilule
+             abricot : l'abricot est *mon* action, jamais une alarme — et une
+             tâche en retard de trois jours n'est pas une urgence. --}}
+        @if ($dueDate)
             <time
-                class="ml-auto shrink-0 text-[12px] {{ $isOverdue ? 'text-(--dgr)' : 'text-(--mut)' }}"
+                class="ml-auto shrink-0 text-[12px] text-(--mut)"
                 datetime="{{ $dueDate->toDateString() }}"
             >
                 @if ($isDone && $task->completed_at)

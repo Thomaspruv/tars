@@ -1,33 +1,68 @@
 <?php
 
+use App\Enums\AgentRunTrigger;
 use App\Enums\GoalStatus;
+use App\Enums\PlannerProposalStatus;
 use App\Enums\TaskStatus;
 use App\Models\Checklist;
 use App\Models\ChecklistItem;
 use App\Models\Event;
 use App\Models\Goal;
-use App\Models\InboxItem;
+use App\Models\PlannerProposal;
 use App\Models\QuestionnaireRun;
-use App\Models\Review;
 use App\Models\Task;
 use App\Support\Momentum\MomentumCalculator;
 use App\Support\Momentum\MomentumSettings;
+use App\Support\Planner\PlannerAgent;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
 new #[Title('Aujourd\'hui')] class extends Component
 {
+    /** Au-delà d'une semaine, une tâche en retard n'est plus de la journée : c'est un stock. */
+    private const int LATE_WEEKS = 1;
+
     #[Computed]
     public function tasksToday(): Collection
     {
+        $longOverdueIds = $this->longOverdueTasks->pluck('id')->all();
+
         return Task::forToday()
             ->topLevel()
+            ->when($longOverdueIds !== [], fn (Builder $query): Builder => $query->whereNotIn('id', $longOverdueIds))
             ->with(['goal', 'entity', 'subtasks.goal', 'subtasks.entity'])
             ->orderByRaw('due_date IS NULL')
             ->orderBy('due_date')
             ->orderBy('priority')
+            ->get();
+    }
+
+    /**
+     * Les retards de plus d'une semaine. Ils ne défilent plus ligne par ligne
+     * dans la journée : les lire une par une n'a jamais fait avancer aucune,
+     * et ça noyait les cinq tâches du jour.
+     */
+    #[Computed]
+    public function longOverdueTasks(): Collection
+    {
+        $threshold = today()->subWeeks(self::LATE_WEEKS);
+
+        return Task::open()
+            ->topLevel()
+            ->where(function (Builder $query) use ($threshold): void {
+                $query->whereDate('due_date', '<', $threshold)
+                    ->orWhere(function (Builder $query) use ($threshold): void {
+                        $query->whereNull('due_date')->whereDate('scheduled_date', '<', $threshold);
+                    });
+            })
+            ->with(['goal', 'entity'])
+            ->orderByRaw('due_date IS NULL')
+            ->orderBy('due_date')
+            ->orderBy('scheduled_date')
             ->get();
     }
 
@@ -72,6 +107,23 @@ new #[Title('Aujourd\'hui')] class extends Component
             ->orderBy('priority')
             ->orderBy('created_at')
             ->get();
+    }
+
+    /**
+     * La proposition de replanification en attente : ce que le planificateur
+     * vient de renvoyer, tant que je ne l'ai ni acceptée ni refusée.
+     */
+    #[Computed]
+    public function plannerProposal(): ?PlannerProposal
+    {
+        return PlannerProposal::where('status', PlannerProposalStatus::Pending->value)
+            ->whereHas('items', fn ($query) => $query->where('status', PlannerProposalStatus::Pending->value))
+            ->with([
+                'items' => fn ($query) => $query->where('status', PlannerProposalStatus::Pending->value),
+                'items.task',
+            ])
+            ->latest()
+            ->first();
     }
 
     #[Computed]
@@ -121,10 +173,23 @@ new #[Title('Aujourd\'hui')] class extends Component
         };
     }
 
+    /**
+     * Le sur-titre porte le chiffre du jour : la date, le compte, la série.
+     */
     #[Computed]
-    public function inboxPendingCount(): int
+    public function kicker(): string
     {
-        return InboxItem::whereNull('processed_at')->count();
+        $parts = [ucfirst(now()->translatedFormat('l j F'))];
+
+        if ($this->tasksToday->isNotEmpty()) {
+            $parts[] = $this->doneTodayTasks->count().' sur '.$this->tasksToday->count();
+        }
+
+        if ($this->streak > 0) {
+            $parts[] = 'la série tient à '.$this->streak.' '.Str::plural('jour', $this->streak);
+        }
+
+        return implode(' · ', $parts);
     }
 
     #[Computed]
@@ -155,12 +220,6 @@ new #[Title('Aujourd\'hui')] class extends Component
     }
 
     #[Computed]
-    public function pendingReview(): ?Review
-    {
-        return Review::whereNull('completed_at')->orderByDesc('period_end')->first();
-    }
-
-    #[Computed]
     public function pendingBilan(): ?QuestionnaireRun
     {
         return QuestionnaireRun::where('status', 'pending')->orderBy('due_date')->with('questionnaire')->first();
@@ -188,21 +247,21 @@ new #[Title('Aujourd\'hui')] class extends Component
     {
         Task::findOrFail($taskId)->toggleCompletion();
 
-        unset($this->tasksToday, $this->streak, $this->gauges, $this->dayTitle);
+        unset($this->tasksToday, $this->longOverdueTasks, $this->streak, $this->gauges, $this->dayTitle, $this->kicker);
     }
 
     public function postponeTask(int $taskId): void
     {
         Task::findOrFail($taskId)->update(['scheduled_date' => today()->addDay()]);
 
-        unset($this->tasksToday);
+        unset($this->tasksToday, $this->longOverdueTasks, $this->kicker);
     }
 
     public function scheduleForToday(int $taskId): void
     {
         Task::findOrFail($taskId)->update(['scheduled_date' => today()]);
 
-        unset($this->tasksToday, $this->unscheduledTasks);
+        unset($this->tasksToday, $this->unscheduledTasks, $this->kicker);
     }
 
     public function scheduleAllForToday(): void
@@ -213,7 +272,58 @@ new #[Title('Aujourd\'hui')] class extends Component
             ->whereNull('due_date')
             ->update(['scheduled_date' => today()]);
 
-        unset($this->tasksToday, $this->unscheduledTasks);
+        unset($this->tasksToday, $this->unscheduledTasks, $this->kicker);
+    }
+
+    /**
+     * « Replanifier pour moi » : le planificateur propose des dates pour la
+     * semaine qui vient. Il ne touche à rien avant que je dise oui.
+     */
+    public function replanLate(): void
+    {
+        $planner = app(PlannerAgent::class);
+
+        if (! $planner->isConfigured()) {
+            $this->addError('planner', "Le planificateur n'est pas configuré. Il s'active sur l'écran Agents.");
+
+            return;
+        }
+
+        $proposal = $planner->generate(now()->startOfDay(), now()->addDays(6)->endOfDay(), AgentRunTrigger::Manual);
+
+        if (! $proposal) {
+            $this->addError('planner', "Le planificateur n'a rien renvoyé d'exploitable. À réessayer dans un moment.");
+
+            return;
+        }
+
+        $this->resetErrorBag('planner');
+
+        unset($this->plannerProposal);
+    }
+
+    public function applyPlannerProposal(int $proposalId): void
+    {
+        $proposal = PlannerProposal::with('items.task')->findOrFail($proposalId);
+
+        foreach ($proposal->items->where('status', PlannerProposalStatus::Pending) as $item) {
+            $item->task?->update(['scheduled_date' => $item->proposed_scheduled_date]);
+            $item->update(['status' => PlannerProposalStatus::Applied]);
+        }
+
+        $proposal->update(['status' => PlannerProposalStatus::Applied]);
+
+        unset($this->plannerProposal, $this->tasksToday, $this->longOverdueTasks, $this->unscheduledTasks, $this->kicker);
+    }
+
+    public function dismissPlannerProposal(int $proposalId): void
+    {
+        $proposal = PlannerProposal::findOrFail($proposalId);
+
+        $proposal->items()->where('status', PlannerProposalStatus::Pending->value)->update(['status' => PlannerProposalStatus::Dismissed->value]);
+        $proposal->update(['status' => PlannerProposalStatus::Dismissed->value]);
+
+        unset($this->plannerProposal);
     }
 
     public function createSubtask(int $parentTaskId, string $title): void
@@ -261,12 +371,14 @@ new #[Title('Aujourd\'hui')] class extends Component
 ?>
 
 <div>
-    <x-screen-header :kicker="ucfirst(now()->translatedFormat('l j F'))" :title="$this->dayTitle" class="mb-[18px]" />
+    <x-screen-header :kicker="$this->kicker" :title="$this->dayTitle" class="mb-[18px]" />
 
     <x-status-band :gauges="$this->gauges" :streak="$this->streak" :next-tier="$this->nextStreakTier" />
 
-    <div class="grid grid-cols-1 items-start gap-5 xl:grid-cols-[1fr_306px]">
-        <div>
+    {{-- La journée tient la largeur, le rail prend ce qui reste et passe
+         dessous quand l'écran se serre. --}}
+    <div class="flex flex-wrap items-start gap-[22px]">
+        <div class="min-w-0 flex-[999_1_480px]">
             @if ($this->celebratedGoal)
                 <x-card tone="agent" padding="20" class="mb-3.5 flex flex-wrap items-center gap-5">
                     <div class="min-w-0">
@@ -322,6 +434,54 @@ new #[Title('Aujourd\'hui')] class extends Component
                 @endif
             </x-card>
 
+            {{-- Le retard, replié. Un bloc, deux issues : le planificateur s'en
+                 occupe, ou je vais les voir. Jamais trente lignes à faire
+                 défiler avant d'arriver à la journée. --}}
+            @if ($this->longOverdueTasks->isNotEmpty())
+                @php
+                    $lateCount = $this->longOverdueTasks->count();
+                    $lateHeadline = $lateCount.' '.Str::plural('tâche', $lateCount).' '.($lateCount > 1 ? 'attendent' : 'attend').' depuis plus d\'une semaine';
+                    $lateTitles = $this->longOverdueTasks->take(3)->pluck('title')->implode(', ').($lateCount > 3 ? '…' : '');
+                @endphp
+
+                <x-card tone="sunk" padding="18" class="mb-3.5">
+                    <p class="text-[15px] leading-[1.35] font-semibold text-(--tx)">{{ $lateHeadline }}</p>
+
+                    <p class="mt-1.5 text-[13px] leading-[1.55] text-(--mut)">{{ $lateTitles }} La plupart ont perdu leur date, pas leur raison d'être.</p>
+
+                    @error('planner')
+                        <p class="mt-2.5 text-[13px] text-(--dgr)">{{ $message }}</p>
+                    @enderror
+
+                    <div class="mt-3.5 flex flex-wrap items-center gap-2.5">
+                        <x-btn variant="agent" wire:click="replanLate" wire:target="replanLate" wire:loading.attr="disabled">
+                            <span wire:loading wire:target="replanLate">Je regarde…</span>
+                            <span wire:loading.remove wire:target="replanLate">Replanifier pour moi</span>
+                        </x-btn>
+
+                        <x-btn variant="secondary" :href="route('tasks.index', ['filter' => 'overdue'])" wire:navigate>Voir les {{ $lateCount }}</x-btn>
+                    </div>
+
+                    @if ($this->plannerProposal)
+                        <x-agent-block title="Ce que je propose" padding="16" class="mt-3.5">
+                            <div class="mb-3 flex flex-col gap-2">
+                                @foreach ($this->plannerProposal->items as $item)
+                                    <div class="flex flex-wrap items-baseline gap-2 text-[13px]" wire:key="planner-item-{{ $item->id }}">
+                                        <span class="min-w-0 flex-1 text-(--tx)">{{ $item->task?->title }}</span>
+                                        <span class="shrink-0 text-(--ai)">{{ $item->proposed_scheduled_date->translatedFormat('D j M') }}</span>
+                                    </div>
+                                @endforeach
+                            </div>
+
+                            <div class="flex flex-wrap items-center gap-2">
+                                <x-btn variant="agent" size="xs" wire:click="applyPlannerProposal({{ $this->plannerProposal->id }})">Appliquer</x-btn>
+                                <x-btn variant="ghost" size="xs" wire:click="dismissPlannerProposal({{ $this->plannerProposal->id }})">Non merci</x-btn>
+                            </div>
+                        </x-agent-block>
+                    @endif
+                </x-card>
+            @endif
+
             @if ($this->restOfDay->isNotEmpty())
                 <div class="mb-2.5 flex items-center gap-3 px-1">
                     <h2 class="font-display text-[17px] font-semibold text-(--tx)">Le reste de la journée</h2>
@@ -368,26 +528,15 @@ new #[Title('Aujourd\'hui')] class extends Component
             @endif
         </div>
 
-        {{-- Colonne de droite : l'agent parle à un seul endroit, tout en haut,
-             puis viennent les événements et les listes épinglées. --}}
-        <div class="space-y-3.5">
-            @if ($this->pendingReview)
-                <x-agent-block title="Revue prête">
-                    <p class="mb-1.5 text-[14px] leading-[1.5] text-(--tx)">Douze minutes, trois décisions.</p>
-                    @if ($this->inboxPendingCount > 0)
-                        <p class="mb-3 text-[13px] text-(--mut)">{{ $this->inboxPendingCount }} {{ Str::plural('item', $this->inboxPendingCount) }} en inbox, non {{ Str::plural('trié', $this->inboxPendingCount) }}.</p>
-                    @endif
-                    <x-btn variant="agent" :href="route('review.index')" wire:navigate>Lire</x-btn>
-                </x-agent-block>
-            @elseif ($this->pendingBilan)
+        {{-- Le rail : l'agent parle à un seul endroit, tout en haut, puis
+             viennent les événements et les listes épinglées. --}}
+        <div class="max-w-[360px] flex-[1_1_300px] space-y-3.5">
+            <livewire:proposals-rail />
+
+            @if ($this->pendingBilan)
                 <x-agent-block title="Bilan en attente">
                     <p class="mb-3 text-[14px] leading-[1.5] text-(--tx)">{{ $this->pendingBilan->questionnaire->name }}</p>
                     <x-btn variant="agent" :href="route('bilan.run.fill', $this->pendingBilan)" wire:navigate>Remplir</x-btn>
-                </x-agent-block>
-            @elseif ($this->inboxPendingCount > 0)
-                <x-agent-block title="Inbox à trier">
-                    <p class="mb-3 text-[14px] leading-[1.5] text-(--tx)">{{ $this->inboxPendingCount }} {{ Str::plural('item', $this->inboxPendingCount) }} en attente.</p>
-                    <x-btn variant="agent" :href="route('inbox.index')" wire:navigate>Trier</x-btn>
                 </x-agent-block>
             @endif
 
