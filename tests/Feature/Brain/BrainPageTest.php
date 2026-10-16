@@ -124,11 +124,11 @@ test('refuses to save when the vault has a git conflict', function () {
         ->and(File::glob($this->vaultPath.'/TARS/*-conflit-*.md'))->toHaveCount(1);
 });
 
-test('creates a note, commits it, and indexes it', function () {
+test('creates a note at the path its type dictates, commits it, and indexes it', function () {
     $this->actingAs(User::factory()->create());
 
     mockVaultGit(function ($mock): void {
-        $mock->shouldReceive('commitPaths')->once()->with($this->vaultPath, ['nouvelle-note.md'], 'tars: create nouvelle-note.md');
+        $mock->shouldReceive('commitPaths')->once()->with($this->vaultPath, ['Notes/nouvelle-note.md'], 'tars: create Notes/nouvelle-note.md');
         $mock->shouldReceive('status')->andReturn(GitSyncStatus::Synced);
     });
 
@@ -137,8 +137,8 @@ test('creates a note, commits it, and indexes it', function () {
         ->set('newTitle', 'Nouvelle note')
         ->call('createNote')
         ->assertSet('showCreateModal', false)
-        ->assertSet('path', 'nouvelle-note.md');
+        ->assertSet('path', 'Notes/nouvelle-note.md');
 
-    expect(File::exists($this->vaultPath.'/nouvelle-note.md'))->toBeTrue()
-        ->and(BrainDocument::where('path', 'nouvelle-note.md')->exists())->toBeTrue();
+    expect(File::exists($this->vaultPath.'/Notes/nouvelle-note.md'))->toBeTrue()
+        ->and(BrainDocument::where('path', 'Notes/nouvelle-note.md')->exists())->toBeTrue();
 });

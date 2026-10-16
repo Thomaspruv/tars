@@ -10,6 +10,8 @@ use App\Support\Brain\AnchorResolver;
 use App\Support\Brain\BrainHealth;
 use App\Support\Brain\BrainHealthReport;
 use App\Support\Brain\BrainSettings;
+use App\Support\Brain\NotePathResolver;
+use App\Support\Brain\Schema\FrontmatterSchema;
 use App\Support\Brain\GitRepository;
 use App\Support\Brain\Schema\FrontmatterBuilder;
 use App\Support\Brain\Schema\NoteType;
@@ -40,9 +42,11 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
 
     public bool $showCreateModal = false;
 
-    public string $newFolder = '';
+    public string $newType = 'note';
 
     public string $newTitle = '';
+
+    public ?string $saveMessage = null;
 
     public ?string $conformanceMessage = null;
 
@@ -281,6 +285,71 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
         return $tree;
     }
 
+    /**
+     * Les notes que le contrat n'accepte pas — portées en badge dans
+     * l'arborescence et en lecture. Les zones exemptées (Profil/, territoire
+     * d'Hermes) et les fichiers générés n'y figurent jamais.
+     *
+     * @return list<string>
+     */
+    #[Computed]
+    public function nonConformantPaths(): array
+    {
+        return BrainDocument::underContract()
+            ->where('is_conformant', false)
+            ->orderBy('path')
+            ->pluck('path')
+            ->all();
+    }
+
+    /**
+     * @return list<string>
+     */
+    #[Computed]
+    public function schemaErrors(): array
+    {
+        $document = $this->selectedDocument;
+
+        if ($document === null || $document->is_conformant || $document->isConformanceExempt()) {
+            return [];
+        }
+
+        return $document->schemaErrors();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    #[Computed]
+    public function noteTypes(): array
+    {
+        $types = [];
+
+        foreach (NoteType::cases() as $type) {
+            $types[$type->value] = $type->label();
+        }
+
+        return $types;
+    }
+
+    /**
+     * Le chemin que TARS calculera — montré avant d'enregistrer, pour que
+     * Thomas voie où sa note va atterrir.
+     */
+    #[Computed]
+    public function newNotePath(): ?string
+    {
+        if (trim($this->newTitle) === '') {
+            return null;
+        }
+
+        return app(NotePathResolver::class)->resolve(
+            NoteType::tryFrom($this->newType) ?? NoteType::Note,
+            $this->newTitle,
+            now(),
+        );
+    }
+
     #[Computed]
     public function folders(): array
     {
@@ -324,7 +393,8 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
     {
         $this->path = $documentPath;
         $this->isEditing = false;
-        unset($this->selectedDocument, $this->renderedContent, $this->documentLinks);
+        $this->saveMessage = null;
+        unset($this->selectedDocument, $this->renderedContent, $this->documentLinks, $this->schemaErrors);
     }
 
     public function startEditing(): void
@@ -360,30 +430,41 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
         }
 
         $this->isEditing = false;
-        unset($this->selectedDocument, $this->renderedContent, $this->tree, $this->folders);
+        unset($this->selectedDocument, $this->renderedContent, $this->tree, $this->folders, $this->nonConformantPaths, $this->schemaErrors, $this->health);
+
+        // La sauvegarde de Thomas passe toujours : le contrat lie les agents,
+        // pas lui. Mais il doit savoir ce qu'il vient de perdre.
+        $errors = $this->schemaErrors;
+
+        $this->saveMessage = $errors === []
+            ? null
+            : 'Enregistré, mais non conforme : '.implode(' ', $errors).' Les ancres de cette note ne seront pas résolues.';
     }
 
     public function openCreateModal(): void
     {
-        $this->reset(['newFolder', 'newTitle']);
+        $this->reset(['newType', 'newTitle']);
         $this->showCreateModal = true;
     }
 
     public function createNote(): void
     {
-        $validated = $this->validate(['newTitle' => ['required', 'string', 'max:255']]);
+        $validated = $this->validate([
+            'newTitle' => ['required', 'string', 'max:255'],
+            'newType' => ['required', 'string', 'in:'.implode(',', array_keys($this->noteTypes))],
+        ]);
 
-        $slug = Str::slug($validated['newTitle']);
-        $relativePath = ($this->newFolder !== '' ? "{$this->newFolder}/" : '')."{$slug}.md";
+        $type = NoteType::from($validated['newType']);
+        $relativePath = (string) $this->newNotePath;
 
-        if (File::exists($this->absolutePath($relativePath))) {
-            $this->addError('newTitle', 'Une note avec ce nom existe déjà dans ce dossier.');
+        if (! $type->isDated() && File::exists($this->absolutePath($relativePath))) {
+            $this->addError('newTitle', "Une note existe déjà à cet emplacement ({$relativePath}).");
 
             return;
         }
 
         $frontmatter = app(FrontmatterBuilder::class)->build(
-            type: NoteType::fromFolder(explode('/', $relativePath)[0]) ?? NoteType::Note,
+            type: $type,
             title: $validated['newTitle'],
             date: now(),
             source: 'thomas',
@@ -399,7 +480,8 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
 
         $this->showCreateModal = false;
         $this->path = $relativePath;
-        unset($this->selectedDocument, $this->renderedContent, $this->tree, $this->folders);
+        $this->saveMessage = null;
+        unset($this->selectedDocument, $this->renderedContent, $this->tree, $this->folders, $this->nonConformantPaths, $this->schemaErrors, $this->health);
     }
 
     private function absolutePath(string $relativePath): string
@@ -472,7 +554,7 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
                 </div>
             @else
                 <p class="px-3 pb-2.5 font-mono text-[11px] tracking-[.1em] text-(--mut) uppercase">Arborescence</p>
-                <x-brain-tree :tree="$this->tree" :selected-path="$path" />
+                <x-brain-tree :tree="$this->tree" :selected-path="$path" :non-conformant-paths="$this->nonConformantPaths" />
             @endif
         </div>
 
@@ -545,12 +627,35 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
         @elseif (! $this->selectedDocument)
             <div class="lg:hidden">
                 <p class="mb-3.5 font-mono text-[11px] tracking-[.1em] text-(--mut) uppercase">Arborescence</p>
-                <x-brain-tree :tree="$this->tree" :selected-path="$path" />
+                <x-brain-tree :tree="$this->tree" :selected-path="$path" :non-conformant-paths="$this->nonConformantPaths" />
             </div>
             <p class="mt-6 text-[15px] text-(--mut)">Choisis une note dans l'arborescence.</p>
         @else
             <div class="mb-[22px] flex flex-wrap items-center gap-3.5">
                 <span class="font-mono text-[12px] text-(--mut)">{{ str_replace('/', ' / ', $this->selectedDocument->path) }}</span>
+
+                @if ($this->schemaErrors !== [])
+                    <div x-data="{ open: false }" class="relative">
+                        <button type="button" x-on:click="open = ! open" class="press">
+                            <x-badge type="pill" tone="warn">non conforme</x-badge>
+                        </button>
+                        <div
+                            x-show="open"
+                            x-cloak
+                            x-on:click.outside="open = false"
+                            class="absolute top-full left-0 z-10 mt-1.5 w-[320px] rounded-[14px] bg-(--surf2) p-3.5 text-[13px] leading-[1.6] text-(--tx) shadow-lg"
+                        >
+                            <p class="mb-1.5 font-semibold">Ce que le contrat v3 attend :</p>
+                            <ul class="flex flex-col gap-1 text-(--mut)">
+                                @foreach ($this->schemaErrors as $error)
+                                    <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                            <p class="mt-2 text-[12px] text-(--mut)">Tant qu'elle est non conforme, ses ancres ne sont pas résolues.</p>
+                        </div>
+                    </div>
+                @endif
+
                 <div class="ml-auto flex gap-2">
                     @unless ($isEditing)
                         <x-btn variant="secondary" size="xs" wire:click="startEditing">Éditer</x-btn>
@@ -562,6 +667,10 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
             @error('save')
                 <p class="mb-4 max-w-[620px] text-[13px] text-(--dgr)">{{ $message }}</p>
             @enderror
+
+            @if ($saveMessage)
+                <p class="mb-4 max-w-[620px] text-[13px] text-(--warn)">{{ $saveMessage }}</p>
+            @endif
 
             @if ($isEditing)
                 <div class="max-w-[620px]">
@@ -716,20 +825,30 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
             <flux:heading size="lg">Nouvelle note</flux:heading>
 
             <div>
-                <label class="text-[12px] text-(--mut)">Dossier</label>
-                <select wire:model="newFolder" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 font-mono text-[13px] text-(--tx) focus:outline-none">
-                    <option value="">Racine</option>
-                    @foreach ($this->folders as $folder)
-                        <option value="{{ $folder }}">{{ $folder }}</option>
+                <label class="text-[12px] text-(--mut)">Type</label>
+                <select wire:model.live="newType" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none">
+                    @foreach ($this->noteTypes as $value => $label)
+                        <option value="{{ $value }}">{{ $label }}</option>
                     @endforeach
                 </select>
+                @error('newType') <p class="mt-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
             </div>
 
             <div>
                 <label class="text-[12px] text-(--mut)">Titre</label>
-                <input type="text" wire:model="newTitle" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none" />
+                <input type="text" wire:model.live.debounce.400ms="newTitle" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none" />
                 @error('newTitle') <p class="mt-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
             </div>
+
+            {{-- C'est TARS qui calcule le chemin : Thomas le voit avant
+                 d'enregistrer, il ne le choisit pas. --}}
+            <p class="font-mono text-[12px] leading-[1.6] text-(--mut)">
+                @if ($this->newNotePath)
+                    → {{ $this->newNotePath }}
+                @else
+                    Donne un titre pour voir où la note sera rangée.
+                @endif
+            </p>
 
             <div class="flex justify-end gap-2">
                 <x-btn variant="ghost" wire:click="$set('showCreateModal', false)">Annuler</x-btn>
