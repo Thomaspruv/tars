@@ -4,7 +4,11 @@ use App\Enums\BrainSuggestionStatus;
 use App\Enums\GitSyncStatus;
 use App\Models\BrainDocument;
 use App\Models\BrainSuggestion;
+use App\Jobs\RunAgentCommandJob;
+use App\Models\AgentConfig;
 use App\Support\Brain\AnchorResolver;
+use App\Support\Brain\BrainHealth;
+use App\Support\Brain\BrainHealthReport;
 use App\Support\Brain\BrainSettings;
 use App\Support\Brain\GitRepository;
 use App\Support\Brain\Schema\FrontmatterBuilder;
@@ -40,10 +44,101 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
 
     public string $newTitle = '';
 
+    public ?string $conformanceMessage = null;
+
     #[Computed]
     public function configured(): bool
     {
         return app(BrainSettings::class)->isConfigured();
+    }
+
+    #[Computed]
+    public function health(): BrainHealthReport
+    {
+        return app(BrainHealth::class)->report();
+    }
+
+    #[Computed]
+    public function lastPushedAt(): ?\Carbon\CarbonInterface
+    {
+        return $this->configured
+            ? app(GitRepository::class)->lastPushAt(app(BrainSettings::class)->localPath())
+            : null;
+    }
+
+    /**
+     * @return array{at: ?\Illuminate\Support\Carbon, message: ?string}
+     */
+    #[Computed]
+    public function conflictAlert(): array
+    {
+        $settings = app(BrainSettings::class);
+
+        return ['at' => $settings->lastConflictAt(), 'message' => $settings->lastConflictMessage()];
+    }
+
+    /**
+     * Les propositions de conformité, groupées par lot — c'est le lot que
+     * Thomas accepte ou refuse d'un clic.
+     *
+     * @return \Illuminate\Support\Collection<string, Collection>
+     */
+    #[Computed]
+    public function conformanceBatches(): \Illuminate\Support\Collection
+    {
+        return BrainSuggestion::where('status', BrainSuggestionStatus::Pending->value)
+            ->whereNotNull('batch_id')
+            ->with('brainDocument')
+            ->orderBy('id')
+            ->get()
+            ->groupBy('batch_id');
+    }
+
+    public function runConformanceCheck(): void
+    {
+        if (! AgentConfig::where('agent_name', 'curateur')->where('enabled', true)->exists()) {
+            $this->addError('conformance', "Le curateur n'est pas configuré.");
+
+            return;
+        }
+
+        RunAgentCommandJob::dispatch('curator:conformance');
+
+        $this->conformanceMessage = 'Vérification lancée — les propositions arriveront ici.';
+        $this->resetErrorBag('conformance');
+    }
+
+    public function acceptConformanceBatch(string $batchId): void
+    {
+        $suggestions = BrainSuggestion::where('batch_id', $batchId)
+            ->where('status', BrainSuggestionStatus::Pending->value)
+            ->with('brainDocument')
+            ->get();
+
+        try {
+            app(SuggestionApplier::class)->applyBatch($suggestions, "curator conformance batch {$batchId}");
+            $this->resetErrorBag('conformance');
+        } catch (\RuntimeException $e) {
+            $this->addError('conformance', $e->getMessage());
+
+            return;
+        }
+
+        $this->forgetConformance();
+    }
+
+    public function rejectConformanceBatch(string $batchId): void
+    {
+        BrainSuggestion::where('batch_id', $batchId)
+            ->where('status', BrainSuggestionStatus::Pending->value)
+            ->update(['status' => BrainSuggestionStatus::Rejected->value]);
+
+        $this->forgetConformance();
+    }
+
+    private function forgetConformance(): void
+    {
+        unset($this->conformanceBatches, $this->pendingSuggestions, $this->health, $this->tree, $this->folders, $this->selectedDocument, $this->renderedContent);
     }
 
     /**
@@ -101,6 +196,7 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
     public function pendingSuggestions(): Collection
     {
         return BrainSuggestion::where('status', BrainSuggestionStatus::Pending->value)
+            ->whereNull('batch_id')
             ->with('brainDocument')
             ->get()
             ->sort(function (BrainSuggestion $a, BrainSuggestion $b): int {
@@ -134,14 +230,14 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
             return;
         }
 
-        unset($this->pendingSuggestions, $this->tree, $this->folders);
+        $this->forgetConformance();
     }
 
     public function rejectSuggestion(int $suggestionId): void
     {
         BrainSuggestion::where('id', $suggestionId)->update(['status' => BrainSuggestionStatus::Rejected->value]);
 
-        unset($this->pendingSuggestions);
+        unset($this->pendingSuggestions, $this->conformanceBatches, $this->health);
     }
 
     public function deprioritizeSuggestion(int $suggestionId): void
@@ -399,6 +495,48 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
     </div>
 
     <div class="min-w-0 flex-1 px-5 pt-4 pb-10 lg:px-9 lg:pt-[26px]">
+        @if ($this->configured)
+            {{-- La santé de la mémoire, en tête : le contrat tenu, l'état de la
+                 synchro, et l'alerte s'il y a eu un conflit. --}}
+            <div class="mb-[22px] flex flex-wrap items-center gap-x-6 gap-y-2.5">
+                <div class="min-w-[180px]">
+                    <p class="mb-1.5 flex items-baseline gap-2 text-[13px] text-(--mut)">
+                        <span class="font-semibold text-(--tx)">{{ $this->health->conformanceRate }} % conforme</span>
+                        <span>{{ $this->health->conformant }}/{{ $this->health->underContract }} notes</span>
+                    </p>
+                    <div class="h-[5px] w-full overflow-hidden rounded-full bg-(--surf2)" role="img" aria-label="{{ $this->health->conformanceRate }} % des notes respectent le contrat">
+                        <div class="h-full rounded-full bg-(--ai)" style="width: {{ $this->health->conformanceRate }}%"></div>
+                    </div>
+                </div>
+
+                <p class="text-[13px] text-(--mut)">
+                    Dernier push
+                    <span class="font-semibold text-(--tx)">{{ $this->lastPushedAt?->diffForHumans() ?? '—' }}</span>
+                </p>
+
+                @if ($this->health->misplaced > 0)
+                    <p class="text-[13px] text-(--mut)">
+                        <span class="font-semibold text-(--warn)">{{ $this->health->misplaced }}</span>
+                        hors dossier cible
+                    </p>
+                @endif
+
+                @if ($this->health->sasNotes > 0)
+                    <p class="text-[13px] text-(--mut)">
+                        Sas <span class="font-semibold text-(--tx)">{{ $this->health->sasNotes }}</span>
+                    </p>
+                @endif
+            </div>
+
+            @if ($this->conflictAlert['at'])
+                <div class="mb-[22px] max-w-[620px] rounded-[16px] border border-(--dgr) bg-(--surf) p-4">
+                    <p class="mb-1 text-[13px] font-semibold text-(--dgr)">Conflit git — {{ $this->conflictAlert['at']->diffForHumans() }}</p>
+                    <p class="text-[13px] leading-[1.6] text-(--mut)">{{ $this->conflictAlert['message'] }}</p>
+                    <a href="{{ route('settings.index') }}#cerveau" wire:navigate class="mt-2 inline-block text-[13px] text-(--ac) hover:text-(--achov)">Forcer la synchro dans les Réglages →</a>
+                </div>
+            @endif
+        @endif
+
         @if (! $this->configured)
             <x-card padding="22" class="max-w-[620px]">
                 <p class="mb-2 text-[15px] text-(--mut)">Le vault n'est pas configuré.</p>
@@ -464,6 +602,62 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
         @error('acceptSuggestion')
             <p class="mb-3.5 text-[13px] text-(--dgr)">{{ $message }}</p>
         @enderror
+
+        <div class="mb-[26px]">
+            <div class="mb-3.5 flex items-center gap-2">
+                <p class="text-[11px] tracking-[.12em] text-(--ai) uppercase">Conformité</p>
+                <x-btn variant="secondary" size="xs" class="ml-auto" wire:click="runConformanceCheck" wire:loading.attr="disabled" wire:target="runConformanceCheck">
+                    <span wire:loading wire:target="runConformanceCheck">En cours…</span>
+                    <span wire:loading.remove wire:target="runConformanceCheck">Vérifier la conformité</span>
+                </x-btn>
+            </div>
+
+            @error('conformance')
+                <p class="mb-3 text-[13px] text-(--dgr)">{{ $message }}</p>
+            @enderror
+
+            @if ($conformanceMessage)
+                <p class="mb-3 text-[13px] text-(--mut)">{{ $conformanceMessage }}</p>
+            @endif
+
+            @forelse ($this->conformanceBatches as $batchId => $batch)
+                <x-agent-block padding="16" rail="3" wire:key="batch-{{ $batchId }}" class="mb-3 !rounded-[16px]">
+                    <p class="mb-3 text-[14px] font-semibold text-(--tx)">
+                        {{ $batch->count() }} {{ Str::plural('proposition', $batch->count()) }} de mise en conformité
+                    </p>
+
+                    <div class="mb-3.5 flex flex-col gap-2.5">
+                        @foreach ($batch as $suggestion)
+                            <div wire:key="batch-item-{{ $suggestion->id }}">
+                                <p class="text-[13px] leading-[1.5] text-(--tx)">
+                                    <span class="font-semibold">{{ $suggestion->action->label() }}</span> — {{ $suggestion->reason }}
+                                </p>
+                                <p class="font-mono text-[12px] text-(--mut)">
+                                    {{ $suggestion->brainDocument?->path }}@if ($suggestion->target) → {{ $suggestion->target }}@endif
+                                </p>
+                                <div class="mt-1.5 flex gap-2">
+                                    <x-btn variant="secondary" size="xs" wire:click="acceptSuggestion({{ $suggestion->id }})">Accepter</x-btn>
+                                    <x-btn variant="ghost" size="xs" wire:click="rejectSuggestion({{ $suggestion->id }})">Refuser</x-btn>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+
+                    <div class="flex flex-wrap gap-2 border-t border-(--bd) pt-3">
+                        <x-btn variant="agent" size="xs" wire:click="acceptConformanceBatch('{{ $batchId }}')">Accepter tout le lot</x-btn>
+                        <x-btn variant="ghost" size="xs" wire:click="rejectConformanceBatch('{{ $batchId }}')">Refuser tout le lot</x-btn>
+                    </div>
+                </x-agent-block>
+            @empty
+                <p class="text-[13px] text-(--mut)">
+                    @if ($this->health->conformanceRate >= 100)
+                        Tout le cerveau respecte le contrat.
+                    @else
+                        Aucune proposition en attente.
+                    @endif
+                </p>
+            @endforelse
+        </div>
 
         @if ($this->pendingSuggestions->isNotEmpty())
             <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--ai) uppercase">Le curateur propose</p>

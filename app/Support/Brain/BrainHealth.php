@@ -1,0 +1,91 @@
+<?php
+
+namespace App\Support\Brain;
+
+use App\Enums\BrainSuggestionAction;
+use App\Enums\BrainSuggestionStatus;
+use App\Models\BrainDocument;
+use App\Models\BrainSuggestion;
+use App\Support\Brain\Schema\FrontmatterSchema;
+use App\Support\Brain\Schema\NoteType;
+use Illuminate\Support\Collection;
+
+/**
+ * The two health indicators of §A.2, plus what the conformance mission has
+ * waiting. Read by `/cerveau`, the weekly review and `get_context` — one
+ * computation, three readers.
+ */
+class BrainHealth
+{
+    /**
+     * Folders where a document's location says nothing about its type: the sas
+     * is a waiting room, the archives keep the type they had when filed.
+     */
+    public const array UNPLACED_FOLDERS = ['TARS', 'Archives'];
+
+    public function report(): BrainHealthReport
+    {
+        $underContract = BrainDocument::underContract()->count();
+        $conformant = BrainDocument::underContract()->where('is_conformant', true)->count();
+
+        return new BrainHealthReport(
+            documents: BrainDocument::count(),
+            underContract: $underContract,
+            conformant: $conformant,
+            conformanceRate: $underContract > 0 ? (int) round(($conformant / $underContract) * 100) : 100,
+            misplaced: $this->misplaced()->count(),
+            pendingConformanceSuggestions: BrainSuggestion::query()
+                ->where('status', BrainSuggestionStatus::Pending)
+                ->whereNotNull('batch_id')
+                ->count(),
+            sasNotes: BrainDocument::where('path', 'like', 'TARS/%')
+                ->where('note_type', NoteType::ATraiter->value)
+                ->where('status', '!=', 'done')
+                ->count(),
+        );
+    }
+
+    /**
+     * Conformant notes sitting in the wrong folder for their type.
+     *
+     * @return Collection<int, BrainDocument>
+     */
+    public function misplaced(): Collection
+    {
+        return BrainDocument::underContract()
+            ->where('is_conformant', true)
+            ->whereNotNull('note_type')
+            ->get()
+            ->filter(fn (BrainDocument $document): bool => self::isMisplaced($document))
+            ->values();
+    }
+
+    public static function isMisplaced(BrainDocument $document): bool
+    {
+        $type = $document->noteType();
+        $folder = explode('/', $document->path)[0];
+
+        if ($type === null || FrontmatterSchema::isExempt($document->path) || FrontmatterSchema::isGenerated($document->path)) {
+            return false;
+        }
+
+        if (in_array($folder, self::UNPLACED_FOLDERS, true)) {
+            return false;
+        }
+
+        return $folder !== $type->folder();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function conformanceActions(): array
+    {
+        return array_map(fn (BrainSuggestionAction $action): string => $action->value, [
+            BrainSuggestionAction::Complete,
+            BrainSuggestionAction::Move,
+            BrainSuggestionAction::Merge,
+            BrainSuggestionAction::Archive,
+        ]);
+    }
+}

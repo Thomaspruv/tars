@@ -6,6 +6,7 @@ use App\Models\BrainDocument;
 use App\Models\Checklist;
 use App\Models\Entity;
 use App\Models\Goal;
+use App\Support\Brain\BrainHealth;
 use App\Support\Brain\BrainSettings;
 use App\Support\Brain\IndexFileGenerator;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -61,16 +62,13 @@ class GetContextTool extends LoggedTool
      */
     private function memorySection(): string
     {
-        $total = BrainDocument::count();
-        $underContract = BrainDocument::underContract()->count();
-        $conformant = BrainDocument::underContract()->where('is_conformant', true)->count();
-        $rate = $underContract > 0 ? (int) round(($conformant / $underContract) * 100) : 100;
+        $report = app(BrainHealth::class)->report();
 
         $indexes = collect(IndexFileGenerator::INDEXED_FOLDERS)
             ->filter(fn (string $folder): bool => BrainDocument::where('path', "{$folder}/_index.md")->exists())
             ->implode(', ');
 
-        $line = "Mémoire : {$total} note(s), {$rate} % conformes au contrat v3.";
+        $line = "Mémoire : {$report->documents} note(s), {$report->conformanceRate} % conformes au contrat v3.";
 
         return $indexes === ''
             ? $line.' Aucun sommaire disponible — appelle get_memory_map après une indexation.'

@@ -13,6 +13,7 @@ use App\Models\JournalEntry;
 use App\Models\QuestionnaireAnswer;
 use App\Models\QuestionnaireRun;
 use App\Models\Task;
+use App\Support\Brain\BrainHealth;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Str;
 
@@ -22,6 +23,7 @@ class ReviewContextBuilder
     {
         return implode("\n\n", array_filter([
             $this->buildStats($periodStart, $periodEnd),
+            $this->buildMemoryHealth(),
             $this->buildActiveGoals(),
             $this->buildUpcomingDeadlines(),
             $this->buildPastDecisions(),
@@ -53,6 +55,21 @@ class ReviewContextBuilder
         - Tâches terminées : {$done}
         - Tâches planifiées (échéance ou date planifiée sur la période) : {$planned}
         - Tâches orphelines (sans objectif) : {$orphanCount}/{$openCount} tâches ouvertes ({$orphanRatio}%)
+        MD;
+    }
+
+    /**
+     * Les deux indicateurs de santé de la mémoire, pour que la revue les
+     * rappelle à Thomas plutôt que de les laisser dans un écran.
+     */
+    private function buildMemoryHealth(): string
+    {
+        $report = app(BrainHealth::class)->report();
+
+        return <<<MD
+        ## Santé de la mémoire
+        - {$report->sentence()}
+        - Documents hors dossier cible : {$report->misplaced}
         MD;
     }
 

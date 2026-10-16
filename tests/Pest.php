@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\GitSyncStatus;
 use App\Support\Brain\GitPullResult;
 use App\Support\Brain\GitRepository;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -58,9 +59,13 @@ expect()->extend('toBeOne', function () {
 function mockVaultGit(?Closure $expectations = null): void
 {
     test()->mock(GitRepository::class, function (MockInterface $mock) use ($expectations): void {
-        $mock->shouldReceive('isRepository')->andReturn(true);
-        $mock->shouldReceive('pullRebase')->andReturn(new GitPullResult(successful: true, message: ''));
-        $mock->shouldReceive('push')->andReturnNull();
+        // byDefault() so a test that cares about one of these can still
+        // declare its own expectation and have it win.
+        $mock->shouldReceive('isRepository')->andReturn(true)->byDefault();
+        $mock->shouldReceive('pullRebase')->andReturn(new GitPullResult(successful: true, message: ''))->byDefault();
+        $mock->shouldReceive('push')->andReturnNull()->byDefault();
+        $mock->shouldReceive('lastPushAt')->andReturnNull()->byDefault();
+        $mock->shouldReceive('status')->andReturn(GitSyncStatus::Synced)->byDefault();
 
         $expectations?->__invoke($mock);
     });

@@ -11,15 +11,47 @@ use App\Models\Entity;
 use App\Models\Goal;
 use App\Models\McpCall;
 use App\Models\Task;
+use App\Support\Brain\BrainHealth;
+use App\Support\Brain\Schema\NoteType;
+use App\Support\FuzzyMatcher;
 use Illuminate\Support\Collection;
 
 class CuratorContextBuilder
 {
     /**
-     * Folders the curator is ever allowed to touch — anything else (Hermes's
-     * own memory territory, or paths outside the vault) is out of scope.
+     * One LLM call per batch: a migration of the whole vault is a long job, and
+     * a batch Thomas can read is a batch he actually validates.
      */
-    public const array MANAGED_FOLDERS = ['Profil', 'Réunions', 'Notes', 'TARS', 'Archives'];
+    public const int BATCH_SIZE = 40;
+
+    /**
+     * Above this similarity, two living notes in the same folder are probably
+     * the same subject written twice.
+     */
+    private const float DUPLICATE_THRESHOLD = 0.85;
+
+    /**
+     * Folders where a second note on the same subject is a merge signal.
+     */
+    private const array DUPLICATE_FOLDERS = ['Notes', 'Personnes', 'Organisations'];
+
+    public function __construct(
+        private readonly BrainHealth $health = new BrainHealth,
+        private readonly FuzzyMatcher $fuzzyMatcher = new FuzzyMatcher,
+    ) {}
+
+    /**
+     * Folders the curator is ever allowed to touch: the ontology's own, and
+     * nothing else. Hermes's technical memory — whatever its folders are
+     * actually called — and any stray path outside the documented tree stay
+     * out of scope.
+     *
+     * @return list<string>
+     */
+    public static function managedFolders(): array
+    {
+        return array_values(array_unique(array_map(fn (NoteType $type): string => $type->folder(), NoteType::cases())));
+    }
 
     public function build(string $mission): string
     {
@@ -56,16 +88,114 @@ class CuratorContextBuilder
             ->values();
     }
 
-    /**
-     * Only the 5 documented vault folders are ever the curator's business —
-     * anything else (Hermes's own memory territory, whatever it's actually
-     * named, or a stray file outside the documented structure) is excluded.
-     */
     public static function isManagedPath(string $path): bool
     {
-        $topFolder = explode('/', $path)[0];
+        return in_array(explode('/', $path)[0], self::managedFolders(), true);
+    }
 
-        return in_array($topFolder, self::MANAGED_FOLDERS, true);
+    /**
+     * The documents the conformance mission has to look at: non conformant
+     * ones, conformant ones sitting in the wrong folder, and probable
+     * duplicates — oldest first, so a migration converges.
+     *
+     * @return Collection<int, BrainDocument>
+     */
+    public function conformanceDocuments(): Collection
+    {
+        $nonConformant = BrainDocument::underContract()
+            ->where('is_conformant', false)
+            ->orderBy('path')
+            ->get();
+
+        return $nonConformant
+            ->concat($this->health->misplaced())
+            ->concat($this->probableDuplicates())
+            ->unique('id')
+            ->values();
+    }
+
+    /**
+     * The context of one conformance batch — the referential it may anchor
+     * against, the documents themselves, the living map it could merge into,
+     * and what Thomas already refused.
+     *
+     * @param  Collection<int, BrainDocument>  $batch
+     */
+    public function forConformance(Collection $batch): string
+    {
+        return implode("\n\n", array_filter([
+            $this->buildReferential(),
+            $this->buildLivingMap(),
+            $this->buildConformanceDocuments($batch),
+            $this->buildRecentRejections($batch),
+        ]));
+    }
+
+    /**
+     * @param  Collection<int, BrainDocument>  $batch
+     */
+    private function buildConformanceDocuments(Collection $batch): string
+    {
+        if ($batch->isEmpty()) {
+            return "## Documents à mettre en conformité\nAucun document à traiter.";
+        }
+
+        $blocks = $batch->map(function (BrainDocument $document): string {
+            $frontmatter = collect($document->frontmatter ?? [])
+                ->map(fn (mixed $value, string $key): string => "{$key}: ".(is_array($value) ? json_encode($value) : (string) $value))
+                ->implode("\n");
+
+            $diagnosis = implode(' ', array_filter([
+                $document->is_conformant ? 'Conforme.' : 'Non conforme : '.implode(' ', $document->schemaErrors()),
+                BrainHealth::isMisplaced($document) ? "Mal placé : le type « {$document->note_type} » appartient au dossier {$document->noteType()?->folder()}/." : null,
+            ]));
+
+            return <<<MD
+            ### {$document->path}
+            Diagnostic : {$diagnosis}
+
+            Frontmatter actuel :
+            {$frontmatter}
+
+            Contenu :
+            {$document->content}
+            MD;
+        })->implode("\n\n");
+
+        return "## Documents à mettre en conformité\n{$blocks}";
+    }
+
+    /**
+     * Pairs of living notes whose titles are close enough to be the same
+     * subject — only the newer of each pair is submitted, since it is the one
+     * that would be merged away.
+     *
+     * @return Collection<int, BrainDocument>
+     */
+    private function probableDuplicates(): Collection
+    {
+        $candidates = BrainDocument::underContract()
+            ->where(function ($query): void {
+                foreach (self::DUPLICATE_FOLDERS as $folder) {
+                    $query->orWhere('path', 'like', "{$folder}/%");
+                }
+            })
+            ->orderBy('path')
+            ->get();
+
+        $duplicates = collect();
+
+        foreach ($candidates as $document) {
+            $twin = $candidates->first(fn (BrainDocument $other): bool => $other->id !== $document->id
+                && dirname($other->path) === dirname($document->path)
+                && $this->fuzzyMatcher->score((string) $other->title, (string) $document->title) >= self::DUPLICATE_THRESHOLD * 100);
+
+            if ($twin !== null) {
+                $duplicates->push($document);
+            }
+        }
+
+        return $duplicates->values();
     }
 
     private function buildReferential(): string

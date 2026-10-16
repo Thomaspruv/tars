@@ -159,7 +159,23 @@ class VaultWriter
         }
 
         File::delete("{$vaultPath}/{$operation->movedFrom}");
-        BrainDocument::where('path', $operation->movedFrom)->delete();
+
+        $source = BrainDocument::where('path', $operation->movedFrom)->first();
+
+        if ($source === null) {
+            return;
+        }
+
+        // The index row follows the file instead of being recreated: a moved
+        // note keeps its id, so its anchors and the suggestion that moved it
+        // survive the move.
+        if (BrainDocument::where('path', $operation->relativePath)->whereKeyNot($source->getKey())->exists()) {
+            $source->delete();
+
+            return;
+        }
+
+        $source->update(['path' => $operation->relativePath]);
     }
 
     /**

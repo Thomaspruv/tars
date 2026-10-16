@@ -16,6 +16,7 @@ use App\Support\Brain\VaultOperation;
 use App\Support\Brain\VaultWriter;
 use App\Support\FuzzyMatcher;
 use App\Support\QuickAdd\QuickAddParser;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
 use RuntimeException;
 use Symfony\Component\Yaml\Yaml;
@@ -36,17 +37,81 @@ class SuggestionApplier
      */
     public function apply(BrainSuggestion $suggestion): void
     {
-        match ($suggestion->action) {
-            BrainSuggestionAction::Anchor, BrainSuggestionAction::Complete => $this->applyFrontmatterPatch($suggestion),
-            BrainSuggestionAction::Move => $this->applyMove($suggestion),
-            BrainSuggestionAction::Merge => $this->applyMerge($suggestion),
-            BrainSuggestionAction::Archive => $this->applyArchive($suggestion),
+        $operations = $this->operationsFor($suggestion);
+
+        if ($operations !== []) {
+            $this->commit($operations, $this->commitMessageFor($suggestion));
+        }
+
+        $suggestion->update(['status' => BrainSuggestionStatus::Accepted]);
+    }
+
+    /**
+     * Accepts a whole conformance batch in one commit — « accepter tout le
+     * lot » has to read as one movement in the vault's history, not twenty.
+     *
+     * Two suggestions landing on the same file would silently overwrite each
+     * other in a single commit, so such a batch falls back to one commit per
+     * suggestion.
+     *
+     * @param  Collection<int, BrainSuggestion>  $suggestions
+     *
+     * @throws RuntimeException
+     */
+    public function applyBatch(Collection $suggestions, string $commitMessage): void
+    {
+        $operations = [];
+
+        foreach ($suggestions as $suggestion) {
+            foreach ($this->operationsFor($suggestion) as $operation) {
+                $operations[] = $operation;
+            }
+        }
+
+        $paths = array_map(fn (VaultOperation $operation): string => $operation->relativePath, $operations);
+
+        if (count($paths) !== count(array_unique($paths))) {
+            foreach ($suggestions as $suggestion) {
+                $this->apply($suggestion);
+            }
+
+            return;
+        }
+
+        if ($operations !== []) {
+            $this->commit($operations, $commitMessage);
+        }
+
+        BrainSuggestion::whereIn('id', $suggestions->pluck('id'))->update(['status' => BrainSuggestionStatus::Accepted->value]);
+    }
+
+    /**
+     * What a suggestion changes in the vault — empty for the actions that
+     * create a task, a list item or a goal instead (those apply right here).
+     *
+     * @return list<VaultOperation>
+     */
+    private function operationsFor(BrainSuggestion $suggestion): array
+    {
+        return match ($suggestion->action) {
+            BrainSuggestionAction::Anchor, BrainSuggestionAction::Complete => [$this->frontmatterPatchOperation($suggestion)],
+            BrainSuggestionAction::Move => [$this->moveOperation($suggestion)],
+            BrainSuggestionAction::Merge => $this->mergeOperations($suggestion),
+            BrainSuggestionAction::Archive => [$this->archiveSuggestionOperation($suggestion)],
             BrainSuggestionAction::CreateTask => $this->applyCreateTask($suggestion),
             BrainSuggestionAction::CreateListItem => $this->applyCreateListItem($suggestion),
             BrainSuggestionAction::CreateGoal => $this->applyCreateGoal($suggestion),
         };
+    }
 
-        $suggestion->update(['status' => BrainSuggestionStatus::Accepted]);
+    private function commitMessageFor(BrainSuggestion $suggestion): string
+    {
+        $path = $suggestion->brainDocument->path;
+
+        return match ($suggestion->action) {
+            BrainSuggestionAction::Move, BrainSuggestionAction::Merge => "curator {$suggestion->action->value} {$path} → {$suggestion->target}",
+            default => "curator {$suggestion->action->value} {$path}",
+        };
     }
 
     /**
@@ -54,19 +119,16 @@ class SuggestionApplier
      * and the curator always leaves it conformant to the v3 contract, which is
      * how the existing vault migrates note by note.
      */
-    private function applyFrontmatterPatch(BrainSuggestion $suggestion): void
+    private function frontmatterPatchOperation(BrainSuggestion $suggestion): VaultOperation
     {
         $document = $suggestion->brainDocument;
 
         [, $body] = $this->splitFrontmatter($this->read($document->path));
 
-        $this->commit(
-            [VaultOperation::write($document->path, $this->contractual($suggestion, $document->path, $body), $body)],
-            "curator {$suggestion->action->value} {$document->path}",
-        );
+        return VaultOperation::write($document->path, $this->contractual($suggestion, $document->path, $body), $body);
     }
 
-    private function applyMove(BrainSuggestion $suggestion): void
+    private function moveOperation(BrainSuggestion $suggestion): VaultOperation
     {
         $document = $suggestion->brainDocument;
         $target = $suggestion->target;
@@ -77,13 +139,13 @@ class SuggestionApplier
 
         [, $body] = $this->splitFrontmatter($this->read($document->path));
 
-        $this->commit(
-            [VaultOperation::move($document->path, $target, $this->contractual($suggestion, $target, $body), $body)],
-            "curator move {$document->path} → {$target}",
-        );
+        return VaultOperation::move($document->path, $target, $this->contractual($suggestion, $target, $body), $body);
     }
 
-    private function applyMerge(BrainSuggestion $suggestion): void
+    /**
+     * @return list<VaultOperation>
+     */
+    private function mergeOperations(BrainSuggestion $suggestion): array
     {
         $document = $suggestion->brainDocument;
         $target = $suggestion->target;
@@ -99,7 +161,7 @@ class SuggestionApplier
         [$mergedFrontmatter, $mergedBody] = $this->splitFrontmatter($suggestion->merged_content);
         [$targetFrontmatter] = $this->splitFrontmatter($this->readIfExists($target));
 
-        $this->commit([
+        return [
             VaultOperation::write($target, $this->frontmatter->upgrade(
                 frontmatter: [...$targetFrontmatter, ...$mergedFrontmatter],
                 relativePath: $target,
@@ -107,18 +169,14 @@ class SuggestionApplier
                 source: 'agent-curateur',
             ), $mergedBody),
             $this->archiveOperation($document->path, $archivePath),
-        ], "curator merge {$document->path} → {$target}");
+        ];
     }
 
-    private function applyArchive(BrainSuggestion $suggestion): void
+    private function archiveSuggestionOperation(BrainSuggestion $suggestion): VaultOperation
     {
         $document = $suggestion->brainDocument;
-        $archivePath = 'Archives/'.basename($document->path);
 
-        $this->commit(
-            [$this->archiveOperation($document->path, $archivePath, $suggestion->frontmatter_patch ?? [])],
-            "curator archive {$document->path}",
-        );
+        return $this->archiveOperation($document->path, 'Archives/'.basename($document->path), $suggestion->frontmatter_patch ?? []);
     }
 
     /**
@@ -202,7 +260,10 @@ class SuggestionApplier
         return File::exists($absolutePath) ? File::get($absolutePath) : '';
     }
 
-    private function applyCreateTask(BrainSuggestion $suggestion): void
+    /**
+     * @return list<VaultOperation>
+     */
+    private function applyCreateTask(BrainSuggestion $suggestion): array
     {
         $patch = $suggestion->frontmatter_patch ?? [];
         $title = trim((string) ($patch['title'] ?? ''));
@@ -224,9 +285,14 @@ class SuggestionApplier
         ]);
 
         $suggestion->update(['created_type' => Task::class, 'created_id' => $task->id]);
+
+        return [];
     }
 
-    private function applyCreateListItem(BrainSuggestion $suggestion): void
+    /**
+     * @return list<VaultOperation>
+     */
+    private function applyCreateListItem(BrainSuggestion $suggestion): array
     {
         $target = $suggestion->target;
         $content = trim((string) (($suggestion->frontmatter_patch ?? [])['content'] ?? ''));
@@ -247,9 +313,14 @@ class SuggestionApplier
         ]);
 
         $suggestion->update(['created_type' => ChecklistItem::class, 'created_id' => $item->id]);
+
+        return [];
     }
 
-    private function applyCreateGoal(BrainSuggestion $suggestion): void
+    /**
+     * @return list<VaultOperation>
+     */
+    private function applyCreateGoal(BrainSuggestion $suggestion): array
     {
         $patch = $suggestion->frontmatter_patch ?? [];
         $title = trim((string) ($patch['title'] ?? ''));
@@ -266,6 +337,8 @@ class SuggestionApplier
         ]);
 
         $suggestion->update(['created_type' => Goal::class, 'created_id' => $goal->id]);
+
+        return [];
     }
 
     /**

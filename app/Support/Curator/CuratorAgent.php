@@ -17,11 +17,13 @@ use App\Models\ChecklistItem;
 use App\Models\Goal;
 use App\Models\Task;
 use App\Support\Agents\AgentRunner;
+use App\Support\Brain\BrainHealth;
 use App\Support\Brain\Schema\FrontmatterBuilder;
 use App\Support\Brain\VaultWriter;
 use App\Support\FuzzyMatcher;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 
 class CuratorAgent
 {
@@ -81,6 +83,68 @@ class CuratorAgent
     }
 
     /**
+     * Mission C — conformité : ramène l'existant au contrat, par lots que
+     * Thomas valide. Un lot = un appel LLM = un AgentRun, tous loggés.
+     *
+     * @return Collection<int, AgentRun>
+     */
+    public function processConformance(AgentRunTrigger $trigger, ?int $limit = null): Collection
+    {
+        $config = $this->curatorConfig();
+
+        if (! $config) {
+            return new Collection;
+        }
+
+        $systemPrompt = str_replace(
+            '{{VAULT_README}}',
+            File::get(resource_path('vault/README.md')),
+            File::get(resource_path('prompts/curator-conformance.md')),
+        );
+
+        $documents = $this->contextBuilder->conformanceDocuments();
+
+        if ($limit !== null) {
+            $documents = $documents->take($limit);
+        }
+
+        $runs = new Collection;
+
+        foreach ($documents->chunk(CuratorContextBuilder::BATCH_SIZE) as $batch) {
+            $context = $this->contextBuilder->forConformance($batch);
+            $run = $this->runner->run($config, $systemPrompt, [['role' => 'user', 'content' => $context]], $trigger);
+            $runs->push($run);
+
+            if ($run->status !== AgentRunStatus::Success) {
+                continue;
+            }
+
+            $items = $this->decodeAndValidate((string) $run->output);
+
+            if ($items === null) {
+                $run->update(['status' => AgentRunStatus::Failed, 'error' => 'Réponse du curateur invalide : JSON attendu, schéma non respecté.']);
+
+                continue;
+            }
+
+            $batchId = (string) Str::uuid();
+            $notesByPath = $batch->keyBy('path');
+
+            foreach ($items as $item) {
+                if (! in_array($item['action'], [...BrainHealth::conformanceActions(), 'none'], true)) {
+                    report(new \RuntimeException("Suggestion de conformité ignorée : action « {$item['action']} » hors mission."));
+
+                    continue;
+                }
+
+                $this->processItem($item, $notesByPath, $run, batchId: $batchId, autoApply: false);
+            }
+        }
+
+        return $runs;
+    }
+
+    /**
      * @return list<array<string, mixed>>|null
      */
     private function decodeAndValidate(string $output): ?array
@@ -115,7 +179,7 @@ class CuratorAgent
      * @param  array<string, mixed>  $item
      * @param  Collection<string, BrainDocument>  $notesByPath
      */
-    private function processItem(array $item, Collection $notesByPath, AgentRun $run): void
+    private function processItem(array $item, Collection $notesByPath, AgentRun $run, ?string $batchId = null, bool $autoApply = true): void
     {
         if ($item['action'] === 'none') {
             return;
@@ -157,6 +221,7 @@ class CuratorAgent
             'confidence' => $confidence,
             'reason' => $reason,
             'agent_run_id' => $run->id,
+            'batch_id' => $batchId,
         ];
 
         $suggestion = BrainSuggestion::create([...$data, 'status' => BrainSuggestionStatus::Pending]);
@@ -166,7 +231,7 @@ class CuratorAgent
         // exists. Everything else — including vault housekeeping and goal
         // creation — auto-applies via the same SuggestionApplier the
         // Rangement tab uses for a manual "Accepter".
-        if ($confidence === SuggestionConfidence::High && $this->hasNoConflict($action, $frontmatterPatch ?? [], $target)) {
+        if ($autoApply && $confidence === SuggestionConfidence::High && $this->hasNoConflict($action, $frontmatterPatch ?? [], $target)) {
             try {
                 $this->applier->apply($suggestion);
                 $suggestion->update(['status' => BrainSuggestionStatus::AutoApplied]);

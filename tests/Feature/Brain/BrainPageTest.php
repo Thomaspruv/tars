@@ -107,6 +107,7 @@ test('refuses to save when the vault has a git conflict', function () {
     $this->mock(GitRepository::class, function ($mock): void {
         $mock->shouldReceive('isRepository')->andReturn(true);
         $mock->shouldReceive('status')->andReturn(GitSyncStatus::Conflict);
+        $mock->shouldReceive('lastPushAt')->andReturnNull();
         $mock->shouldReceive('pullRebase')->andReturn(new GitPullResult(successful: false, message: 'CONFLICT (content)'));
         // Only the sas note is committed — never the file being saved.
         $mock->shouldReceive('commit')->with(Mockery::type('string'), Mockery::pattern('/^TARS\//'), Mockery::type('string'));

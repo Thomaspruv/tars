@@ -19,6 +19,7 @@ new #[Title('Agents')] class extends Component
     private const array CURATOR_MISSIONS = [
         'todo' => 'curator:todo',
         'tidy' => 'curator:tidy',
+        'conformance' => 'curator:conformance',
     ];
 
     /** @var array<string, string> */
@@ -535,6 +536,10 @@ new #[Title('Agents')] class extends Component
                                 <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="runCuratorMission('todo')" wire:loading.attr="disabled" wire:target="runCuratorMission('todo')">
                                     <span wire:loading wire:target="runCuratorMission('todo')">En cours…</span>
                                     <span wire:loading.remove wire:target="runCuratorMission('todo')">Lancer la todo</span>
+                                </x-btn>
+                                <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="runCuratorMission('conformance')" wire:loading.attr="disabled" wire:target="runCuratorMission('conformance')">
+                                    <span wire:loading wire:target="runCuratorMission('conformance')">En cours…</span>
+                                    <span wire:loading.remove wire:target="runCuratorMission('conformance')">Vérifier la conformité</span>
                                 </x-btn>
                                 <x-btn variant="agent" wire:click="runCuratorMission('tidy')" wire:loading.attr="disabled" wire:target="runCuratorMission('tidy')">
                                     <span wire:loading wire:target="runCuratorMission('tidy')">En cours…</span>

@@ -2,11 +2,15 @@
 
 use App\Enums\BrainSuggestionStatus;
 use App\Enums\GitSyncStatus;
+use App\Jobs\RunAgentCommandJob;
+use App\Models\AgentConfig;
 use App\Models\BrainDocument;
 use App\Models\BrainSuggestion;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Brain\BrainSettings;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -147,4 +151,97 @@ test('shows the sidebar badge count matching pending suggestions', function () {
     $response = $this->get(route('today'));
 
     expect($response->getContent())->toMatch('/Cerveau<\/span>\s*<span[^>]*>2<\/span>/');
+});
+
+test('shows the memory health in the brain header', function () {
+    $this->actingAs(User::factory()->create());
+    BrainDocument::factory()->create(['path' => 'Notes/ok.md', 'note_type' => 'note', 'is_conformant' => true]);
+    BrainDocument::factory()->create(['path' => 'Notes/ko.md', 'is_conformant' => false]);
+
+    mockVaultGit();
+
+    Livewire::test('pages::brain')
+        ->assertSee('50 % conforme')
+        ->assertSee('Dernier push');
+});
+
+test('shows the conflict alert and links to the force-sync button', function () {
+    $this->actingAs(User::factory()->create());
+    app(BrainSettings::class)->recordConflict('Contenu gardé dans TARS/2026-10-16-conflit-alpha.md.');
+
+    mockVaultGit();
+
+    Livewire::test('pages::brain')
+        ->assertSee('Conflit git')
+        ->assertSee('TARS/2026-10-16-conflit-alpha.md')
+        ->assertSee('Forcer la synchro dans les Réglages');
+});
+
+test('groups conformance suggestions into a batch Thomas can accept in one click', function () {
+    $this->actingAs(User::factory()->create());
+    File::ensureDirectoryExists($this->vaultPath.'/Notes');
+    File::put($this->vaultPath.'/Notes/marc.md', "---\ntype: insight\n---\n\nMarc Dupont.");
+
+    $document = BrainDocument::factory()->create(['path' => 'Notes/marc.md', 'title' => 'Marc', 'frontmatter' => ['type' => 'insight']]);
+
+    BrainSuggestion::factory()->create([
+        'brain_document_id' => $document->id,
+        'batch_id' => 'lot-1',
+        'action' => 'complete',
+        'frontmatter_patch' => ['type' => 'person', 'title' => 'Marc Dupont', 'date' => '2026-07-26'],
+        'reason' => 'Frontmatter hérité de la v2.',
+    ]);
+
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once()->with(
+        Mockery::type('string'),
+        ['Notes/marc.md'],
+        'tars: curator conformance batch lot-1',
+    ));
+
+    Livewire::test('pages::brain')
+        ->assertSee('Conformité')
+        ->assertSee('Frontmatter hérité de la v2.')
+        ->assertSee('Accepter tout le lot')
+        ->call('acceptConformanceBatch', 'lot-1')
+        ->assertHasNoErrors();
+
+    expect(BrainSuggestion::first()->status)->toBe(BrainSuggestionStatus::Accepted)
+        ->and(File::get($this->vaultPath.'/Notes/marc.md'))->toContain('type: person');
+});
+
+test('refusing a batch rejects every suggestion in it without touching the vault', function () {
+    $this->actingAs(User::factory()->create());
+    $document = BrainDocument::factory()->create(['path' => 'Notes/marc.md']);
+
+    BrainSuggestion::factory()->count(2)->create(['brain_document_id' => $document->id, 'batch_id' => 'lot-1', 'action' => 'complete']);
+
+    mockVaultGit(fn ($mock) => $mock->shouldNotReceive('commitPaths'));
+
+    Livewire::test('pages::brain')
+        ->call('rejectConformanceBatch', 'lot-1')
+        ->assertDontSee('Accepter tout le lot');
+
+    expect(BrainSuggestion::where('status', BrainSuggestionStatus::Rejected)->count())->toBe(2);
+});
+
+test('the conformance check is queued, and refuses to run without a configured curator', function () {
+    $this->actingAs(User::factory()->create());
+    Queue::fake();
+
+    mockVaultGit();
+
+    Livewire::test('pages::brain')
+        ->call('runConformanceCheck')
+        ->assertHasErrors(['conformance']);
+
+    Queue::assertNothingPushed();
+
+    AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
+
+    Livewire::test('pages::brain')
+        ->call('runConformanceCheck')
+        ->assertHasNoErrors()
+        ->assertSee('Vérification lancée');
+
+    Queue::assertPushed(RunAgentCommandJob::class);
 });

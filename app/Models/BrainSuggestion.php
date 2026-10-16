@@ -24,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property string $reason
  * @property BrainSuggestionStatus $status
  * @property int $agent_run_id
+ * @property string|null $batch_id
  * @property string|null $created_type
  * @property int|null $created_id
  * @property Carbon|null $deprioritized_at
@@ -32,7 +33,7 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable([
     'brain_document_id', 'action', 'target', 'frontmatter_patch', 'merged_content',
-    'confidence', 'reason', 'status', 'agent_run_id', 'created_type', 'created_id', 'deprioritized_at',
+    'confidence', 'reason', 'status', 'agent_run_id', 'batch_id', 'created_type', 'created_id', 'deprioritized_at',
 ])]
 class BrainSuggestion extends Model
 {

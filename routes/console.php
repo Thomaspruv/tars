@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\ArchiveStaleItemsCommand;
+use App\Console\Commands\CuratorConformanceCommand;
 use App\Console\Commands\CuratorTidyCommand;
 use App\Console\Commands\CuratorTodoCommand;
 use App\Console\Commands\GeneratePlannerProposalCommand;
@@ -23,6 +24,7 @@ Schedule::command(SyncBrainCommand::class, ['--scheduled'])->everyMinute()->with
 Schedule::command(GenerateReviewCommand::class, ['--scheduled'])->everyMinute()->withoutOverlapping();
 Schedule::command(CuratorTodoCommand::class, ['--scheduled'])->hourly()->withoutOverlapping();
 Schedule::command(CuratorTidyCommand::class, ['--scheduled'])->dailyAt('22:00')->withoutOverlapping();
+Schedule::command(CuratorConformanceCommand::class, ['--scheduled'])->weeklyOn(0, '21:00')->withoutOverlapping();
 Schedule::command(TriageInboxCommand::class, ['--scheduled'])->hourly()->withoutOverlapping();
 Schedule::command(GeneratePlannerProposalCommand::class, ['--scheduled'])->everyMinute()->withoutOverlapping();
 Schedule::command(QuestionnaireSchedulerCommand::class, ['--scheduled'])->hourly()->withoutOverlapping();
