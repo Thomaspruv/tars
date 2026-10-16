@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\JournalEntry;
+use App\Support\Brain\GitPullResult;
+use App\Support\Brain\GitRepository;
 use App\Support\Journal\JournalWriter;
 use Illuminate\Support\Facades\File;
 
@@ -139,4 +141,27 @@ test('explicitly clearing the mood on an existing entry sets it to null', functi
 
     $content = File::get("{$this->vaultPath}/{$second->note_path}");
     expect($content)->not->toContain('mood:');
+});
+
+test('does not point the entry at a note the vault refused to write', function () {
+    $this->mock(GitRepository::class, function ($mock): void {
+        $mock->shouldReceive('isRepository')->andReturn(true);
+        $mock->shouldReceive('pullRebase')->andReturn(new GitPullResult(successful: false, message: 'CONFLICT (content)'));
+        $mock->shouldReceive('commit');
+    });
+
+    $entry = app(JournalWriter::class)->write(
+        summary: 'Journée dense.',
+        mood: 7,
+        moodLabel: null,
+        highlights: [],
+        date: null,
+        source: 'hermes',
+    );
+
+    // The entry itself is kept — it is Thomas's data — and it points at the
+    // sas note that actually holds the text, not at a file never written.
+    expect($entry->summary)->toBe('Journée dense.')
+        ->and($entry->note_path)->toContain('-conflit-')
+        ->and(File::exists($this->vaultPath.'/'.$entry->note_path))->toBeTrue();
 });

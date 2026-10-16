@@ -52,7 +52,13 @@ class JournalWriter
             ? $this->appendEntry(File::get($absolutePath), $date, $summary, $highlights, $mood, $moodLabel, $clearMood)
             : $this->buildEntry($date, $summary, $highlights, $mood, $moodLabel, $source);
 
-        $this->writer->write($relativePath, $frontmatter, $body, "journal {$date->toDateString()}");
+        $result = $this->writer->write($relativePath, $frontmatter, $body, "journal {$date->toDateString()}");
+
+        // The entry itself is never lost — it lives in the database — but a
+        // note_path pointing at a file the vault refused would be a lie.
+        if (! $result->isWritten()) {
+            report(new \RuntimeException("Journal du {$date->toDateString()} non écrit dans le vault : ".$result->message()));
+        }
 
         $mergedHighlights = $existing
             ? array_values(array_unique([...($existing->highlights ?? []), ...$highlights]))
@@ -64,7 +70,11 @@ class JournalWriter
             'summary' => $existing ? trim($existing->summary."\n\n".$summary) : $summary,
             'highlights' => $mergedHighlights,
             'source' => $source,
-            'note_path' => $relativePath,
+            // On a refused write the content sits in the sas: point there
+            // rather than at a file the vault never created.
+            'note_path' => $result->isWritten()
+                ? $relativePath
+                : ($result->sasPath ?? $existing->note_path ?? $relativePath),
         ];
 
         if ($existing) {

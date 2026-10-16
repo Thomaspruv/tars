@@ -152,3 +152,20 @@ test('the index command reposes the README right after indexing', function () {
 
     expect(File::exists($this->vaultPath.'/README.md'))->toBeTrue();
 });
+
+test('rewrites a generated file whose frontmatter drifted', function () {
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths'));
+
+    app(IndexFileGenerator::class)->write();
+
+    // Same body, but the contract header was stripped by hand in Obsidian.
+    $body = app(IndexFileGenerator::class)->operations();
+    expect($body)->toBe([]);
+
+    File::put($this->vaultPath.'/Personnes/_index.md', "# Personnes\n\nAucune note pour l'instant.\n");
+
+    expect(array_map(
+        fn ($operation): string => $operation->relativePath,
+        app(IndexFileGenerator::class)->operations()
+    ))->toBe(['Personnes/_index.md']);
+});

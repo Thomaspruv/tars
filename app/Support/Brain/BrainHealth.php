@@ -33,14 +33,16 @@ class BrainHealth
             underContract: $underContract,
             conformant: $conformant,
             conformanceRate: $underContract > 0 ? (int) round(($conformant / $underContract) * 100) : 100,
-            misplaced: $this->misplaced()->count(),
+            misplaced: $this->misplaced(['id', 'path', 'note_type'])->count(),
             pendingConformanceSuggestions: BrainSuggestion::query()
                 ->where('status', BrainSuggestionStatus::Pending)
                 ->whereNotNull('batch_id')
                 ->count(),
+            // `status != 'done'` alone would drop the NULL-status rows — which
+            // is precisely every pre-contract note the sas still holds.
             sasNotes: BrainDocument::where('path', 'like', 'TARS/%')
                 ->where('note_type', NoteType::ATraiter->value)
-                ->where('status', '!=', 'done')
+                ->where(fn ($query) => $query->whereNull('status')->orWhere('status', '!=', 'done'))
                 ->count(),
         );
     }
@@ -48,14 +50,16 @@ class BrainHealth
     /**
      * Conformant notes sitting in the wrong folder for their type.
      *
+     * @param  list<string>  $columns  narrow it when only the count is needed:
+     *                                 this runs on every `/cerveau` render and every `get_context`.
      * @return Collection<int, BrainDocument>
      */
-    public function misplaced(): Collection
+    public function misplaced(array $columns = ['*']): Collection
     {
         return BrainDocument::underContract()
             ->where('is_conformant', true)
             ->whereNotNull('note_type')
-            ->get()
+            ->get($columns)
             ->filter(fn (BrainDocument $document): bool => self::isMisplaced($document))
             ->values();
     }

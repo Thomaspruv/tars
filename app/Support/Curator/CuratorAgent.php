@@ -18,7 +18,9 @@ use App\Models\Goal;
 use App\Models\Task;
 use App\Support\Agents\AgentRunner;
 use App\Support\Brain\BrainHealth;
+use App\Support\Brain\BrainSettings;
 use App\Support\Brain\Schema\FrontmatterBuilder;
+use App\Support\Brain\VaultParser;
 use App\Support\Brain\VaultWriter;
 use App\Support\FuzzyMatcher;
 use Illuminate\Support\Collection;
@@ -34,6 +36,8 @@ class CuratorAgent
         private readonly FuzzyMatcher $fuzzyMatcher,
         private readonly VaultWriter $writer,
         private readonly FrontmatterBuilder $frontmatter,
+        private readonly BrainSettings $settings,
+        private readonly VaultParser $parser,
     ) {}
 
     public function isConfigured(): bool
@@ -324,15 +328,34 @@ class CuratorAgent
      */
     private function markProcessed(BrainDocument $document): void
     {
+        $absolutePath = rtrim($this->settings->localPath(), '/')."/{$document->path}";
+
+        // The same run may just have archived or moved this note: writing it
+        // back at its old path would resurrect it in the sas, for ever.
+        if (! File::exists($absolutePath)) {
+            return;
+        }
+
+        // Read from disk, never from the index: brain_documents is only as
+        // fresh as the last indexation, and Thomas may have edited the note in
+        // Obsidian since.
+        $parsed = $this->parser->parse(File::get($absolutePath), basename($document->path, '.md'));
+
         $frontmatter = $this->frontmatter->upgrade(
-            frontmatter: $document->frontmatter ?? [],
+            frontmatter: $parsed->frontmatter,
             relativePath: $document->path,
-            fallbackTitle: (string) $document->title,
+            fallbackTitle: $parsed->title,
             source: 'agent-curateur',
             patch: ['status' => 'done'],
         );
 
-        $this->writer->write($document->path, $frontmatter, (string) $document->content, "curator traité {$document->path}");
+        $result = $this->writer->write($document->path, $frontmatter, $parsed->content, "curator traité {$document->path}");
+
+        // A note left unmarked comes back at the next hourly round and is
+        // re-analysed from scratch — worth knowing about.
+        if (! $result->isWritten()) {
+            report(new \RuntimeException("Note du sas non marquée traitée « {$document->path} » : ".$result->message()));
+        }
     }
 
     private function curatorConfig(): ?AgentConfig

@@ -3,6 +3,8 @@
 use App\Models\Questionnaire;
 use App\Models\QuestionnaireAnswer;
 use App\Models\QuestionnaireRun;
+use App\Support\Brain\GitPullResult;
+use App\Support\Brain\GitRepository;
 use App\Support\Questionnaire\QuestionnaireCompleter;
 use Illuminate\Support\Facades\File;
 
@@ -87,4 +89,20 @@ test('completing an already-completed run is a no-op and does not commit again',
     app(QuestionnaireCompleter::class)->complete($run);
 
     expect($run->fresh()->completed_at->toDateTimeString())->toBe($completedAt->toDateTimeString());
+});
+
+test('points a refused bilan at the sas note instead of a file that was never written', function () {
+    $this->mock(GitRepository::class, function ($mock): void {
+        $mock->shouldReceive('isRepository')->andReturn(true);
+        $mock->shouldReceive('pullRebase')->andReturn(new GitPullResult(successful: false, message: 'CONFLICT (content)'));
+        $mock->shouldReceive('commit');
+    });
+
+    $run = QuestionnaireRun::factory()->create(['due_date' => '2026-10-16']);
+    QuestionnaireAnswer::factory()->create(['run_id' => $run->id, 'question_text' => 'Énergie', 'type' => 'scale', 'answer_numeric' => 7]);
+
+    app(QuestionnaireCompleter::class)->complete($run);
+
+    expect($run->fresh()->status->value)->toBe('completed')
+        ->and($run->fresh()->note_path)->toContain('-conflit-');
 });

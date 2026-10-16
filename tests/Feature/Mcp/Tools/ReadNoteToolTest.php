@@ -55,3 +55,13 @@ test('fails cleanly when the vault is not configured', function () {
 
     TarsServer::tool(ReadNoteTool::class, ['ref' => 'Marc'])->assertHasErrors(['vault']);
 });
+
+test('treats a LIKE wildcard in the reference as plain text', function () {
+    BrainDocument::factory()->create(['path' => 'Personnes/_index.md', 'title' => 'Index', 'content' => 'Le sommaire.']);
+    BrainDocument::factory()->create(['path' => 'Personnes/marc-index.md', 'title' => 'Marc', 'content' => 'Le voisin.']);
+
+    TarsServer::tool(ReadNoteTool::class, ['ref' => '_index.md'])
+        ->assertOk()
+        ->assertSee('Le sommaire')
+        ->assertDontSee('Le voisin');
+});

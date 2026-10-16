@@ -12,6 +12,8 @@ use App\Models\ChecklistItem;
 use App\Models\Goal;
 use App\Models\Task;
 use App\Support\Agents\AgentRunner;
+use App\Support\Brain\GitPullResult;
+use App\Support\Brain\GitRepository;
 use App\Support\Curator\CuratorAgent;
 use App\Support\Curator\CuratorContextBuilder;
 use Illuminate\Database\Eloquent\Collection;
@@ -435,4 +437,75 @@ test('does not flip frontmatter or commit for the tidy mission', function () {
     app(CuratorAgent::class)->process(AgentRunTrigger::Scheduled, 'tidy');
 
     expect(BrainSuggestion::count())->toBe(0);
+});
+
+test('does not resurrect a sas note the same round just archived', function () {
+    AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
+    File::put($this->vaultPath.'/TARS/note.md', "---\nschema: 3\ntype: a-traiter\ntitle: Brut\ndate: 2026-10-16\nstatus: active\n---\n\nPérimé.");
+    BrainDocument::factory()->create([
+        'path' => 'TARS/note.md',
+        'title' => 'Brut',
+        'frontmatter' => ['schema' => 3, 'type' => 'a-traiter', 'title' => 'Brut', 'date' => '2026-10-16', 'status' => 'active'],
+    ]);
+
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths'));
+
+    $this->mock(AgentRunner::class, function ($mock) {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
+            'path' => 'TARS/note.md',
+            'action' => 'archive',
+            'confidence' => 'high',
+            'reason' => 'Périmé.',
+        ]])]));
+    });
+
+    app(CuratorAgent::class)->process(AgentRunTrigger::Scheduled, 'todo');
+
+    expect(File::exists($this->vaultPath.'/TARS/note.md'))->toBeFalse()
+        ->and(File::exists($this->vaultPath.'/Archives/note.md'))->toBeTrue();
+});
+
+test('marks the sas note from what is on disk, not from a stale index', function () {
+    AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
+    File::put($this->vaultPath.'/TARS/note.md', "---\ntype: a-traiter\n---\n\nTexte corrigé dans Obsidian.");
+    BrainDocument::factory()->create([
+        'path' => 'TARS/note.md',
+        'title' => 'Brut',
+        'frontmatter' => ['type' => 'a-traiter'],
+        'content' => 'Ancien texte, indexé avant la correction.',
+    ]);
+
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once());
+
+    $this->mock(AgentRunner::class, function ($mock) {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([['path' => 'TARS/note.md', 'action' => 'none']])]));
+    });
+
+    app(CuratorAgent::class)->process(AgentRunTrigger::Scheduled, 'todo');
+
+    expect(File::get($this->vaultPath.'/TARS/note.md'))
+        ->toContain('Texte corrigé dans Obsidian')
+        ->not->toContain('Ancien texte');
+});
+
+test('reports a sas note it could not mark instead of losing the failure', function () {
+    AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
+    File::put($this->vaultPath.'/TARS/note.md', "---\ntype: a-traiter\n---\n\nBrut.");
+    BrainDocument::factory()->create(['path' => 'TARS/note.md', 'title' => 'Brut', 'frontmatter' => ['type' => 'a-traiter']]);
+
+    $this->mock(GitRepository::class, function ($mock): void {
+        $mock->shouldReceive('isRepository')->andReturn(true);
+        $mock->shouldReceive('pullRebase')->andReturn(new GitPullResult(successful: false, message: 'CONFLICT (content)'));
+        $mock->shouldReceive('commit');
+    });
+
+    $this->mock(AgentRunner::class, function ($mock) {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([['path' => 'TARS/note.md', 'action' => 'none']])]));
+    });
+
+    app(CuratorAgent::class)->process(AgentRunTrigger::Scheduled, 'todo');
+
+    // The note keeps its active status, so the next round picks it up again.
+    expect(File::get($this->vaultPath.'/TARS/note.md'))->not->toContain('status: done')
+        ->and(File::glob($this->vaultPath.'/TARS/*-conflit-*.md'))->toHaveCount(1);
 });

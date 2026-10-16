@@ -53,13 +53,23 @@ class QuestionnaireCompleter
             extra: ['questionnaire' => $run->questionnaire->name, ...$numericAnswers],
         );
 
-        $this->writer->write(
+        $result = $this->writer->write(
             $relativePath,
             $frontmatter,
             trim(implode("\n", $lines))."\n",
             "bilan {$run->questionnaire->name} ({$run->due_date->toDateString()})",
         );
 
-        $run->update(['status' => 'completed', 'completed_at' => now(), 'note_path' => $relativePath]);
+        // The answers are safe in the database either way; the note_path is
+        // only set when the file really landed.
+        if (! $result->isWritten()) {
+            report(new \RuntimeException("Bilan « {$run->questionnaire->name} » non écrit dans le vault : ".$result->message()));
+        }
+
+        $run->update([
+            'status' => 'completed',
+            'completed_at' => now(),
+            'note_path' => $result->isWritten() ? $relativePath : $result->sasPath,
+        ]);
     }
 }

@@ -53,14 +53,31 @@ class GitRepository
     }
 
     /**
+     * Not being able to reach the remote is not a divergence: nothing was
+     * rewritten, so the write may land locally and the push job carries it
+     * later. Anything else that makes the pull fail does block the write.
+     */
+    private const array UNREACHABLE_REMOTE_PATTERNS = [
+        'there is no tracking information',
+        'could not read from remote repository',
+        'could not resolve host',
+        'unable to access',
+        'does not appear to be a git repository',
+        'no such remote',
+        'network is unreachable',
+        'connection timed out',
+        'operation timed out',
+    ];
+
+    /**
      * The pull that runs before every machine write (§A.8). A genuine
      * divergence leaves a rebase in progress: it is aborted so the working
      * tree is left exactly as it was, and reported as unsuccessful so the
      * caller writes nothing.
      *
-     * Being unable to reach the remote at all (offline, no upstream) is not a
-     * conflict: nothing was rewritten, so the write may proceed locally and
-     * the push job will carry it later.
+     * A pull that *refuses to start* — unstaged changes in the working tree,
+     * typically because Thomas is editing in Obsidian right now — blocks the
+     * write just the same: the §A.8 guarantee has to hold or be reported.
      */
     public function pullRebase(string $path): GitPullResult
     {
@@ -72,13 +89,26 @@ class GitRepository
 
         $message = trim($result->errorOutput() ?: $result->output());
 
-        if (! $this->isRebasing($path)) {
-            return new GitPullResult(successful: true, message: $message);
+        if ($this->isRebasing($path)) {
+            Process::path($path)->run(['git', 'rebase', '--abort']);
+
+            return new GitPullResult(successful: false, message: $message);
         }
 
-        Process::path($path)->run(['git', 'rebase', '--abort']);
+        return new GitPullResult(successful: $this->isUnreachableRemote($message), message: $message);
+    }
 
-        return new GitPullResult(successful: false, message: $message);
+    private function isUnreachableRemote(string $message): bool
+    {
+        $normalized = mb_strtolower($message);
+
+        foreach (self::UNREACHABLE_REMOTE_PATTERNS as $pattern) {
+            if (str_contains($normalized, $pattern)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function push(string $path): void

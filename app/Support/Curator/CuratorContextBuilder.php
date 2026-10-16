@@ -107,10 +107,20 @@ class CuratorContextBuilder
             ->orderBy('path')
             ->get();
 
+        // A document already waiting in a batch is not submitted again: a
+        // second pending proposal on the same note cannot be applied after the
+        // first one moved it.
+        $alreadyProposed = BrainSuggestion::query()
+            ->where('status', BrainSuggestionStatus::Pending)
+            ->whereNotNull('batch_id')
+            ->pluck('brain_document_id')
+            ->all();
+
         return $nonConformant
             ->concat($this->health->misplaced())
             ->concat($this->probableDuplicates())
             ->unique('id')
+            ->reject(fn (BrainDocument $document): bool => in_array($document->id, $alreadyProposed, true))
             ->values();
     }
 
@@ -184,15 +194,27 @@ class CuratorContextBuilder
             ->get();
 
         $duplicates = collect();
+        $paired = [];
 
         foreach ($candidates as $document) {
+            if (isset($paired[$document->id])) {
+                continue;
+            }
+
             $twin = $candidates->first(fn (BrainDocument $other): bool => $other->id !== $document->id
+                && ! isset($paired[$other->id])
                 && dirname($other->path) === dirname($document->path)
                 && $this->fuzzyMatcher->score((string) $other->title, (string) $document->title) >= self::DUPLICATE_THRESHOLD * 100);
 
-            if ($twin !== null) {
-                $duplicates->push($document);
+            if ($twin === null) {
+                continue;
             }
+
+            // Submit one of the pair only: two reciprocal merges in the same
+            // batch would write each note into the other.
+            $paired[$document->id] = true;
+            $paired[$twin->id] = true;
+            $duplicates->push($document);
         }
 
         return $duplicates->values();

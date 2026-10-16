@@ -68,7 +68,17 @@ class SuggestionApplier
             }
         }
 
-        $paths = array_map(fn (VaultOperation $operation): string => $operation->relativePath, $operations);
+        // Both ends of a move count: a batch that archives A and also writes
+        // to A would recreate it, leaving the note at two paths at once.
+        $paths = [];
+
+        foreach ($operations as $operation) {
+            $paths[] = $operation->relativePath;
+
+            if ($operation->isMove()) {
+                $paths[] = (string) $operation->movedFrom;
+            }
+        }
 
         if (count($paths) !== count(array_unique($paths))) {
             foreach ($suggestions as $suggestion) {

@@ -219,3 +219,23 @@ test('isRepository tells a clone from a plain folder', function () {
     File::ensureDirectoryExists($this->path.'/.git');
     expect((new GitRepository)->isRepository($this->path))->toBeTrue();
 });
+
+test('pullRebase blocks the write when the pull refuses to start', function () {
+    File::ensureDirectoryExists($this->path.'/.git');
+    Process::fake(fn () => Process::result(errorOutput: 'error: cannot pull with rebase: You have unstaged changes.', exitCode: 1));
+
+    $result = (new GitRepository)->pullRebase($this->path);
+
+    expect($result->successful)->toBeFalse();
+});
+
+test('pullRebase lets a local write through only when the remote is out of reach', function (string $message) {
+    File::ensureDirectoryExists($this->path.'/.git');
+    Process::fake(fn () => Process::result(errorOutput: $message, exitCode: 1));
+
+    expect((new GitRepository)->pullRebase($this->path)->successful)->toBeTrue();
+})->with([
+    'pas de remote suivi' => ['There is no tracking information for the current branch.'],
+    'hôte injoignable' => ['ssh: Could not resolve host github.com'],
+    'dépôt inaccessible' => ['fatal: unable to access https://github.com/x/y.git'],
+]);

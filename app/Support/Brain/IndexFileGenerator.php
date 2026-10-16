@@ -4,6 +4,7 @@ namespace App\Support\Brain;
 
 use App\Models\BrainDocument;
 use App\Support\Brain\Schema\FrontmatterBuilder;
+use App\Support\Brain\Schema\FrontmatterSchema;
 use App\Support\Brain\Schema\NoteType;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
@@ -144,6 +145,13 @@ class IndexFileGenerator
         return rtrim(File::get(resource_path('vault/README.md')))."\n";
     }
 
+    /**
+     * Only the body is compared, so that a reindexation which changes nothing
+     * leaves a null diff — the frontmatter carries today's date and would
+     * otherwise move every day. Its *version* is still checked: a generated
+     * file whose frontmatter drifted (hand-stripped, or written under an older
+     * contract) is rewritten.
+     */
     private function unchanged(string $relativePath, string $body): bool
     {
         $absolutePath = rtrim($this->settings->localPath(), '/')."/{$relativePath}";
@@ -152,7 +160,13 @@ class IndexFileGenerator
             return false;
         }
 
-        return trim($this->parser->parse(File::get($absolutePath), '')->content) === trim($body);
+        $parsed = $this->parser->parse(File::get($absolutePath), '');
+
+        if ($parsed->schema->schemaVersion !== FrontmatterSchema::CURRENT_VERSION) {
+            return false;
+        }
+
+        return trim($parsed->content) === trim($body);
     }
 
     /**

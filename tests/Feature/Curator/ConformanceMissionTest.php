@@ -66,12 +66,27 @@ test('the context builder submits a conformant note sitting in the wrong folder'
         ->and(app(CuratorContextBuilder::class)->forConformance($documents))->toContain('Mal placé');
 });
 
-test('the context builder submits probable duplicates of a living note', function () {
+test('the context builder submits one of each probable duplicate pair, not both', function () {
     BrainDocument::factory()->create(['path' => 'Notes/fiscalite-sarl.md', 'title' => 'Fiscalité SARL', 'note_type' => 'note', 'is_conformant' => true]);
     BrainDocument::factory()->create(['path' => 'Notes/fiscalite-sarl-2.md', 'title' => 'Fiscalité SARL', 'note_type' => 'note', 'is_conformant' => true]);
 
-    expect(app(CuratorContextBuilder::class)->conformanceDocuments()->pluck('path')->all())
-        ->toContain('Notes/fiscalite-sarl.md', 'Notes/fiscalite-sarl-2.md');
+    // Submitting both would let the curator answer « merge A → B » and
+    // « merge B → A » in the same batch.
+    $paths = app(CuratorContextBuilder::class)->conformanceDocuments()->pluck('path')->all();
+
+    expect($paths)->toHaveCount(1)
+        ->and($paths[0])->toStartWith('Notes/fiscalite-sarl');
+});
+
+test('a document already waiting in a batch is not submitted twice', function () {
+    $document = nonConformantDocument();
+    BrainSuggestion::factory()->create([
+        'brain_document_id' => $document->id,
+        'batch_id' => 'lot-1',
+        'status' => BrainSuggestionStatus::Pending,
+    ]);
+
+    expect(app(CuratorContextBuilder::class)->conformanceDocuments())->toHaveCount(0);
 });
 
 test('the context builder never submits Profil, Hermes territory or a generated file', function () {
@@ -361,4 +376,49 @@ test('accepting a whole batch moves the files and completes the frontmatter in a
         ->and(File::get($this->vaultPath.'/Notes/alpha.md'))->toContain('schema: 3')
         ->and(BrainSuggestion::where('status', BrainSuggestionStatus::Accepted)->count())->toBe(2)
         ->and(BrainDocument::where('path', 'Notes/alpha.md')->first()->entities)->toHaveCount(1);
+});
+
+test('a batch that both moves and rewrites the same note falls back to one commit each', function () {
+    File::ensureDirectoryExists($this->vaultPath.'/Notes');
+    File::put($this->vaultPath.'/Notes/marc.md', "---\ntype: insight\n---\n\nMarc Dupont.");
+
+    $document = BrainDocument::factory()->create(['path' => 'Notes/marc.md', 'title' => 'Marc', 'frontmatter' => ['type' => 'insight']]);
+    $run = AgentRun::factory()->create(['status' => AgentRunStatus::Success]);
+
+    // The curator should never emit both, but if it does the note must not end
+    // up existing at two paths at once.
+    BrainSuggestion::factory()->create([
+        'brain_document_id' => $document->id,
+        'agent_run_id' => $run->id,
+        'batch_id' => 'lot-1',
+        'action' => 'move',
+        'target' => 'Personnes/marc-dupont.md',
+        'frontmatter_patch' => ['type' => 'person', 'title' => 'Marc Dupont', 'date' => '2026-07-26'],
+    ]);
+    BrainSuggestion::factory()->create([
+        'brain_document_id' => $document->id,
+        'agent_run_id' => $run->id,
+        'batch_id' => 'lot-1',
+        'action' => 'complete',
+        'frontmatter_patch' => ['type' => 'note', 'title' => 'Marc', 'date' => '2026-07-26'],
+    ]);
+
+    // One commit per suggestion instead of one for the batch.
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->with(
+        Mockery::type('string'),
+        Mockery::type('array'),
+        Mockery::pattern('/^tars: curator (move|complete) /'),
+    )->atLeast()->once());
+
+    try {
+        app(SuggestionApplier::class)->applyBatch(
+            BrainSuggestion::where('batch_id', 'lot-1')->with('brainDocument')->get(),
+            'curator conformance batch lot-1',
+        );
+    } catch (RuntimeException) {
+        // The second suggestion has nothing left to read: that is the point.
+    }
+
+    expect(File::exists($this->vaultPath.'/Notes/marc.md'))->toBeFalse()
+        ->and(File::exists($this->vaultPath.'/Personnes/marc-dupont.md'))->toBeTrue();
 });

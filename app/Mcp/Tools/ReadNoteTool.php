@@ -70,6 +70,10 @@ class ReadNoteTool extends LoggedTool
             return $byTitle;
         }
 
-        return BrainDocument::where('path', 'like', "%{$ref}%")->orderBy('path')->get();
+        // `%` and `_` arrive straight from the model, and `_` is common in the
+        // very filenames this fallback exists for (`_index.md`).
+        $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $ref);
+
+        return BrainDocument::whereRaw("path LIKE ? ESCAPE '\\'", ["%{$escaped}%"])->orderBy('path')->get();
     }
 }

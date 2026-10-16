@@ -18,7 +18,7 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
 #[Name('upsert_note')]
-#[Description("Écrit une connaissance typée dans le cerveau — personne, organisation, réunion, note, décision, journal, veille, projet. C'est TARS qui calcule le chemin d'après le type : ne fournis jamais de chemin. Réécrire une note vivante existante la met à jour au lieu de la dupliquer.")]
+#[Description("Écrit une connaissance typée dans le cerveau — personne, organisation, réunion, note, décision, journal, veille, projet. C'est TARS qui calcule le chemin d'après le type : ne fournis jamais de chemin. Réécrire une note vivante existante la met à jour au lieu de la dupliquer, mais le contenu fourni REMPLACE le corps existant : pour compléter une note, lis-la d'abord avec read_note et renvoie le tout.")]
 class UpsertNoteTool extends LoggedTool
 {
     /**
@@ -40,7 +40,7 @@ class UpsertNoteTool extends LoggedTool
         return [
             'type' => $schema->string()->enum($this->allowedTypes())->description('Le type de la note — il décide du dossier et du nommage.')->required(),
             'title' => $schema->string()->description('Le titre de la note.')->required(),
-            'content' => $schema->string()->description('Le corps de la note, en markdown.')->required(),
+            'content' => $schema->string()->description('Le corps complet de la note, en markdown : il remplace entièrement le corps existant. Pour compléter une note, lis-la d\'abord avec read_note.')->required(),
             'date' => $schema->string()->description('Date en français : "hier", "vendredi", "16/10". Par défaut aujourd\'hui.'),
             'status' => $schema->string()->enum(['active', 'paused', 'done', 'archived'])->description('Requis pour project, veille et a-traiter.'),
             'entity' => $schema->array()->items($schema->string())->description('Noms des entités à ancrer (personnes, organisations…).'),
@@ -125,7 +125,7 @@ class UpsertNoteTool extends LoggedTool
 
     private function originalDate(?BrainDocument $existing): ?CarbonInterface
     {
-        $date = $existing?->frontmatter['date'] ?? null;
+        $date = ($existing->frontmatter ?? [])['date'] ?? null;
 
         return is_string($date) ? Carbon::parse($date) : null;
     }
