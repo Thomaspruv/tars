@@ -156,19 +156,42 @@ test('rejects an action that does not belong to the conformance mission', functi
     expect(BrainSuggestion::count())->toBe(0);
 });
 
-test('rejects a suggestion pointing outside the ontology and logs it', function () {
+test('accepts a legacy folder as the source of a move — that is the migration', function () {
     AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
-    nonConformantDocument('Mémoire technique/contexte.md', ['type' => 'context']);
+    nonConformantDocument('00 - Meta/marc.md', ['type' => 'contact']);
 
     $this->mock(AgentRunner::class, function ($mock): void {
         $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create([
             'status' => AgentRunStatus::Success,
             'output' => json_encode([[
-                'path' => 'Mémoire technique/contexte.md',
+                'path' => '00 - Meta/marc.md',
                 'action' => 'move',
-                'target' => 'Notes/contexte.md',
+                'target' => 'Personnes/marc-dupont.md',
+                'frontmatter' => ['schema' => 3, 'type' => 'person', 'title' => 'Marc Dupont', 'date' => '2026-07-26'],
+                'confidence' => 'medium',
+                'reason' => 'Fiche de personne rangée dans un dossier hérité.',
+            ]]),
+        ]));
+    });
+
+    app(CuratorAgent::class)->processConformance(AgentRunTrigger::Manual);
+
+    expect(BrainSuggestion::firstOrFail()->target)->toBe('Personnes/marc-dupont.md');
+});
+
+test('never touches Hermes own memory territory', function () {
+    AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
+    BrainDocument::factory()->create(['path' => '.hermes/active-context.md', 'is_conformant' => false]);
+    nonConformantDocument();
+
+    $this->mock(AgentRunner::class, function ($mock): void {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create([
+            'status' => AgentRunStatus::Success,
+            'output' => json_encode([[
+                'path' => '.hermes/active-context.md',
+                'action' => 'archive',
                 'confidence' => 'high',
-                'reason' => 'Hors périmètre.',
+                'reason' => 'Périmé.',
             ]]),
         ]));
     });
@@ -177,6 +200,32 @@ test('rejects a suggestion pointing outside the ontology and logs it', function 
 
     expect(BrainSuggestion::count())->toBe(0);
 });
+
+test('rejects a destination that would leave the ontology, or the vault', function (string $target) {
+    AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
+    nonConformantDocument();
+
+    $this->mock(AgentRunner::class, function ($mock) use ($target): void {
+        $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create([
+            'status' => AgentRunStatus::Success,
+            'output' => json_encode([[
+                'path' => 'Notes/marc.md',
+                'action' => 'move',
+                'target' => $target,
+                'confidence' => 'high',
+                'reason' => 'Destination inventée.',
+            ]]),
+        ]));
+    });
+
+    app(CuratorAgent::class)->processConformance(AgentRunTrigger::Manual);
+
+    expect(BrainSuggestion::count())->toBe(0);
+})->with([
+    'un dossier inventé' => ['Contacts/marc.md'],
+    'une sortie du vault' => ['../../ailleurs/marc.md'],
+    'un chemin absolu' => ['/etc/marc.md'],
+]);
 
 test('marks the run failed on invalid json without writing anything', function () {
     AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);

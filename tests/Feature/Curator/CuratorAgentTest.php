@@ -135,7 +135,7 @@ test('auto-applies a move action at high confidence during the tidy mission', fu
         ->and(BrainDocument::where('path', 'Archives/plombier.md')->exists())->toBeTrue();
 });
 
-test('falls back to pending when an auto-applicable move is missing a target', function () {
+test('drops a move suggestion that names no destination', function () {
     AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
     File::ensureDirectoryExists($this->vaultPath.'/Notes');
     File::put($this->vaultPath.'/Notes/plombier.md', "---\ntype: note\n---\n\nLe plombier passe mardi.");
@@ -152,7 +152,9 @@ test('falls back to pending when an auto-applicable move is missing a target', f
 
     app(CuratorAgent::class)->process(AgentRunTrigger::Manual, 'tidy');
 
-    expect(BrainSuggestion::firstOrFail()->status)->toBe(BrainSuggestionStatus::Pending)
+    // A move without a destination could never be applied: it is dropped and
+    // logged rather than parked in front of Thomas.
+    expect(BrainSuggestion::count())->toBe(0)
         ->and(File::exists($this->vaultPath.'/Notes/plombier.md'))->toBeTrue();
 });
 

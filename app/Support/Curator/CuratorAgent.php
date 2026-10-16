@@ -195,13 +195,13 @@ class CuratorAgent
 
         $action = BrainSuggestionAction::from($item['action']);
 
-        if ($this->isOutOfScope($document->path, $action)) {
-            report(new \RuntimeException("Suggestion du curateur ignorée : chemin hors périmètre « {$document->path} » ({$action->value})."));
+        $target = is_string($item['target'] ?? null) ? $item['target'] : null;
+
+        if ($this->isOutOfScope($document->path, $action, $target)) {
+            report(new \RuntimeException("Suggestion du curateur ignorée : chemin hors périmètre « {$document->path} »".($target !== null ? " → « {$target} »" : '')." ({$action->value})."));
 
             return;
         }
-
-        $target = is_string($item['target'] ?? null) ? $item['target'] : null;
 
         if ($this->isRecentlyRejected($document->id, $action, $target)) {
             return;
@@ -283,15 +283,28 @@ class CuratorAgent
         return $this->fuzzyMatcher->bestMatch($openItems, $content, fn (ChecklistItem $item): string => $item->content) === null;
     }
 
-    private function isOutOfScope(string $path, BrainSuggestionAction $action): bool
+    /**
+     * A *source* may sit anywhere but Hermes's own memory — that is the whole
+     * point of the migration: the legacy folders are outside the ontology, and
+     * a note has to be allowed to leave them. A *destination*, on the other
+     * hand, is always inside the ontology, which also rules out a hallucinated
+     * path escaping the vault.
+     */
+    private function isOutOfScope(string $path, BrainSuggestionAction $action, ?string $target): bool
     {
-        if (! CuratorContextBuilder::isManagedPath($path)) {
+        if (str_starts_with($path, '.hermes/')) {
             return true;
         }
 
         $topFolder = explode('/', $path)[0];
 
-        return $topFolder === 'Profil' && ! in_array($action, [BrainSuggestionAction::Anchor, BrainSuggestionAction::Complete], true);
+        if ($topFolder === 'Profil' && ! in_array($action, [BrainSuggestionAction::Anchor, BrainSuggestionAction::Complete], true)) {
+            return true;
+        }
+
+        $movesFile = in_array($action, [BrainSuggestionAction::Move, BrainSuggestionAction::Merge], true);
+
+        return $movesFile && ($target === null || ! CuratorContextBuilder::isManagedPath($target));
     }
 
     private function isRecentlyRejected(int $documentId, BrainSuggestionAction $action, ?string $target): bool

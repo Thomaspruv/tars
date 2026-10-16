@@ -191,3 +191,27 @@ test('does nothing at all when the vault is not configured', function () {
     expect($result->status)->toBe(VaultWriteStatus::Unconfigured)
         ->and(File::exists($this->vaultPath.'/Personnes/marc.md'))->toBeFalse();
 });
+
+test('refuses a path that would leave the vault', function (string $path) {
+    Queue::fake();
+
+    $result = app(VaultWriter::class)->write($path, ($this->frontmatter)(), 'Corps.', 'person Marc');
+
+    expect($result->status)->toBe(VaultWriteStatus::Invalid)
+        ->and($result->message())->toContain('hors du vault');
+
+    Queue::assertNothingPushed();
+})->with([
+    'remontée' => ['../marc.md'],
+    'remontée profonde' => ['Personnes/../../marc.md'],
+    'chemin absolu' => ['/tmp/marc.md'],
+    'chemin vide' => [''],
+]);
+
+test('refuses a move whose source would leave the vault', function () {
+    Queue::fake();
+
+    $result = app(VaultWriter::class)->move('../ailleurs.md', 'Personnes/marc.md', ($this->frontmatter)(), 'Corps.', 'move');
+
+    expect($result->status)->toBe(VaultWriteStatus::Invalid);
+});

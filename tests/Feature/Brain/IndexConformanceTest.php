@@ -121,3 +121,10 @@ test('under-contract scope excludes the exempt zones and the generated files', f
 
     expect(BrainDocument::underContract()->pluck('path')->all())->toBe(['Notes/alpha.md']);
 });
+
+test('a note whose name merely ends in index is still under contract', function () {
+    BrainDocument::factory()->create(['path' => 'Notes/myindex.md']);
+    BrainDocument::factory()->create(['path' => 'Notes/_index.md']);
+
+    expect(BrainDocument::underContract()->pluck('path')->all())->toBe(['Notes/myindex.md']);
+});

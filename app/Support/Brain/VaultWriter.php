@@ -133,6 +133,16 @@ class VaultWriter
         $errors = [];
 
         foreach ($operations as $operation) {
+            $paths = $operation->movedFrom !== null
+                ? [$operation->relativePath, $operation->movedFrom]
+                : [$operation->relativePath];
+
+            foreach ($paths as $path) {
+                if (! $this->isInsideVault($path)) {
+                    $errors[] = "{$path} : chemin hors du vault.";
+                }
+            }
+
             if ($operation->isRaw()) {
                 continue;
             }
@@ -145,6 +155,20 @@ class VaultWriter
         }
 
         return $errors;
+    }
+
+    /**
+     * The last line of defence on a path: the curator's `target` and the
+     * conflict sas name both reach here as text, and a single `..` would put a
+     * file outside Thomas's vault.
+     */
+    private function isInsideVault(string $relativePath): bool
+    {
+        if ($relativePath === '' || str_starts_with($relativePath, '/') || preg_match('/^[a-zA-Z]:/', $relativePath)) {
+            return false;
+        }
+
+        return ! in_array('..', explode('/', str_replace('\\', '/', $relativePath)), true);
     }
 
     private function put(string $vaultPath, VaultOperation $operation): void

@@ -102,7 +102,11 @@ class BrainDocument extends Model
             $query->where('path', 'not like', "{$folder}/%");
         }
 
-        return $query->where('path', '!=', 'README.md')->where('path', 'not like', '%_index.md');
+        // `_` is a single-character wildcard in LIKE, and SQLite has no default
+        // escape character — without the explicit ESCAPE, `Notes/myindex.md`
+        // would pass for a generated file.
+        return $query->where('path', '!=', 'README.md')
+            ->whereRaw("path NOT LIKE ? ESCAPE '\\'", ['%\_index.md']);
     }
 
     /**
