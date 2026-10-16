@@ -266,18 +266,23 @@ new #[Title('Réglages')] class extends Component
     }
 
     /**
-     * @return array{lastSynced: ?Carbon, lastIndexed: ?Carbon, documentsCount: int, gitStatus: GitSyncStatus}
+     * @return array{lastSynced: ?Carbon, lastIndexed: ?Carbon, documentsCount: int, gitStatus: GitSyncStatus, lastPushed: ?Carbon, lastPushError: ?string, lastConflictAt: ?Carbon, lastConflictMessage: ?string}
      */
     #[Computed]
     public function brainStatus(): array
     {
         $settings = app(BrainSettings::class);
+        $git = app(GitRepository::class);
 
         return [
             'lastSynced' => $settings->lastSyncedAt(),
             'lastIndexed' => $settings->lastIndexedAt(),
             'documentsCount' => BrainDocument::count(),
-            'gitStatus' => app(GitRepository::class)->status($settings->localPath()),
+            'gitStatus' => $git->status($settings->localPath()),
+            'lastPushed' => $git->lastPushAt($settings->localPath()),
+            'lastPushError' => $settings->lastPushError(),
+            'lastConflictAt' => $settings->lastConflictAt(),
+            'lastConflictMessage' => $settings->lastConflictMessage(),
         ];
     }
 
@@ -319,6 +324,37 @@ new #[Title('Réglages')] class extends Component
         $this->brainSyncMessage = $exitCode === 0
             ? trim(Artisan::output())
             : 'Échec de la synchronisation — voir les logs.';
+
+        unset($this->brainStatus);
+    }
+
+    /**
+     * Pull-rebase then push, in one click — what Thomas reaches for when a
+     * conflict alert is showing and he has sorted it out in Obsidian.
+     */
+    public function forceBrainSync(): void
+    {
+        $settings = app(BrainSettings::class);
+        $git = app(GitRepository::class);
+        $path = $settings->localPath();
+
+        $pull = $git->pullRebase($path);
+
+        if (! $pull->successful) {
+            $this->brainSyncMessage = "Le pull-rebase a échoué : {$pull->message}";
+            unset($this->brainStatus);
+
+            return;
+        }
+
+        try {
+            $git->push($path);
+            $settings->recordPushError(null);
+            $this->brainSyncMessage = 'Vault synchronisé — pull-rebase et push effectués.';
+        } catch (\Throwable $e) {
+            $settings->recordPushError($e->getMessage());
+            $this->brainSyncMessage = "Le push a échoué : {$e->getMessage()}";
+        }
 
         unset($this->brainStatus);
     }
@@ -599,13 +635,31 @@ new #[Title('Réglages')] class extends Component
                         <dd class="text-(--tx)">{{ $this->brainStatus['lastIndexed']?->translatedFormat('d M · H:i') ?? '—' }}</dd>
                     </div>
                     <div class="flex justify-between">
+                        <dt>Dernier push</dt>
+                        <dd class="text-(--tx)">{{ $this->brainStatus['lastPushed']?->translatedFormat('d M · H:i') ?? '—' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
                         <dt>Documents indexés</dt>
                         <dd class="text-(--tx)">{{ $this->brainStatus['documentsCount'] }}</dd>
                     </div>
                 </dl>
 
+                @if ($this->brainStatus['lastConflictAt'])
+                    <div class="rounded-[14px] border border-(--dgr) bg-(--surf2) p-3.5">
+                        <p class="mb-1 text-[13px] font-semibold text-(--dgr)">
+                            Conflit git — {{ $this->brainStatus['lastConflictAt']->translatedFormat('d M · H:i') }}
+                        </p>
+                        <p class="text-[12px] leading-[1.6] text-(--mut)">{{ $this->brainStatus['lastConflictMessage'] }}</p>
+                    </div>
+                @endif
+
+                @if ($this->brainStatus['lastPushError'])
+                    <p class="text-[12px] leading-[1.6] text-(--dgr)">Dernière erreur de push : {{ $this->brainStatus['lastPushError'] }}</p>
+                @endif
+
                 <div class="flex flex-wrap gap-2 pt-1">
                     <x-btn variant="secondary" wire:click="syncBrainNow">Synchroniser maintenant</x-btn>
+                    <x-btn variant="secondary" wire:click="forceBrainSync">Forcer la synchro</x-btn>
                     <x-btn variant="secondary" wire:click="reindexBrainFull" wire:confirm="Reconstruire tout l'index depuis zéro ?">Réindexer tout</x-btn>
                 </div>
 

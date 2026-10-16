@@ -64,6 +64,21 @@ enum NoteType: string
     }
 
     /**
+     * The type a note found in this folder is presumed to be — used to
+     * complete a legacy note's frontmatter from where it already lives.
+     */
+    public static function fromFolder(string $folder): ?self
+    {
+        foreach (self::cases() as $case) {
+            if ($case->folder() === $folder) {
+                return $case;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Dated notes are immutable and stacked (`AAAA-MM-JJ-slug.md`); the rest
      * are living notes, rewritten in place at a stable path.
      */

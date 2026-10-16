@@ -6,7 +6,6 @@ use App\Models\BrainDocument;
 use App\Models\BrainSuggestion;
 use App\Models\Task;
 use App\Models\User;
-use App\Support\Brain\GitRepository;
 use Illuminate\Support\Facades\File;
 use Livewire\Livewire;
 
@@ -39,7 +38,7 @@ test('accepts an anchor suggestion, applies it, and removes it from the pending 
     File::put($this->vaultPath.'/Notes/plombier.md', "---\ntype: note\n---\n\nLe plombier passe mardi.");
     $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md', 'frontmatter' => ['type' => 'note']]);
 
-    $this->mock(GitRepository::class, function ($mock) {
+    mockVaultGit(function ($mock) {
         $mock->shouldReceive('commit')->once();
         $mock->shouldReceive('status')->andReturn(GitSyncStatus::Synced);
     });

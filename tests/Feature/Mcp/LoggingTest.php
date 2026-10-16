@@ -9,7 +9,6 @@ use App\Models\BrainDocument;
 use App\Models\Entity;
 use App\Models\McpCall;
 use App\Models\Task;
-use Illuminate\Support\Facades\File;
 
 test('logs a successful call', function () {
     TarsServer::tool(CaptureTool::class, ['text' => 'test'])->assertOk();
@@ -36,12 +35,10 @@ test('logs an ambiguous call without any write happening', function () {
 });
 
 test('logs an unhandled exception as an error without breaking the response', function () {
-    $vaultPath = sys_get_temp_dir().'/mcp-log-test-'.uniqid();
-    File::ensureDirectoryExists($vaultPath);
-    config(['brain.local_path' => $vaultPath, 'brain.remote_url' => 'git@example.com:vault.git']);
+    // An unwritable vault path: creating the note's folder fails for real, so
+    // the tool raises a genuine unhandled exception.
+    config(['brain.local_path' => '/dev/null/vault', 'brain.remote_url' => 'git@example.com:vault.git']);
 
-    // No git repository at $vaultPath and GitRepository is not mocked here, so the real
-    // `git commit` invoked by AddNoteTool fails for real — a genuine unhandled exception.
     TarsServer::tool(AddNoteTool::class, ['content' => 'Test'])->assertHasErrors();
 
     $call = McpCall::latest('id')->first();
@@ -50,6 +47,4 @@ test('logs an unhandled exception as an error without breaking the response', fu
         ->and($call->status)->toBe(McpCallStatus::Error)
         ->and($call->error_message)->not->toBeNull()
         ->and(BrainDocument::count())->toBe(0);
-
-    File::deleteDirectory($vaultPath);
 });

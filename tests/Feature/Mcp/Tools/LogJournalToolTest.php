@@ -3,14 +3,13 @@
 use App\Mcp\Servers\TarsServer;
 use App\Mcp\Tools\LogJournalTool;
 use App\Models\JournalEntry;
-use App\Support\Brain\GitRepository;
 use Illuminate\Support\Facades\File;
 
 beforeEach(function () {
     $this->vaultPath = sys_get_temp_dir().'/mcp-journal-test-'.uniqid();
     File::ensureDirectoryExists($this->vaultPath);
     config(['brain.local_path' => $this->vaultPath, 'brain.remote_url' => 'git@example.com:vault.git']);
-    $this->mock(GitRepository::class, function ($mock): void {
+    mockVaultGit(function ($mock): void {
         $mock->shouldReceive('commit');
     });
 });

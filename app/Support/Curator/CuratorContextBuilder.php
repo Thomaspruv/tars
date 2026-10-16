@@ -43,7 +43,8 @@ class CuratorContextBuilder
         if ($mission === 'todo') {
             return BrainDocument::where('path', 'like', 'TARS/%')
                 ->get()
-                ->filter(fn (BrainDocument $document): bool => ($document->frontmatter['type'] ?? null) === 'a-traiter')
+                ->filter(fn (BrainDocument $document): bool => ($document->frontmatter['type'] ?? null) === 'a-traiter'
+                    && ($document->frontmatter['status'] ?? null) !== 'done')
                 ->values();
         }
 

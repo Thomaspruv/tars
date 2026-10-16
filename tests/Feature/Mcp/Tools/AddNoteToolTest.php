@@ -3,7 +3,6 @@
 use App\Mcp\Servers\TarsServer;
 use App\Mcp\Tools\AddNoteTool;
 use App\Models\BrainDocument;
-use App\Support\Brain\GitRepository;
 use Illuminate\Support\Facades\File;
 
 beforeEach(function () {
@@ -17,7 +16,7 @@ afterEach(function () {
 });
 
 test('writes a note file in TARS/, commits it, and indexes it', function () {
-    $this->mock(GitRepository::class, function ($mock): void {
+    mockVaultGit(function ($mock): void {
         $mock->shouldReceive('commit')->once();
     });
 

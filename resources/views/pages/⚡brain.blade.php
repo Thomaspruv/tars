@@ -7,7 +7,9 @@ use App\Models\BrainSuggestion;
 use App\Support\Brain\AnchorResolver;
 use App\Support\Brain\BrainSettings;
 use App\Support\Brain\GitRepository;
-use App\Support\Brain\VaultIndexer;
+use App\Support\Brain\Schema\FrontmatterBuilder;
+use App\Support\Brain\Schema\NoteType;
+use App\Support\Brain\VaultWriter;
 use App\Support\Curator\SuggestionApplier;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -253,18 +255,13 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
             return;
         }
 
-        $settings = app(BrainSettings::class);
-        $git = app(GitRepository::class);
+        $result = app(VaultWriter::class)->writeRaw($document->path, $this->editContent, "edit {$document->path}");
 
-        if ($git->status($settings->localPath()) === GitSyncStatus::Conflict) {
-            $this->addError('save', "Le dépôt du vault a un conflit git — résous-le avant de sauvegarder.");
+        if (! $result->isWritten()) {
+            $this->addError('save', $result->message());
 
             return;
         }
-
-        File::put($this->absolutePath($document->path), $this->editContent);
-        $git->commit($settings->localPath(), $document->path, "tars: edit {$document->path}");
-        app(VaultIndexer::class)->indexFile($this->absolutePath($document->path));
 
         $this->isEditing = false;
         unset($this->selectedDocument, $this->renderedContent, $this->tree, $this->folders);
@@ -289,13 +286,20 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
             return;
         }
 
-        $content = "---\ntype: note\ndate: \"{$this->today()}\"\n---\n\n# {$validated['newTitle']}\n\n";
+        $frontmatter = app(FrontmatterBuilder::class)->build(
+            type: NoteType::fromFolder(explode('/', $relativePath)[0]) ?? NoteType::Note,
+            title: $validated['newTitle'],
+            date: now(),
+            source: 'thomas',
+        );
 
-        $settings = app(BrainSettings::class);
-        File::ensureDirectoryExists(dirname($this->absolutePath($relativePath)));
-        File::put($this->absolutePath($relativePath), $content);
-        app(GitRepository::class)->commit($settings->localPath(), $relativePath, "tars: create {$relativePath}");
-        app(VaultIndexer::class)->indexFile($this->absolutePath($relativePath));
+        $result = app(VaultWriter::class)->write($relativePath, $frontmatter, "# {$validated['newTitle']}\n", "create {$relativePath}");
+
+        if (! $result->isWritten()) {
+            $this->addError('newTitle', $result->message());
+
+            return;
+        }
 
         $this->showCreateModal = false;
         $this->path = $relativePath;
@@ -305,11 +309,6 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
     private function absolutePath(string $relativePath): string
     {
         return rtrim(app(BrainSettings::class)->localPath(), '/').'/'.$relativePath;
-    }
-
-    private function today(): string
-    {
-        return now()->toDateString();
     }
 
     private function renderMarkdown(BrainDocument $document): string

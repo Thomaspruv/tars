@@ -4,7 +4,6 @@ use App\Models\JournalEntry;
 use App\Models\Questionnaire;
 use App\Models\QuestionnaireRun;
 use App\Models\User;
-use App\Support\Brain\GitRepository;
 use Illuminate\Support\Facades\File;
 use Livewire\Livewire;
 
@@ -12,7 +11,7 @@ beforeEach(function () {
     $this->vaultPath = sys_get_temp_dir().'/bilan-screen-test-'.uniqid();
     File::ensureDirectoryExists($this->vaultPath);
     config(['brain.local_path' => $this->vaultPath, 'brain.remote_url' => 'git@example.com:vault.git']);
-    $this->mock(GitRepository::class, function ($mock): void {
+    mockVaultGit(function ($mock): void {
         $mock->shouldReceive('commit');
     });
 });

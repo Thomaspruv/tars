@@ -17,12 +17,11 @@ use App\Models\ChecklistItem;
 use App\Models\Goal;
 use App\Models\Task;
 use App\Support\Agents\AgentRunner;
-use App\Support\Brain\BrainSettings;
-use App\Support\Brain\GitRepository;
+use App\Support\Brain\Schema\FrontmatterBuilder;
+use App\Support\Brain\VaultWriter;
 use App\Support\FuzzyMatcher;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
-use Symfony\Component\Yaml\Yaml;
 
 class CuratorAgent
 {
@@ -31,8 +30,8 @@ class CuratorAgent
         private readonly CuratorContextBuilder $contextBuilder,
         private readonly SuggestionApplier $applier,
         private readonly FuzzyMatcher $fuzzyMatcher,
-        private readonly BrainSettings $settings,
-        private readonly GitRepository $git,
+        private readonly VaultWriter $writer,
+        private readonly FrontmatterBuilder $frontmatter,
     ) {}
 
     public function isConfigured(): bool
@@ -240,25 +239,22 @@ class CuratorAgent
             ->exists();
     }
 
+    /**
+     * A sas note the curator has looked at is `status: done` — the contract's
+     * own vocabulary, so the note stays conformant and stops coming back in
+     * the hourly todo round.
+     */
     private function markProcessed(BrainDocument $document): void
     {
-        $vaultPath = rtrim($this->settings->localPath(), '/');
-        $absolutePath = "{$vaultPath}/{$document->path}";
+        $frontmatter = $this->frontmatter->upgrade(
+            frontmatter: $document->frontmatter ?? [],
+            relativePath: $document->path,
+            fallbackTitle: (string) $document->title,
+            source: 'agent-curateur',
+            patch: ['status' => 'done'],
+        );
 
-        if (! File::exists($absolutePath)) {
-            return;
-        }
-
-        $frontmatter = $document->frontmatter ?? [];
-        $frontmatter['type'] = 'traite';
-
-        $raw = File::get($absolutePath);
-        $body = preg_match('/^---\r?\n.*?\r?\n---\r?\n?(.*)$/us', $raw, $matches) ? $matches[1] : $raw;
-
-        File::put($absolutePath, "---\n".Yaml::dump($frontmatter)."---\n\n{$body}");
-        $this->git->commit($vaultPath, $document->path, "tars: curator mark traité {$document->path}");
-
-        $document->update(['frontmatter' => $frontmatter]);
+        $this->writer->write($document->path, $frontmatter, (string) $document->content, "curator traité {$document->path}");
     }
 
     private function curatorConfig(): ?AgentConfig

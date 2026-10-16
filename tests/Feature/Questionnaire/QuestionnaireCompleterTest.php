@@ -3,7 +3,6 @@
 use App\Models\Questionnaire;
 use App\Models\QuestionnaireAnswer;
 use App\Models\QuestionnaireRun;
-use App\Support\Brain\GitRepository;
 use App\Support\Questionnaire\QuestionnaireCompleter;
 use Illuminate\Support\Facades\File;
 
@@ -11,7 +10,7 @@ beforeEach(function () {
     $this->vaultPath = sys_get_temp_dir().'/questionnaire-completer-test-'.uniqid();
     File::ensureDirectoryExists($this->vaultPath);
     config(['brain.local_path' => $this->vaultPath, 'brain.remote_url' => 'git@example.com:vault.git']);
-    $this->mock(GitRepository::class, function ($mock): void {
+    mockVaultGit(function ($mock): void {
         $mock->shouldReceive('commit');
     });
 });
@@ -81,7 +80,7 @@ test('completing an already-completed run is a no-op and does not commit again',
     QuestionnaireAnswer::factory()->create(['run_id' => $run->id, 'question_text' => 'Satisfaction', 'type' => 'scale', 'answer_numeric' => 8]);
     $completedAt = $run->completed_at;
 
-    $this->mock(GitRepository::class, function ($mock): void {
+    mockVaultGit(function ($mock): void {
         $mock->shouldNotReceive('commit');
     });
 

@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\JournalEntry;
-use App\Support\Brain\GitRepository;
 use App\Support\Journal\JournalWriter;
 use Illuminate\Support\Facades\File;
 
@@ -9,7 +8,7 @@ beforeEach(function () {
     $this->vaultPath = sys_get_temp_dir().'/journal-writer-test-'.uniqid();
     File::ensureDirectoryExists($this->vaultPath);
     config(['brain.local_path' => $this->vaultPath, 'brain.remote_url' => 'git@example.com:vault.git']);
-    $this->mock(GitRepository::class, function ($mock): void {
+    mockVaultGit(function ($mock): void {
         $mock->shouldReceive('commit');
     });
 });

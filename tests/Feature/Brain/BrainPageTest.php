@@ -4,6 +4,7 @@ use App\Enums\GitSyncStatus;
 use App\Models\BrainDocument;
 use App\Models\Entity;
 use App\Models\User;
+use App\Support\Brain\GitPullResult;
 use App\Support\Brain\GitRepository;
 use Illuminate\Support\Facades\File;
 use Livewire\Livewire;
@@ -82,7 +83,7 @@ test('editing and saving writes the file, commits, and reindexes', function () {
     $this->artisan('brain:index');
     $document = BrainDocument::where('path', 'note.md')->firstOrFail();
 
-    $this->mock(GitRepository::class, function ($mock): void {
+    mockVaultGit(function ($mock): void {
         $mock->shouldReceive('status')->andReturn(GitSyncStatus::Synced);
         $mock->shouldReceive('commit')->once()->with($this->vaultPath, 'note.md', 'tars: edit note.md');
     });
@@ -104,8 +105,11 @@ test('refuses to save when the vault has a git conflict', function () {
     $this->artisan('brain:index');
 
     $this->mock(GitRepository::class, function ($mock): void {
+        $mock->shouldReceive('isRepository')->andReturn(true);
         $mock->shouldReceive('status')->andReturn(GitSyncStatus::Conflict);
-        $mock->shouldNotReceive('commit');
+        $mock->shouldReceive('pullRebase')->andReturn(new GitPullResult(successful: false, message: 'CONFLICT (content)'));
+        // Only the sas note is committed — never the file being saved.
+        $mock->shouldReceive('commit')->with(Mockery::type('string'), Mockery::pattern('/^TARS\//'), Mockery::type('string'));
     });
 
     Livewire::test('pages::brain')
@@ -115,13 +119,14 @@ test('refuses to save when the vault has a git conflict', function () {
         ->call('save')
         ->assertHasErrors(['save']);
 
-    expect(File::get($this->vaultPath.'/note.md'))->toContain('Ancien contenu');
+    expect(File::get($this->vaultPath.'/note.md'))->toContain('Ancien contenu')
+        ->and(File::glob($this->vaultPath.'/TARS/*-conflit-*.md'))->toHaveCount(1);
 });
 
 test('creates a note, commits it, and indexes it', function () {
     $this->actingAs(User::factory()->create());
 
-    $this->mock(GitRepository::class, function ($mock): void {
+    mockVaultGit(function ($mock): void {
         $mock->shouldReceive('commit')->once()->with($this->vaultPath, 'nouvelle-note.md', 'tars: create nouvelle-note.md');
         $mock->shouldReceive('status')->andReturn(GitSyncStatus::Synced);
     });

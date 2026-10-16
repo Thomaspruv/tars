@@ -2,6 +2,7 @@
 
 use App\Enums\GitSyncStatus;
 use App\Support\Brain\GitRepository;
+use Illuminate\Process\Exceptions\ProcessFailedException;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 
@@ -161,4 +162,59 @@ test('commitAll stages every change and commits', function () {
 
     Process::assertRan(fn ($process) => $process->command === ['git', 'add', '-A']);
     Process::assertRan(fn ($process) => $process->command === ['git', 'commit', '-m', 'tars: curator move notes/example.md']);
+});
+
+test('pullRebase reports success when the rebase goes through', function () {
+    File::ensureDirectoryExists($this->path);
+    Process::fake(fn () => Process::result('Successfully rebased.'));
+
+    $result = (new GitRepository)->pullRebase($this->path);
+
+    expect($result->successful)->toBeTrue();
+});
+
+test('pullRebase aborts and refuses the write when a rebase is left in progress', function () {
+    File::ensureDirectoryExists($this->path.'/.git/rebase-merge');
+    Process::fake(fn () => Process::result(errorOutput: 'CONFLICT (content): Merge conflict', exitCode: 1));
+
+    $result = (new GitRepository)->pullRebase($this->path);
+
+    expect($result->successful)->toBeFalse()
+        ->and($result->message)->toContain('CONFLICT');
+
+    Process::assertRan(fn ($process) => $process->command === ['git', 'rebase', '--abort']);
+});
+
+test('pullRebase treats an unreachable remote as no obstacle to a local write', function () {
+    File::ensureDirectoryExists($this->path.'/.git');
+    Process::fake(fn () => Process::result(errorOutput: 'could not read from remote repository', exitCode: 1));
+
+    $result = (new GitRepository)->pullRebase($this->path);
+
+    expect($result->successful)->toBeTrue();
+    Process::assertNotRan(fn ($process) => ($process->command[1] ?? null) === 'rebase');
+});
+
+test('push throws when git refuses it', function () {
+    File::ensureDirectoryExists($this->path);
+    Process::fake(fn () => Process::result(errorOutput: 'rejected', exitCode: 1));
+
+    expect(fn () => (new GitRepository)->push($this->path))->toThrow(ProcessFailedException::class);
+});
+
+test('lastPushAt reads the upstream commit date, and is null outside a repository', function () {
+    expect((new GitRepository)->lastPushAt($this->path))->toBeNull();
+
+    File::ensureDirectoryExists($this->path.'/.git');
+    Process::fake(fn () => Process::result('1792108800'));
+
+    expect((new GitRepository)->lastPushAt($this->path)?->toDateString())->toBe('2026-10-16');
+});
+
+test('isRepository tells a clone from a plain folder', function () {
+    File::ensureDirectoryExists($this->path);
+    expect((new GitRepository)->isRepository($this->path))->toBeFalse();
+
+    File::ensureDirectoryExists($this->path.'/.git');
+    expect((new GitRepository)->isRepository($this->path))->toBeTrue();
 });

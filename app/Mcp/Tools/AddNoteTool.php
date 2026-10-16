@@ -2,11 +2,10 @@
 
 namespace App\Mcp\Tools;
 
-use App\Support\Brain\BrainSettings;
-use App\Support\Brain\GitRepository;
-use App\Support\Brain\VaultIndexer;
+use App\Support\Brain\Schema\FrontmatterBuilder;
+use App\Support\Brain\Schema\NoteType;
+use App\Support\Brain\VaultWriter;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -14,13 +13,12 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
 #[Name('add_note')]
-#[Description("Crée une note dans le cerveau (dossier TARS/ du vault), avec commit git. L'ancrage sur une entité/objectif se fait par nom, résolu automatiquement à l'indexation.")]
+#[Description('Dépose une note brute dans le sas du cerveau (dossier TARS/), à trier plus tard. Pour une connaissance typée — personne, organisation, réunion, décision, veille — utilise plutôt upsert_note.')]
 class AddNoteTool extends LoggedTool
 {
     public function __construct(
-        private readonly BrainSettings $settings,
-        private readonly GitRepository $git,
-        private readonly VaultIndexer $indexer,
+        private readonly VaultWriter $writer,
+        private readonly FrontmatterBuilder $frontmatter,
     ) {}
 
     public function schema(JsonSchema $schema): array
@@ -40,34 +38,26 @@ class AddNoteTool extends LoggedTool
             'goal' => ['nullable', 'string'],
         ]);
 
-        if (! $this->settings->isConfigured()) {
-            return Response::error('Le vault du cerveau n\'est pas configuré.');
+        $title = Str::limit($validated['content'], 40, '');
+        $relativePath = 'TARS/'.now()->toDateString().'-'.(Str::slug($title) ?: 'note').'.md';
+
+        $frontmatter = $this->frontmatter->build(
+            type: NoteType::ATraiter,
+            title: $title,
+            date: now(),
+            source: 'hermes',
+            extra: [
+                'status' => 'active',
+                'entity' => $validated['entity'] ?? null,
+                'goal' => $validated['goal'] ?? null,
+            ],
+        );
+
+        $result = $this->writer->write($relativePath, $frontmatter, $validated['content'], "sas {$relativePath}");
+
+        if (! $result->isWritten()) {
+            return Response::error($result->message());
         }
-
-        $date = now()->toDateString();
-        $slug = Str::slug(Str::limit($validated['content'], 40, ''));
-        $relativePath = "TARS/{$date}-{$slug}.md";
-
-        $frontmatter = ['date' => $date, 'source' => 'hermes'];
-
-        if (! empty($validated['entity'])) {
-            $frontmatter['entity'] = $validated['entity'];
-        }
-
-        if (! empty($validated['goal'])) {
-            $frontmatter['goal'] = $validated['goal'];
-        }
-
-        $yaml = collect($frontmatter)->map(fn ($value, $key): string => "{$key}: \"{$value}\"")->implode("\n");
-        $fileContent = "---\n{$yaml}\n---\n\n{$validated['content']}\n";
-
-        $vaultPath = $this->settings->localPath();
-        $absolutePath = rtrim($vaultPath, '/')."/{$relativePath}";
-
-        File::ensureDirectoryExists(dirname($absolutePath));
-        File::put($absolutePath, $fileContent);
-        $this->git->commit($vaultPath, $relativePath, "tars: add note via hermes ({$relativePath})");
-        $this->indexer->indexFile($absolutePath);
 
         return Response::text('Note ajoutée au cerveau.');
     }

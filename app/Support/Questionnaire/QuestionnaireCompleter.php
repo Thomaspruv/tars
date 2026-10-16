@@ -4,19 +4,16 @@ namespace App\Support\Questionnaire;
 
 use App\Enums\QuestionnaireRunStatus;
 use App\Models\QuestionnaireRun;
-use App\Support\Brain\BrainSettings;
-use App\Support\Brain\GitRepository;
-use App\Support\Brain\VaultIndexer;
-use Illuminate\Support\Facades\File;
+use App\Support\Brain\Schema\FrontmatterBuilder;
+use App\Support\Brain\Schema\NoteType;
+use App\Support\Brain\VaultWriter;
 use Illuminate\Support\Str;
-use Symfony\Component\Yaml\Yaml;
 
 class QuestionnaireCompleter
 {
     public function __construct(
-        private readonly BrainSettings $settings,
-        private readonly GitRepository $git,
-        private readonly VaultIndexer $indexer,
+        private readonly VaultWriter $writer,
+        private readonly FrontmatterBuilder $frontmatter,
     ) {}
 
     /**
@@ -33,9 +30,7 @@ class QuestionnaireCompleter
 
         $run->loadMissing(['questionnaire', 'answers']);
 
-        $vaultPath = rtrim($this->settings->localPath(), '/');
         $relativePath = "TARS/Journal/Bilans/{$run->due_date->toDateString()} — {$run->questionnaire->name}.md";
-        $absolutePath = "{$vaultPath}/{$relativePath}";
 
         $numericAnswers = [];
         $lines = [];
@@ -50,19 +45,20 @@ class QuestionnaireCompleter
             }
         }
 
-        $frontmatter = [
-            'date' => $run->due_date->toDateString(),
-            'questionnaire' => $run->questionnaire->name,
-            'source' => 'bilan',
-            ...$numericAnswers,
-        ];
+        $frontmatter = $this->frontmatter->build(
+            type: NoteType::Journal,
+            title: "{$run->questionnaire->name} — {$run->due_date->toDateString()}",
+            date: $run->due_date,
+            source: 'thomas',
+            extra: ['questionnaire' => $run->questionnaire->name, ...$numericAnswers],
+        );
 
-        $content = "---\n".Yaml::dump($frontmatter)."---\n\n".trim(implode("\n", $lines))."\n";
-
-        File::ensureDirectoryExists(dirname($absolutePath));
-        File::put($absolutePath, $content);
-        $this->git->commit($vaultPath, $relativePath, "tars: bilan {$run->questionnaire->name} ({$run->due_date->toDateString()})");
-        $this->indexer->indexFile($absolutePath);
+        $this->writer->write(
+            $relativePath,
+            $frontmatter,
+            trim(implode("\n", $lines))."\n",
+            "bilan {$run->questionnaire->name} ({$run->due_date->toDateString()})",
+        );
 
         $run->update(['status' => 'completed', 'completed_at' => now(), 'note_path' => $relativePath]);
     }

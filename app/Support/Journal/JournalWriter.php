@@ -4,8 +4,9 @@ namespace App\Support\Journal;
 
 use App\Models\JournalEntry;
 use App\Support\Brain\BrainSettings;
-use App\Support\Brain\GitRepository;
-use App\Support\Brain\VaultIndexer;
+use App\Support\Brain\Schema\FrontmatterBuilder;
+use App\Support\Brain\Schema\NoteType;
+use App\Support\Brain\VaultWriter;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Yaml\Yaml;
@@ -20,8 +21,8 @@ class JournalWriter
 
     public function __construct(
         private readonly BrainSettings $settings,
-        private readonly GitRepository $git,
-        private readonly VaultIndexer $indexer,
+        private readonly VaultWriter $writer,
+        private readonly FrontmatterBuilder $frontmatter,
     ) {}
 
     /**
@@ -47,14 +48,11 @@ class JournalWriter
         $relativePath = "TARS/Journal/{$date->format('Y')}/{$date->format('Y-m-d')}.md";
         $absolutePath = "{$vaultPath}/{$relativePath}";
 
-        $fileContent = $existing && File::exists($absolutePath)
-            ? $this->appendEntry(File::get($absolutePath), $summary, $highlights, $mood, $moodLabel, $clearMood)
+        [$frontmatter, $body] = $existing && File::exists($absolutePath)
+            ? $this->appendEntry(File::get($absolutePath), $date, $summary, $highlights, $mood, $moodLabel, $clearMood)
             : $this->buildEntry($date, $summary, $highlights, $mood, $moodLabel, $source);
 
-        File::ensureDirectoryExists(dirname($absolutePath));
-        File::put($absolutePath, $fileContent);
-        $this->git->commit($vaultPath, $relativePath, "tars: journal {$date->toDateString()}");
-        $this->indexer->indexFile($absolutePath);
+        $this->writer->write($relativePath, $frontmatter, $body, "journal {$date->toDateString()}");
 
         $mergedHighlights = $existing
             ? array_values(array_unique([...($existing->highlights ?? []), ...$highlights]))
@@ -89,15 +87,17 @@ class JournalWriter
 
     /**
      * @param  list<string>  $highlights
+     * @return array{0: array<string, mixed>, 1: string}
      */
-    private function buildEntry(CarbonInterface $date, string $summary, array $highlights, ?int $mood, ?string $moodLabel, string $source): string
+    private function buildEntry(CarbonInterface $date, string $summary, array $highlights, ?int $mood, ?string $moodLabel, string $source): array
     {
-        $frontmatter = array_filter([
-            'date' => $date->toDateString(),
-            'mood' => $mood,
-            'mood_label' => $moodLabel,
-            'source' => $source,
-        ], fn (mixed $value): bool => $value !== null);
+        $frontmatter = $this->frontmatter->build(
+            type: NoteType::Journal,
+            title: "Journal du {$date->toDateString()}",
+            date: $date,
+            source: $this->contractSource($source),
+            extra: ['mood' => $mood, 'mood_label' => $moodLabel],
+        );
 
         $body = "## Résumé\n{$summary}\n";
 
@@ -105,13 +105,23 @@ class JournalWriter
             $body .= "\n## Moments\n".$this->bulletList($highlights)."\n";
         }
 
-        return $this->render($frontmatter, $body);
+        return [$frontmatter, $body];
+    }
+
+    /**
+     * The journal's own `source` column keeps its own vocabulary; the vault's
+     * frontmatter speaks the contract's.
+     */
+    private function contractSource(string $source): string
+    {
+        return $source === 'hermes' ? 'hermes' : 'thomas';
     }
 
     /**
      * @param  list<string>  $highlights
+     * @return array{0: array<string, mixed>, 1: string}
      */
-    private function appendEntry(string $raw, string $summary, array $highlights, ?int $mood, ?string $moodLabel, bool $clearMood): string
+    private function appendEntry(string $raw, CarbonInterface $date, string $summary, array $highlights, ?int $mood, ?string $moodLabel, bool $clearMood): array
     {
         [$frontmatter, $body] = $this->splitFrontmatter($raw);
 
@@ -131,7 +141,15 @@ class JournalWriter
             $addition .= "\n".$this->bulletList($highlights)."\n";
         }
 
-        return $this->render($frontmatter, rtrim($body)."\n{$addition}");
+        $frontmatter = $this->frontmatter->upgrade(
+            frontmatter: $frontmatter,
+            relativePath: "Journal/{$date->format('Y')}/{$date->format('Y-m-d')}.md",
+            fallbackTitle: "Journal du {$date->toDateString()}",
+            source: 'thomas',
+            patch: ['type' => NoteType::Journal->value, 'date' => $date->toDateString()],
+        );
+
+        return [$frontmatter, rtrim($body)."\n{$addition}"];
     }
 
     /**
@@ -154,13 +172,5 @@ class JournalWriter
         $parsed = Yaml::parse($matches[1]);
 
         return [is_array($parsed) ? $parsed : [], $matches[2]];
-    }
-
-    /**
-     * @param  array<string, mixed>  $frontmatter
-     */
-    private function render(array $frontmatter, string $body): string
-    {
-        return "---\n".Yaml::dump($frontmatter)."---\n\n{$body}";
     }
 }

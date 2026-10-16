@@ -11,8 +11,9 @@ use App\Models\Goal;
 use App\Models\Task;
 use App\Support\Brain\AnchorResolver;
 use App\Support\Brain\BrainSettings;
-use App\Support\Brain\GitRepository;
-use App\Support\Brain\VaultIndexer;
+use App\Support\Brain\Schema\FrontmatterBuilder;
+use App\Support\Brain\VaultOperation;
+use App\Support\Brain\VaultWriter;
 use App\Support\FuzzyMatcher;
 use App\Support\QuickAdd\QuickAddParser;
 use Illuminate\Support\Facades\File;
@@ -23,10 +24,10 @@ class SuggestionApplier
 {
     public function __construct(
         private readonly BrainSettings $settings,
-        private readonly GitRepository $git,
-        private readonly VaultIndexer $indexer,
+        private readonly VaultWriter $writer,
         private readonly AnchorResolver $anchorResolver,
         private readonly FuzzyMatcher $fuzzyMatcher,
+        private readonly FrontmatterBuilder $frontmatter,
     ) {}
 
     /**
@@ -48,18 +49,21 @@ class SuggestionApplier
         $suggestion->update(['status' => BrainSuggestionStatus::Accepted]);
     }
 
+    /**
+     * Anchoring and completing both come down to rewriting the frontmatter —
+     * and the curator always leaves it conformant to the v3 contract, which is
+     * how the existing vault migrates note by note.
+     */
     private function applyFrontmatterPatch(BrainSuggestion $suggestion): void
     {
         $document = $suggestion->brainDocument;
-        $vaultPath = rtrim($this->settings->localPath(), '/');
-        $absolutePath = "{$vaultPath}/{$document->path}";
 
-        $frontmatter = array_merge($document->frontmatter ?? [], $suggestion->frontmatter_patch ?? []);
-        [, $body] = $this->splitFrontmatter(File::get($absolutePath));
+        [, $body] = $this->splitFrontmatter($this->read($document->path));
 
-        File::put($absolutePath, $this->render($frontmatter, $body));
-        $this->git->commit($vaultPath, $document->path, "tars: curator {$suggestion->action->value} {$document->path}");
-        $this->indexer->indexFile($absolutePath);
+        $this->commit(
+            [VaultOperation::write($document->path, $this->contractual($suggestion, $document->path, $body), $body)],
+            "curator {$suggestion->action->value} {$document->path}",
+        );
     }
 
     private function applyMove(BrainSuggestion $suggestion): void
@@ -71,21 +75,12 @@ class SuggestionApplier
             throw new RuntimeException('Aucune destination fournie pour ce déplacement.');
         }
 
-        $vaultPath = rtrim($this->settings->localPath(), '/');
-        $sourcePath = "{$vaultPath}/{$document->path}";
-        $destPath = "{$vaultPath}/{$target}";
+        [, $body] = $this->splitFrontmatter($this->read($document->path));
 
-        [$frontmatter, $body] = $this->splitFrontmatter(File::get($sourcePath));
-        $frontmatter = array_merge($frontmatter, $suggestion->frontmatter_patch ?? []);
-
-        File::ensureDirectoryExists(dirname($destPath));
-        File::put($destPath, $this->render($frontmatter, $body));
-        File::delete($sourcePath);
-
-        $this->git->commitAll($vaultPath, "tars: curator move {$document->path} → {$target}");
-
-        $document->delete();
-        $this->indexer->indexFile($destPath);
+        $this->commit(
+            [VaultOperation::move($document->path, $target, $this->contractual($suggestion, $target, $body), $body)],
+            "curator move {$document->path} → {$target}",
+        );
     }
 
     private function applyMerge(BrainSuggestion $suggestion): void
@@ -97,49 +92,114 @@ class SuggestionApplier
             throw new RuntimeException('Fusion incomplète : destination ou contenu fusionné manquant.');
         }
 
-        $vaultPath = rtrim($this->settings->localPath(), '/');
-        $sourcePath = "{$vaultPath}/{$document->path}";
-        $targetPath = "{$vaultPath}/{$target}";
-        $archivePath = "{$vaultPath}/Archives/".basename($document->path);
+        $archivePath = 'Archives/'.basename($document->path);
 
-        File::ensureDirectoryExists(dirname($targetPath));
-        File::put($targetPath, $suggestion->merged_content);
+        // The merged content may or may not carry its own frontmatter: what
+        // counts is its body — the frontmatter stays TARS's business.
+        [$mergedFrontmatter, $mergedBody] = $this->splitFrontmatter($suggestion->merged_content);
+        [$targetFrontmatter] = $this->splitFrontmatter($this->readIfExists($target));
 
-        $this->archiveSourceFile($sourcePath, $archivePath);
-
-        $this->git->commitAll($vaultPath, "tars: curator merge {$document->path} → {$target}");
-
-        $document->delete();
-        $this->indexer->indexFile($targetPath);
-        $this->indexer->indexFile($archivePath);
+        $this->commit([
+            VaultOperation::write($target, $this->frontmatter->upgrade(
+                frontmatter: [...$targetFrontmatter, ...$mergedFrontmatter],
+                relativePath: $target,
+                fallbackTitle: $this->fallbackTitle($target, $mergedBody),
+                source: 'agent-curateur',
+            ), $mergedBody),
+            $this->archiveOperation($document->path, $archivePath),
+        ], "curator merge {$document->path} → {$target}");
     }
 
     private function applyArchive(BrainSuggestion $suggestion): void
     {
         $document = $suggestion->brainDocument;
-        $vaultPath = rtrim($this->settings->localPath(), '/');
-        $sourcePath = "{$vaultPath}/{$document->path}";
-        $archivePath = "{$vaultPath}/Archives/".basename($document->path);
+        $archivePath = 'Archives/'.basename($document->path);
 
-        $this->archiveSourceFile($sourcePath, $archivePath, $suggestion->frontmatter_patch ?? []);
-
-        $this->git->commitAll($vaultPath, "tars: curator archive {$document->path}");
-
-        $document->delete();
-        $this->indexer->indexFile($archivePath);
+        $this->commit(
+            [$this->archiveOperation($document->path, $archivePath, $suggestion->frontmatter_patch ?? [])],
+            "curator archive {$document->path}",
+        );
     }
 
     /**
+     * Nothing is ever deleted: the source file moves under Archives/ with the
+     * date it was archived.
+     *
      * @param  array<string, mixed>  $extraFrontmatter
      */
-    private function archiveSourceFile(string $sourcePath, string $archivePath, array $extraFrontmatter = []): void
+    private function archiveOperation(string $sourcePath, string $archivePath, array $extraFrontmatter = []): VaultOperation
     {
-        [$frontmatter, $body] = $this->splitFrontmatter(File::get($sourcePath));
-        $frontmatter = array_merge($frontmatter, $extraFrontmatter, ['archived' => now()->toDateString()]);
+        [$frontmatter, $body] = $this->splitFrontmatter($this->read($sourcePath));
 
-        File::ensureDirectoryExists(dirname($archivePath));
-        File::put($archivePath, $this->render($frontmatter, $body));
-        File::delete($sourcePath);
+        $frontmatter = $this->frontmatter->upgrade(
+            frontmatter: $frontmatter,
+            relativePath: $sourcePath,
+            fallbackTitle: $this->fallbackTitle($sourcePath, $body),
+            source: 'agent-curateur',
+            patch: [...$extraFrontmatter, 'archived' => now()->toDateString()],
+        );
+
+        return VaultOperation::move($sourcePath, $archivePath, $frontmatter, $body);
+    }
+
+    /**
+     * @param  list<VaultOperation>  $operations
+     *
+     * @throws RuntimeException when the vault refuses the write — the caller
+     *                          shows the message and the suggestion stays pending.
+     */
+    private function commit(array $operations, string $commitMessage): void
+    {
+        $result = $this->writer->apply($operations, $commitMessage);
+
+        if (! $result->isWritten()) {
+            throw new RuntimeException($result->message());
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function contractual(BrainSuggestion $suggestion, string $relativePath, string $body): array
+    {
+        return $this->frontmatter->upgrade(
+            frontmatter: $suggestion->brainDocument->frontmatter ?? [],
+            relativePath: $relativePath,
+            fallbackTitle: (string) ($suggestion->brainDocument->title ?: $this->fallbackTitle($relativePath, $body)),
+            source: 'agent-curateur',
+            patch: $suggestion->frontmatter_patch ?? [],
+        );
+    }
+
+    private function fallbackTitle(string $relativePath, string $body): string
+    {
+        if (preg_match('/^#\s+(.+)$/mu', $body, $matches)) {
+            return trim($matches[1]);
+        }
+
+        return basename($relativePath, '.md');
+    }
+
+    /**
+     * @throws RuntimeException when the note has left the vault since the
+     *                          suggestion was made — there is nothing left to act on.
+     */
+    private function read(string $relativePath): string
+    {
+        $absolutePath = rtrim($this->settings->localPath(), '/')."/{$relativePath}";
+
+        if (! File::exists($absolutePath)) {
+            throw new RuntimeException("La note « {$relativePath} » n'est plus dans le vault.");
+        }
+
+        return File::get($absolutePath);
+    }
+
+    private function readIfExists(string $relativePath): string
+    {
+        $absolutePath = rtrim($this->settings->localPath(), '/')."/{$relativePath}";
+
+        return File::exists($absolutePath) ? File::get($absolutePath) : '';
     }
 
     private function applyCreateTask(BrainSuggestion $suggestion): void
@@ -220,13 +280,5 @@ class SuggestionApplier
         $parsed = Yaml::parse($matches[1]);
 
         return [is_array($parsed) ? $parsed : [], $matches[2]];
-    }
-
-    /**
-     * @param  array<string, mixed>  $frontmatter
-     */
-    private function render(array $frontmatter, string $body): string
-    {
-        return "---\n".Yaml::dump($frontmatter)."---\n\n{$body}";
     }
 }

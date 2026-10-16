@@ -1,6 +1,9 @@
 <?php
 
+use App\Support\Brain\GitPullResult;
+use App\Support\Brain\GitRepository;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery\MockInterface;
 use Tests\TestCase;
 
 /*
@@ -44,7 +47,21 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Mocks the vault's git repository with the surface every machine write
+ * touches before it writes anything — is this a repository, pull before
+ * writing, push afterwards — so a test only has to declare the writes it
+ * actually cares about (`commit`, `commitAll`).
+ *
+ * @param  ?Closure(MockInterface): void  $expectations
+ */
+function mockVaultGit(?Closure $expectations = null): void
 {
-    // ..
+    test()->mock(GitRepository::class, function (MockInterface $mock) use ($expectations): void {
+        $mock->shouldReceive('isRepository')->andReturn(true);
+        $mock->shouldReceive('pullRebase')->andReturn(new GitPullResult(successful: true, message: ''));
+        $mock->shouldReceive('push')->andReturnNull();
+
+        $expectations?->__invoke($mock);
+    });
 }

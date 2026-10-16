@@ -133,7 +133,7 @@ class FrontmatterSchema
         );
     }
 
-    private function isValidSource(string $source): bool
+    public function isValidSource(string $source): bool
     {
         return in_array($source, ['thomas', 'hermes'], true)
             || (bool) preg_match('/^(agent|connector)-[\w-]+$/u', $source);

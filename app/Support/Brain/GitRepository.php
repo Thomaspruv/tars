@@ -3,6 +3,8 @@
 namespace App\Support\Brain;
 
 use App\Enums\GitSyncStatus;
+use Carbon\CarbonInterface;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 
@@ -50,6 +52,66 @@ class GitRepository
         );
     }
 
+    /**
+     * The pull that runs before every machine write (§A.8). A genuine
+     * divergence leaves a rebase in progress: it is aborted so the working
+     * tree is left exactly as it was, and reported as unsuccessful so the
+     * caller writes nothing.
+     *
+     * Being unable to reach the remote at all (offline, no upstream) is not a
+     * conflict: nothing was rewritten, so the write may proceed locally and
+     * the push job will carry it later.
+     */
+    public function pullRebase(string $path): GitPullResult
+    {
+        $result = Process::path($path)->run(['git', 'pull', '--rebase']);
+
+        if ($result->successful()) {
+            return new GitPullResult(successful: true, message: trim($result->output()));
+        }
+
+        $message = trim($result->errorOutput() ?: $result->output());
+
+        if (! $this->isRebasing($path)) {
+            return new GitPullResult(successful: true, message: $message);
+        }
+
+        Process::path($path)->run(['git', 'rebase', '--abort']);
+
+        return new GitPullResult(successful: false, message: $message);
+    }
+
+    public function push(string $path): void
+    {
+        Process::path($path)->run(['git', 'push'])->throw();
+    }
+
+    /**
+     * When the remote last received what we have — the upstream ref's own
+     * commit date, which is the only honest answer.
+     */
+    public function lastPushAt(string $path): ?CarbonInterface
+    {
+        if (! $this->isRepository($path)) {
+            return null;
+        }
+
+        $result = Process::path($path)->run(['git', 'log', '-1', '--format=%ct', '@{u}']);
+        $timestamp = (int) trim($result->output());
+
+        return $result->successful() && $timestamp > 0 ? Carbon::createFromTimestampUTC($timestamp) : null;
+    }
+
+    public function isRepository(string $path): bool
+    {
+        return File::isDirectory($path.'/.git');
+    }
+
+    private function isRebasing(string $path): bool
+    {
+        return File::isDirectory($path.'/.git/rebase-merge') || File::isDirectory($path.'/.git/rebase-apply');
+    }
+
     public function lsRemote(string $remote): bool
     {
         return Process::run(['git', 'ls-remote', $remote])->successful();
@@ -57,7 +119,7 @@ class GitRepository
 
     public function status(string $path): GitSyncStatus
     {
-        if (! File::isDirectory($path.'/.git')) {
+        if (! $this->isRepository($path)) {
             return GitSyncStatus::Unknown;
         }
 

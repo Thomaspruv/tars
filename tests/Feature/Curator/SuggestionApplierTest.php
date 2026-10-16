@@ -8,7 +8,6 @@ use App\Models\ChecklistItem;
 use App\Models\Entity;
 use App\Models\Goal;
 use App\Models\Task;
-use App\Support\Brain\GitRepository;
 use App\Support\Curator\SuggestionApplier;
 use Illuminate\Support\Facades\File;
 
@@ -24,7 +23,7 @@ test('applies an anchor suggestion by patching frontmatter and committing', func
     File::put($this->vaultPath.'/Notes/plombier.md', "---\ntype: note\n---\n\nLe plombier passe mardi.");
     $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md', 'frontmatter' => ['type' => 'note']]);
 
-    $this->mock(GitRepository::class, function ($mock): void {
+    mockVaultGit(function ($mock): void {
         $mock->shouldReceive('commit')->once()->with(Mockery::type('string'), 'Notes/plombier.md', Mockery::type('string'));
     });
 
@@ -39,14 +38,14 @@ test('applies an anchor suggestion by patching frontmatter and committing', func
     $content = File::get($this->vaultPath.'/Notes/plombier.md');
     expect($content)->toContain('Appart Lilas')
         ->and($suggestion->fresh()->status)->toBe(BrainSuggestionStatus::Accepted)
-        ->and(BrainDocument::where('path', 'Notes/plombier.md')->first()->frontmatter['entity'])->toBe('Appart Lilas');
+        ->and(BrainDocument::where('path', 'Notes/plombier.md')->first()->frontmatter['entity'])->toBe(['Appart Lilas']);
 });
 
 test('applies a move suggestion by renaming the file and reindexing under the new path', function () {
     File::put($this->vaultPath.'/Notes/plombier.md', "---\ntype: note\n---\n\nLe plombier passe mardi.");
     $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md']);
 
-    $this->mock(GitRepository::class, fn ($mock) => $mock->shouldReceive('commitAll')->once());
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitAll')->once());
 
     $suggestion = BrainSuggestion::factory()->create([
         'brain_document_id' => $document->id,
@@ -75,7 +74,7 @@ test('applies a merge suggestion writing the merged content and archiving the so
     File::put($this->vaultPath.'/Notes/appart-lilas.md', "---\ntype: note\n---\n\nAppart Lilas.");
     $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md']);
 
-    $this->mock(GitRepository::class, fn ($mock) => $mock->shouldReceive('commitAll')->once());
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitAll')->once());
 
     $suggestion = BrainSuggestion::factory()->create([
         'brain_document_id' => $document->id,
@@ -95,7 +94,7 @@ test('applies an archive suggestion by moving the file to Archives with an archi
     File::put($this->vaultPath.'/Notes/plombier.md', "---\ntype: note\n---\n\nPérimé.");
     $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md']);
 
-    $this->mock(GitRepository::class, fn ($mock) => $mock->shouldReceive('commitAll')->once());
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitAll')->once());
 
     $suggestion = BrainSuggestion::factory()->create(['brain_document_id' => $document->id, 'action' => 'archive']);
 

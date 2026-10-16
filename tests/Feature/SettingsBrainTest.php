@@ -70,6 +70,7 @@ test('tests the git connection', function () {
     $this->mock(GitRepository::class, function ($mock): void {
         $mock->shouldReceive('lsRemote')->with('git@example.com:vault.git')->once()->andReturnTrue();
         $mock->shouldReceive('status')->andReturn(GitSyncStatus::Unknown);
+        $mock->shouldReceive('lastPushAt')->andReturnNull();
     });
 
     Livewire::test('pages::settings-app')
@@ -85,6 +86,7 @@ test('reports a failed connection test', function () {
     $this->mock(GitRepository::class, function ($mock): void {
         $mock->shouldReceive('lsRemote')->once()->andReturnFalse();
         $mock->shouldReceive('status')->andReturn(GitSyncStatus::Unknown);
+        $mock->shouldReceive('lastPushAt')->andReturnNull();
     });
 
     Livewire::test('pages::settings-app')
@@ -101,6 +103,7 @@ test('syncs the vault now and refreshes the status', function () {
         $mock->shouldReceive('ensureCloned')->once();
         $mock->shouldReceive('pull')->once()->andReturn(new GitPullResult(successful: true, message: 'ok'));
         $mock->shouldReceive('status')->andReturn(GitSyncStatus::Synced);
+        $mock->shouldReceive('lastPushAt')->andReturnNull();
     });
 
     Livewire::test('pages::settings-app')->call('syncBrainNow');
@@ -125,4 +128,54 @@ test('shows the git status badge', function () {
     $this->actingAs(User::factory()->create());
 
     $this->get(route('settings.index'))->assertSee('Inconnu');
+});
+
+test('shows the last push, the last push error and the conflict alert', function () {
+    $this->actingAs(User::factory()->create());
+    app(BrainSettings::class)->recordPushError('rejected: non-fast-forward');
+    app(BrainSettings::class)->recordConflict('Conflit git — le contenu a été gardé dans TARS/2026-10-16-conflit-alpha.md.');
+
+    $this->mock(GitRepository::class, function ($mock): void {
+        $mock->shouldReceive('status')->andReturn(GitSyncStatus::Synced);
+        $mock->shouldReceive('lastPushAt')->andReturn(now()->subMinutes(3));
+    });
+
+    Livewire::test('pages::settings-app')
+        ->assertSee('Dernier push')
+        ->assertSee('Conflit git')
+        ->assertSee('TARS/2026-10-16-conflit-alpha.md')
+        ->assertSee('rejected: non-fast-forward');
+});
+
+test('forcing the sync pull-rebases then pushes', function () {
+    $this->actingAs(User::factory()->create());
+    app(BrainSettings::class)->recordPushError('une vieille erreur');
+
+    $this->mock(GitRepository::class, function ($mock): void {
+        $mock->shouldReceive('status')->andReturn(GitSyncStatus::Synced);
+        $mock->shouldReceive('lastPushAt')->andReturn(null);
+        $mock->shouldReceive('pullRebase')->once()->andReturn(new GitPullResult(successful: true, message: 'Successfully rebased.'));
+        $mock->shouldReceive('push')->once();
+    });
+
+    Livewire::test('pages::settings-app')
+        ->call('forceBrainSync')
+        ->assertSee('Vault synchronisé');
+
+    expect(app(BrainSettings::class)->lastPushError())->toBeNull();
+});
+
+test('forcing the sync reports a conflict instead of pushing', function () {
+    $this->actingAs(User::factory()->create());
+
+    $this->mock(GitRepository::class, function ($mock): void {
+        $mock->shouldReceive('status')->andReturn(GitSyncStatus::Conflict);
+        $mock->shouldReceive('lastPushAt')->andReturn(null);
+        $mock->shouldReceive('pullRebase')->once()->andReturn(new GitPullResult(successful: false, message: 'CONFLICT (content)'));
+        $mock->shouldNotReceive('push');
+    });
+
+    Livewire::test('pages::settings-app')
+        ->call('forceBrainSync')
+        ->assertSee('Le pull-rebase a échoué');
 });

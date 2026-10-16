@@ -75,6 +75,48 @@ class BrainSettings
         $this->set('last_indexed_at', now()->toDateTimeString());
     }
 
+    public function lastPushError(): ?string
+    {
+        return $this->get('last_push_error');
+    }
+
+    public function recordPushError(?string $message): void
+    {
+        $this->set('last_push_error', $message);
+    }
+
+    public function lastConflictAt(): ?Carbon
+    {
+        $value = $this->get('last_conflict_at');
+
+        return $value ? Carbon::parse($value) : null;
+    }
+
+    public function lastConflictMessage(): ?string
+    {
+        return $this->get('last_conflict_message');
+    }
+
+    /**
+     * A refused write is an event Thomas has to see: it is kept until the next
+     * write succeeds (Réglages → Cerveau).
+     */
+    public function recordConflict(string $message): void
+    {
+        $this->set('last_conflict_at', now()->toDateTimeString());
+        $this->set('last_conflict_message', $message);
+    }
+
+    public function clearConflict(): void
+    {
+        if ($this->get('last_conflict_at') === null) {
+            return;
+        }
+
+        $this->set('last_conflict_at', null);
+        $this->set('last_conflict_message', null);
+    }
+
     private function get(string $key): ?string
     {
         return Setting::where('key', "brain.{$key}")->value('value');
