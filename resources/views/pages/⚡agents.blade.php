@@ -364,6 +364,10 @@ new #[Title('Agents')] class extends Component
         $activeAgents = $availableAgents->filter(fn ($agent) => ! empty($enabled[$agent->value]))->count();
     @endphp
 
+    {{-- Les agents vivent sous les Réglages depuis que la barre latérale ne
+         nomme plus que les cinq espaces : on remonte donc là d'où on vient. --}}
+    <a href="{{ route('settings.index') }}#agents" wire:navigate class="mb-3.5 inline-block text-[13px] text-(--mut) hover:text-(--tx)">← Réglages</a>
+
     <x-screen-header
         :kicker="count($this->agentNames()).' agents · '.$activeAgents.' '.Str::plural('actif', $activeAgents)"
         title="Agents"

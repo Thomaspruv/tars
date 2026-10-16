@@ -297,7 +297,11 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
 <div>
 <div class="flex min-h-screen">
     <div class="hidden w-[236px] shrink-0 flex-col border-r border-(--bd) px-5 py-[26px] lg:flex">
-        <a href="{{ route('today') }}" wire:navigate class="mb-[26px] text-[13px] text-(--mut) hover:text-(--tx)">← Aujourd'hui</a>
+        <a href="{{ route('today') }}" wire:navigate class="mb-3.5 text-[13px] text-(--mut) hover:text-(--tx)">← Aujourd'hui</a>
+
+        {{-- Ces écrans n'ont pas la barre latérale : les onglets de l'espace
+             passent donc dans leur colonne. --}}
+        <x-space-tabs variant="column" class="mb-[22px] -mx-3" />
 
         <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Bilans</p>
 

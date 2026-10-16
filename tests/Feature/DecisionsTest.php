@@ -269,7 +269,7 @@ test('the comparator route resolves the decision and renders the board', functio
         ->assertSee('Trancher');
 });
 
-test('the sidebar badge counts only the decisions still open', function () {
+test('the space badge counts only the decisions still open', function () {
     $this->actingAs(User::factory()->create());
 
     OpenDecision::factory()->count(2)->create();
@@ -278,8 +278,9 @@ test('the sidebar badge counts only the decisions still open', function () {
 
     $response = $this->get(route('today'));
 
-    // Abricot, pas vert : ce compte est le mien, pas celui d'un agent.
-    expect($response->getContent())->toMatch('/Décisions<\/span>\s*<span[^>]*bg-\(--acbg\)[^>]*>2<\/span>/');
+    // Abricot, pas vert : ce compte est le mien, pas celui d'un agent. Il est
+    // porté par l'espace Objectifs, dont les Décisions sont un onglet.
+    expect($response->getContent())->toMatch('/Objectifs<\/span>\s*<span[^>]*bg-\(--acbg\)[^>]*>2<\/span>/');
 });
 
 test('it renames an option and a criterion', function () {

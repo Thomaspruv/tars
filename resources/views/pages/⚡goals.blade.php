@@ -112,6 +112,8 @@ new #[Title('Objectifs')] class extends Component
 ?>
 
 <div>
+    <x-space-tabs class="mb-3.5 -ml-3.5" />
+
     <x-screen-header :kicker="$this->headerCounts" title="Objectifs" class="mb-[22px]">
         <x-slot:actions>
             <x-btn variant="secondary" wire:click="openCreateModal">Nouvel objectif</x-btn>

@@ -1,29 +1,17 @@
 <?php
 
-use App\Models\InboxItem;
-
-$inboxPendingCount = InboxItem::whereNull('processed_at')->count();
+use App\Support\Navigation\Spaces;
 
 $theme = request()->cookie('la-theme') === 'light' ? 'light' : 'dark';
 
-// La barre du bas mobile ne porte que les cinq écrans de travail — les neuf
-// autres vivent derrière « Plus ». Ce n'est pas la parité avec le desktop,
-// c'est le confort du pouce.
-$mobileTabs = [
-    ['route' => 'today', 'label' => 'Aujourd\'hui'],
-    ['route' => 'inbox.index', 'label' => 'Inbox'],
-    ['route' => 'tasks.index', 'label' => 'Tâches'],
-    ['route' => 'lists.index', 'label' => 'Listes'],
-];
+// La barre du bas mobile porte quatre des cinq espaces — la Revue est un
+// rituel hebdomadaire, elle n'a rien à faire sous le pouce. Elle vit derrière
+// « Plus », avec les écrans transverses.
+$revue = Spaces::find('revue');
+$mobileSpaces = array_values(array_filter(Spaces::all(), fn (array $space): bool => $space['key'] !== 'revue'));
 
 $moreLinks = [
-    ['route' => 'calendar.index', 'label' => 'Calendrier'],
-    ['route' => 'goals.index', 'label' => 'Objectifs'],
-    ['route' => 'entities.index', 'label' => 'Entités'],
-    ['route' => 'brain.index', 'label' => 'Cerveau'],
-    ['route' => 'decisions.index', 'label' => 'Décisions'],
-    ['route' => 'review.index', 'label' => 'Revue'],
-    ['route' => 'bilan.index', 'label' => 'Bilan de vie'],
+    ['route' => $revue['tabs'][0]['route'], 'label' => $revue['label']],
     ['route' => 'agents.index', 'label' => 'Agents'],
     ['route' => 'settings.index', 'label' => 'Réglages'],
 ];
@@ -36,8 +24,8 @@ $moreLinks = [
     <body class="min-h-screen bg-(--bg) font-sans text-(--tx) antialiased">
         {{ $slot }}
 
-        {{-- Chrome mobile : cinq onglets, plus le bouton de capture au pouce.
-             Toutes les cibles font au moins 44px. --}}
+        {{-- Chrome mobile : quatre espaces et « Plus », plus le bouton de
+             capture au pouce. Toutes les cibles font au moins 44px. --}}
         <div x-data="{ more: false }" class="lg:hidden">
             <div class="pointer-events-none fixed right-5 bottom-[92px] z-30">
                 <button
@@ -51,11 +39,12 @@ $moreLinks = [
             </div>
 
             <nav class="fixed inset-x-0 bottom-0 z-30 flex border-t border-(--bd) bg-(--sunk) px-2 pt-2.5 pb-[22px]">
-                @foreach ($mobileTabs as $tab)
-                    @php $isCurrent = request()->routeIs($tab['route']); @endphp
+                @foreach ($mobileSpaces as $space)
+                    @php $isCurrent = request()->routeIs(...Spaces::routesOf($space)); @endphp
                     <a
-                        href="{{ route($tab['route']) }}"
+                        href="{{ route($space['tabs'][0]['route']) }}"
                         wire:navigate
+                        @if ($isCurrent) aria-current="page" @endif
                         @class([
                             'press flex-1 py-2 text-center text-[11px]',
                             'text-(--ac)' => $isCurrent,
@@ -63,10 +52,9 @@ $moreLinks = [
                         ])
                     >
                         <span class="mx-auto mb-2 block h-[3px] w-[20px] rounded-full transition-colors duration-(--dur-swap) ease-(--ease) {{ $isCurrent ? 'bg-(--ac)' : 'bg-transparent' }}"></span>
-                        {{ $tab['label'] }}
-                        @if ($tab['route'] === 'inbox.index' && $inboxPendingCount > 0)
-                            <span class="sr-only">, {{ $inboxPendingCount }} en attente</span>
-                        @endif
+                        {{ $space['label'] }}
+                        @php $signal = \App\Support\Navigation\NavSignals::get($space['signal']['key'] ?? null); @endphp
+                        @if ($signal)<span class="sr-only">, {{ $signal['count'] }} {{ $signal['sr'] }}</span>@endif
                     </a>
                 @endforeach
 

@@ -352,6 +352,8 @@ new #[Title('Calendrier')] class extends Component
 ?>
 
 <div class="flex min-h-[calc(100vh-120px)] flex-col">
+    <x-space-tabs class="mb-3.5 -ml-3.5" />
+
     <x-screen-header :kicker="$this->syncLabel" :title="$this->monthLabel" class="mb-3.5">
         <x-slot:actions>
             <x-btn variant="secondary" class="!px-3.5" wire:click="previousMonth" aria-label="Mois précédent">←</x-btn>

@@ -527,10 +527,12 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
             <span class="font-display text-[19px] font-bold tracking-[-.01em] text-(--tx)">TARS</span>
         </a>
 
-        <div class="mb-4 flex items-center gap-2.5 rounded-full bg-(--surf2) px-3 py-2 text-[14px] font-semibold text-(--tx)">
-            Cerveau
-            <a href="{{ route('today') }}" wire:navigate class="ml-auto text-[12px] font-normal text-(--mut) hover:text-(--tx)">← retour</a>
-        </div>
+        <a href="{{ route('today') }}" wire:navigate class="mb-3 px-3 text-[12px] text-(--mut) hover:text-(--tx)">← Aujourd'hui</a>
+
+        {{-- Cet écran n'a pas la barre latérale : les onglets de l'espace
+             Cerveau passent donc dans sa colonne, au même endroit que sur les
+             deux autres écrans de lecture. --}}
+        <x-space-tabs variant="column" class="mb-4 -mx-0.5" />
 
         <input
             type="text"

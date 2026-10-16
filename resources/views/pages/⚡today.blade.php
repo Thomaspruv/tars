@@ -371,6 +371,8 @@ new #[Title('Aujourd\'hui')] class extends Component
 ?>
 
 <div>
+    <x-space-tabs class="mb-3.5 -ml-3.5" />
+
     <x-screen-header :kicker="$this->kicker" :title="$this->dayTitle" class="mb-[18px]" />
 
     <x-status-band :gauges="$this->gauges" :streak="$this->streak" :next-tier="$this->nextStreakTier" />

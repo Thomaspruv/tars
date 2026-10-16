@@ -125,6 +125,8 @@ new #[Title('Décisions')] class extends Component
 ?>
 
 <div>
+    <x-space-tabs class="mb-3.5 -ml-3.5" />
+
     <x-screen-header :kicker="$this->headerCounts" title="Décisions" class="mb-[22px]">
         <x-slot:actions>
             <x-btn variant="primary" wire:click="openCreateModal">Nouvelle décision</x-btn>

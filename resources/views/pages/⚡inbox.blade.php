@@ -353,6 +353,8 @@ new #[Title('Inbox')] class extends Component
 ?>
 
 <div>
+    <x-space-tabs class="mb-3.5 -ml-3.5" />
+
     <x-screen-header :kicker="$this->kicker" title="Inbox" class="mb-3">
         <x-slot:actions>
             @if ($this->acceptableSuggestions->isNotEmpty())

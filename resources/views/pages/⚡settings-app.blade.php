@@ -508,6 +508,7 @@ new #[Title('Réglages')] class extends Component
         'cerveau' => 'Cerveau',
         'mcp' => 'Connexions — MCP',
         'google' => 'Connexions — Google',
+        'agents' => 'Agents',
         'ia' => 'Fournisseurs IA',
         'revue' => 'Revue',
         'archivage' => 'Archivage',
@@ -515,7 +516,7 @@ new #[Title('Réglages')] class extends Component
 @endphp
 
 <div>
-    <x-screen-header kicker="domaines, connexions, IA, revue, cerveau" title="Réglages" class="mb-6" />
+    <x-screen-header kicker="domaines, connexions, agents, revue, cerveau" title="Réglages" class="mb-6" />
 
     @if (session('status') === 'google-calendar-connected')
         <div class="mb-6 flex items-center gap-2.5 rounded-[14px] bg-(--aibg) px-4 py-3 text-[14px] font-semibold text-(--ai)">
@@ -999,6 +1000,18 @@ new #[Title('Réglages')] class extends Component
                 </div>
             </x-card>
         </div>
+    </section>
+
+    {{-- Les agents ne sont pas une destination quotidienne : c'est de la
+         configuration et un historique de runs. Ils ont donc quitté la barre
+         latérale pour vivre ici, à côté des fournisseurs qui les font tourner. --}}
+    <section id="agents" class="mb-12">
+        <h2 class="font-display mb-2 text-[22px] font-semibold text-(--tx)">Agents</h2>
+        <p class="mb-6 max-w-[620px] text-[15px] leading-[1.65] text-(--mut)">
+            Le reviewer, le curateur, le triage et le planner : leur fournisseur, leur modèle, leur
+            déclenchement et l'historique de leurs passages.
+        </p>
+        <x-btn variant="secondary" size="md" :href="route('agents.index')" wire:navigate>Ouvrir les agents</x-btn>
     </section>
 
     <section id="ia" class="mb-12">

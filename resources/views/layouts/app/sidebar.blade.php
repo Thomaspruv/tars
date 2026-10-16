@@ -1,51 +1,13 @@
 <?php
 
-use App\Enums\BrainSuggestionStatus;
-use App\Models\BrainSuggestion;
-use App\Enums\OpenDecisionStatus;
-use App\Models\InboxItem;
-use App\Models\OpenDecision;
-use App\Models\QuestionnaireRun;
-use App\Models\Review;
+use App\Support\Navigation\Spaces;
 
-$inboxPendingCount = InboxItem::whereNull('processed_at')->count();
-$curatorPendingCount = BrainSuggestion::where('status', BrainSuggestionStatus::Pending->value)->count();
-$bilanPendingCount = QuestionnaireRun::where('status', 'pending')->count();
-$reviewIsPending = Review::whereNull('completed_at')->exists();
-$openDecisionCount = OpenDecision::where('status', OpenDecisionStatus::Open->value)->count();
-
-// Trois groupes nommés : ce que je fais maintenant, ce que je suis dans le
-// temps, ce que je prends le temps de penser. Pas d'icônes — à quatorze
-// destinations nommées en français, le texte seul se scanne plus vite qu'un
-// pictogramme à décoder.
-$navGroups = [
-    [
-        'kicker' => 'Faire',
-        'items' => [
-            ['route' => 'today', 'label' => 'Aujourd\'hui'],
-            ['route' => 'inbox.index', 'label' => 'Inbox', 'count' => $inboxPendingCount, 'tone' => 'agent'],
-            ['route' => 'tasks.index', 'label' => 'Tâches'],
-            ['route' => 'calendar.index', 'label' => 'Calendrier'],
-        ],
-    ],
-    [
-        'kicker' => 'Suivre',
-        'items' => [
-            ['route' => 'goals.index', 'label' => 'Objectifs', 'alsoRouteIs' => 'goals.show'],
-            ['route' => 'entities.index', 'label' => 'Entités', 'alsoRouteIs' => 'entities.show'],
-            ['route' => 'lists.index', 'label' => 'Listes'],
-        ],
-    ],
-    [
-        'kicker' => 'Réfléchir',
-        'items' => [
-            ['route' => 'decisions.index', 'label' => 'Décisions', 'alsoRouteIs' => 'decisions.show', 'count' => $openDecisionCount, 'tone' => 'mine'],
-            ['route' => 'review.index', 'label' => 'Revue', 'dot' => $reviewIsPending],
-            ['route' => 'brain.index', 'label' => 'Cerveau', 'count' => $curatorPendingCount, 'tone' => 'agent'],
-            ['route' => 'bilan.index', 'label' => 'Bilan de vie', 'count' => $bilanPendingCount, 'tone' => 'agent'],
-        ],
-    ],
-];
+// Cinq espaces, pas quatorze destinations : l'app a quatorze écrans mais cinq
+// gestes — tenir ma journée, faire, suivre où je vais, retrouver la matière,
+// regarder en arrière. Le détail de chaque espace est un onglet du composant
+// `space-tabs`, à son URL d'origine. Pas d'icônes, pas de groupes nommés : à
+// cinq entrées en français, le texte seul suffit.
+$spaces = Spaces::all();
 
 ?>
 
@@ -68,50 +30,31 @@ $navGroups = [
         <span class="ml-auto text-[12px] opacity-60">⌘K</span>
     </button>
 
-    @foreach ($navGroups as $groupIndex => $group)
-        <p class="mt-[18px] mb-[7px] px-4 text-[11px] tracking-[.12em] text-(--mut) uppercase {{ $groupIndex === 0 ? '!mt-0' : '' }}">{{ $group['kicker'] }}</p>
-
-        <nav class="flex flex-col gap-[3px]">
-            @foreach ($group['items'] as $item)
-                @php
-                    $isCurrent = request()->routeIs($item['route'])
-                        || (isset($item['alsoRouteIs']) && request()->routeIs($item['alsoRouteIs']));
-                @endphp
-                <a
-                    href="{{ route($item['route']) }}"
-                    wire:navigate
-                    @class([
-                        'press flex items-center rounded-full px-4 py-2.5 text-[14px]',
-                        'bg-(--surf2) font-semibold text-(--tx)' => $isCurrent,
-                        'text-(--tx) hover:bg-(--surf)' => ! $isCurrent,
-                    ])
-                >
-                    <span class="flex-1">{{ $item['label'] }}</span>
-
-                    @if (($item['count'] ?? 0) > 0)
-                        {{-- Le vert est le compte de l'agent, l'abricot le mien : une
-                             décision à trancher n'attend personne d'autre que moi. --}}
-                        <span class="font-display rounded-full px-[9px] py-0.5 text-[12px] font-semibold {{ ($item['tone'] ?? 'agent') === 'mine' ? 'bg-(--acbg) text-(--ac)' : 'bg-(--aibg) text-(--ai)' }}">{{ $item['count'] }}</span>
-                    @elseif ($item['dot'] ?? false)
-                        <span class="size-[8px] rounded-full bg-(--ai)" aria-hidden="true"></span>
-                        <span class="sr-only">une revue vous attend</span>
-                    @endif
-                </a>
-            @endforeach
-        </nav>
-    @endforeach
+    <nav class="flex flex-col gap-[3px]">
+        @foreach ($spaces as $space)
+            @php $isCurrent = request()->routeIs(...Spaces::routesOf($space)); @endphp
+            <a
+                href="{{ route($space['tabs'][0]['route']) }}"
+                wire:navigate
+                @if ($isCurrent) aria-current="page" @endif
+                @class([
+                    'press flex items-center rounded-full px-4 py-2.5 text-[14px]',
+                    'bg-(--surf2) font-semibold text-(--tx)' => $isCurrent,
+                    'text-(--tx) hover:bg-(--surf)' => ! $isCurrent,
+                ])
+            >
+                <span class="flex-1">{{ $space['label'] }}</span>
+                <x-nav-signal :key="$space['signal']['key'] ?? null" :as="$space['signal']['as'] ?? null" />
+            </a>
+        @endforeach
+    </nav>
 
     <div class="mt-auto">
         <nav class="mb-3 flex flex-col gap-[3px]">
             <a
-                href="{{ route('agents.index') }}"
-                wire:navigate
-                class="press rounded-full px-4 py-[9px] text-[13px] {{ request()->routeIs('agents.index') ? 'bg-(--surf2) font-semibold text-(--tx)' : 'text-(--mut) hover:text-(--tx)' }}"
-            >Agents</a>
-            <a
                 href="{{ route('settings.index') }}"
                 wire:navigate
-                class="press rounded-full px-4 py-[9px] text-[13px] {{ request()->routeIs('settings.index') ? 'bg-(--surf2) font-semibold text-(--tx)' : 'text-(--mut) hover:text-(--tx)' }}"
+                class="press rounded-full px-4 py-[9px] text-[13px] {{ request()->routeIs('settings.index', 'agents.index') ? 'bg-(--surf2) font-semibold text-(--tx)' : 'text-(--mut) hover:text-(--tx)' }}"
             >Réglages</a>
             <x-theme-toggle class="press rounded-full px-4 py-[9px] text-left text-[13px] text-(--mut) hover:text-(--tx)" />
         </nav>

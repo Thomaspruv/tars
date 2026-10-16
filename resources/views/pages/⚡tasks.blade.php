@@ -227,6 +227,8 @@ new #[Title('Tâches')] class extends Component
 ?>
 
 <div>
+    <x-space-tabs class="mb-3.5 -ml-3.5" />
+
     <x-screen-header
         :kicker="$this->openCount.' '.Str::plural('tâche', $this->openCount).' '.Str::plural('ouverte', $this->openCount).' · '.$this->tasks->count().' '.Str::plural('affichée', $this->tasks->count()).' · '.$this->orphanRatio['orphan'].'/'.$this->orphanRatio['total'].' sans objectif ('.$this->orphanRatio['percent'].'%)'"
         :title="$this->heading"

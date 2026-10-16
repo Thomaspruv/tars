@@ -128,6 +128,8 @@ new #[Title('Entités')] class extends Component
 ?>
 
 <div>
+    <x-space-tabs class="mb-3.5 -ml-3.5" />
+
     <x-screen-header
         :kicker="$this->entities->count().' '.Str::plural('entité', $this->entities->count()).' · '.$this->urgentCount.' '.Str::plural('échéance', $this->urgentCount).' dans les 30 jours'"
         title="Entités"
