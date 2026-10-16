@@ -18,7 +18,19 @@ class GoogleCalendarClient
 
     private const string CALENDAR_BASE_URL = 'https://www.googleapis.com/calendar/v3';
 
-    private const string SCOPE = 'https://www.googleapis.com/auth/calendar.events openid https://www.googleapis.com/auth/userinfo.email';
+    /** Read and write access to the events of the connected account's calendars. */
+    public const string CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+
+    /** Read-only access to the connected account's mailbox. */
+    public const string GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+
+    /** @var list<string> */
+    private const array SCOPES = [
+        'openid',
+        'https://www.googleapis.com/auth/userinfo.email',
+        self::CALENDAR_SCOPE,
+        self::GMAIL_READONLY_SCOPE,
+    ];
 
     public function buildAuthorizationUrl(string $state): string
     {
@@ -28,7 +40,8 @@ class GoogleCalendarClient
             'response_type' => 'code',
             'access_type' => 'offline',
             'prompt' => 'consent',
-            'scope' => self::SCOPE,
+            'include_granted_scopes' => 'true',
+            'scope' => implode(' ', self::SCOPES),
             'state' => $state,
         ]);
 
@@ -36,7 +49,7 @@ class GoogleCalendarClient
     }
 
     /**
-     * @return array{access_token: string, refresh_token?: string, expires_in: int}
+     * @return array{access_token: string, refresh_token?: string, expires_in: int, scope?: string}
      */
     public function exchangeCode(string $code): array
     {

@@ -11,11 +11,13 @@ use Livewire\Livewire;
 // hitting the developer's real local vault clone over the network.
 beforeEach(fn () => config(['brain.local_path' => sys_get_temp_dir().'/settings-test-'.uniqid()]));
 
-test('shows the connect button when no connection exists and oauth credentials are configured', function () {
+test('shows the google sign-in button when no connection exists and oauth credentials are configured', function () {
     config(['services.google.client_id' => 'client-id', 'services.google.client_secret' => 'client-secret']);
     $this->actingAs(User::factory()->create());
 
-    Livewire::test('pages::settings-app')->assertSee('Connecter Google Calendar');
+    Livewire::test('pages::settings-app')
+        ->assertSee('Continuer avec Google')
+        ->assertSee(route('google-calendar.connect'));
 });
 
 test('shows the setup guide instead of the connect button when oauth credentials are missing', function () {
@@ -35,6 +37,32 @@ test('shows the connected account and last sync time', function () {
     GoogleCalendarConnection::factory()->create(['google_account_email' => 'me@example.com']);
 
     Livewire::test('pages::settings-app')->assertSee('me@example.com');
+});
+
+test('lists the granted google accesses', function () {
+    $this->actingAs(User::factory()->create());
+    GoogleCalendarConnection::factory()->create();
+
+    Livewire::test('pages::settings-app')
+        ->assertSee('lecture et écriture des événements')
+        ->assertSee('lecture seule')
+        ->assertDontSee('non accordé');
+});
+
+test('warns when an access was requested but not granted', function () {
+    $this->actingAs(User::factory()->create());
+    GoogleCalendarConnection::factory()->withoutGmailAccess()->create();
+
+    Livewire::test('pages::settings-app')
+        ->assertSee('non accordé')
+        ->assertSee('Réautoriser');
+});
+
+test('a connection predating the gmail scope reports the gmail access as missing', function () {
+    $this->actingAs(User::factory()->create());
+    GoogleCalendarConnection::factory()->create(['granted_scopes' => null]);
+
+    Livewire::test('pages::settings-app')->assertSee('non accordé');
 });
 
 test('disconnecting revokes the token and deletes the connection', function () {

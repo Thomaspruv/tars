@@ -446,6 +446,34 @@ new #[Title('Réglages')] class extends Component
         return route('google-calendar.callback');
     }
 
+    /**
+     * Les accès demandés à Google et leur état réel : l'écran de consentement
+     * laisse Thomas décocher un scope, auquel cas la connexion existe mais
+     * l'accès manque.
+     *
+     * @return list<array{label: string, detail: string, granted: bool}>
+     */
+    #[Computed]
+    public function googleAccesses(): array
+    {
+        $connection = $this->googleCalendarConnection;
+
+        if ($connection === null) {
+            return [];
+        }
+
+        return [
+            ['label' => 'Google Calendar', 'detail' => 'lecture et écriture des événements', 'granted' => $connection->canReadAndWriteCalendar()],
+            ['label' => 'Gmail', 'detail' => 'lecture seule', 'granted' => $connection->canReadGmail()],
+        ];
+    }
+
+    #[Computed]
+    public function googleAccessesMissing(): bool
+    {
+        return collect($this->googleAccesses)->contains(fn (array $access): bool => ! $access['granted']);
+    }
+
     public function disconnectGoogleCalendar(): void
     {
         $connection = GoogleCalendarConnection::query()->first();
@@ -490,23 +518,30 @@ new #[Title('Réglages')] class extends Component
     <x-screen-header kicker="domaines, connexions, IA, revue, cerveau" title="Réglages" class="mb-6" />
 
     @if (session('status') === 'google-calendar-connected')
-        <p class="mb-5 text-[14px] text-(--ai)">✓ Google Calendar connecté.</p>
+        <div class="mb-6 flex items-center gap-2.5 rounded-[14px] bg-(--aibg) px-4 py-3 text-[14px] font-semibold text-(--ai)">
+            <span aria-hidden="true">✓</span> Compte Google connecté.
+        </div>
     @elseif (session('status') === 'google-calendar-failed')
-        <p class="mb-5 text-[14px] text-(--dgr)">Échec de la connexion à Google Calendar. Réessaie.</p>
+        <div class="mb-6 flex items-center gap-2.5 rounded-[14px] bg-(--dgrbg) px-4 py-3 text-[14px] font-semibold text-(--dgr)">
+            <span aria-hidden="true">✕</span> Échec de la connexion à Google. Réessaie.
+        </div>
     @endif
 
-    <div class="grid grid-cols-1 items-start gap-8 xl:grid-cols-[190px_1fr] xl:gap-12">
+    <div class="grid grid-cols-1 items-start gap-8 xl:grid-cols-[200px_minmax(0,1fr)] xl:gap-12">
         <nav class="sticky top-6 hidden flex-col gap-0.5 xl:flex">
             @foreach ($sections as $anchor => $label)
                 <a href="#{{ $anchor }}" class="press rounded-full px-3.5 py-2 text-[13px] text-(--mut) hover:bg-(--surf) hover:text-(--tx)">{{ $label }}</a>
             @endforeach
         </nav>
 
-        <div class="max-w-[620px]">
+        {{-- Aucun plafond de largeur sur le panneau : il prend tout l'écran.
+             Seuls les paragraphes gardent une largeur de lecture — une ligne de
+             texte de 1600px ne se lit pas. Les cartes, elles, remplissent. --}}
+        <div class="min-w-0">
 
-    <section id="palette" class="mb-10">
+    <section id="palette" class="mb-12">
         <h2 class="font-display mb-2 text-[22px] font-semibold text-(--tx)">Objectifs &amp; palette</h2>
-        <p class="mb-6 text-[15px] leading-[1.65] text-(--mut)">
+        <p class="mb-6 max-w-[620px] text-[15px] leading-[1.65] text-(--mut)">
             Chaque objectif porte une des sept teintes de saison, la même partout : calendrier, tâches, bande
             d'état, fiches. Au-delà de sept objectifs, la série recommence.
         </p>
@@ -533,13 +568,13 @@ new #[Title('Réglages')] class extends Component
         <x-btn variant="secondary" :href="route('goals.index')" wire:navigate>Gérer les objectifs</x-btn>
     </section>
 
-    <section id="rituels" class="mb-10">
+    <section id="rituels" class="mb-12">
         <h2 class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Rituels &amp; jauges</h2>
 
-        <div class="flex flex-col gap-5">
-            <div class="flex items-start gap-5">
+        <x-card padding="22" class="flex flex-col divide-y divide-(--bd)">
+            <div class="flex items-start gap-5 py-4 first:pt-0 last:pb-0">
                 <div>
-                    <p class="mb-1 text-[15px] text-(--tx)">Jauges de saison</p>
+                    <p class="mb-1 text-[15px] font-semibold text-(--tx)">Jauges de saison</p>
                     <p class="text-[13px] leading-[1.6] text-(--mut)">
                         Affiche la bande d'état sur les écrans de travail. Décroissance de 8 % par semaine sans
                         activité, plancher à 10 %.
@@ -548,9 +583,9 @@ new #[Title('Réglages')] class extends Component
                 <x-toggle class="ml-auto shrink-0" wire:model.live="momentumGauges" />
             </div>
 
-            <div class="flex items-start gap-5">
+            <div class="flex items-start gap-5 py-4 first:pt-0 last:pb-0">
                 <div>
-                    <p class="mb-1 text-[15px] text-(--tx)">Série et paliers</p>
+                    <p class="mb-1 text-[15px] font-semibold text-(--tx)">Série et paliers</p>
                     <p class="text-[13px] leading-[1.6] text-(--mut)">
                         Compte les jours consécutifs avec au moins une tâche cochée. Paliers à 7, 30 et 100 jours.
                     </p>
@@ -558,22 +593,22 @@ new #[Title('Réglages')] class extends Component
                 <x-toggle class="ml-auto shrink-0" wire:model.live="momentumStreak" />
             </div>
 
-            <div class="flex items-start gap-5">
+            <div class="flex items-start gap-5 py-4 first:pt-0 last:pb-0">
                 <div>
-                    <p class="mb-1 text-[15px] text-(--tx)">Célébration à la fermeture d'un objectif</p>
+                    <p class="mb-1 text-[15px] font-semibold text-(--tx)">Célébration à la fermeture d'un objectif</p>
                     <p class="text-[13px] leading-[1.6] text-(--mut)">
                         Affiche une carte en tête d'Aujourd'hui les deux jours qui suivent un objectif atteint.
                     </p>
                 </div>
                 <x-toggle class="ml-auto shrink-0" wire:model.live="momentumCelebration" />
             </div>
-        </div>
+        </x-card>
     </section>
 
-    <div id="cerveau" class="mb-10">
+    <section id="cerveau" class="mb-12">
         <h2 class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Cerveau</h2>
 
-        <div class="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
             <form wire:submit="saveBrainSettings" class="space-y-4 rounded-[18px] bg-(--surf) p-5" wire:loading.class="opacity-50" wire:target="saveBrainSettings">
                 <div>
                     <label class="text-[12px] text-(--mut)">URL du remote git</label>
@@ -676,209 +711,305 @@ new #[Title('Réglages')] class extends Component
                 @endif
             </div>
         </div>
-    </div>
+    </section>
 
-    <div class="mt-8">
-        <h2 id="mcp" class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Connexions — MCP / Hermes</h2>
+    <section id="mcp" class="mb-12">
+        <h2 class="font-display mb-2 text-[22px] font-semibold text-(--tx)">Connexions — MCP / Hermes</h2>
+        <p class="mb-6 max-w-[620px] text-[15px] leading-[1.65] text-(--mut)">
+            Le serveur MCP est la porte par laquelle Hermes lit et écrit dans Tars. Un seul jeton à la fois :
+            en régénérer un révoque l'ancien sur-le-champ.
+        </p>
 
-        <div class="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div class="space-y-4 rounded-[18px] bg-(--surf) p-5">
-                <label class="flex items-center gap-2 text-sm text-(--tx)">
-                    <input type="checkbox" wire:model.live="mcpEnabled" class="rounded-[4px] border-(--bd2) text-(--ac) focus:ring-0" />
-                    Activer le serveur MCP
-                </label>
+        <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+            <div class="flex flex-col gap-5">
+                <x-connection-card
+                    title="Serveur MCP"
+                    subtitle="La porte d'Hermes sur Tars"
+                    :status="$mcpEnabled ? 'Actif' : 'Inactif'"
+                    :tone="$mcpEnabled ? 'agent' : 'sunk'"
+                >
+                    <x-slot:mark>
+                        <flux:icon name="command-line" class="size-[19px] text-(--ai)" />
+                    </x-slot:mark>
 
-                <div>
-                    <label class="text-[12px] text-(--mut)">URL de l'endpoint</label>
-                    <input
-                        type="text"
-                        readonly
-                        onclick="this.select()"
-                        value="{{ $this->mcpEndpointUrl }}"
-                        class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none"
-                    />
-                </div>
+                    <x-slot:aside>
+                        <x-toggle wire:model.live="mcpEnabled" />
+                    </x-slot:aside>
 
-                <div>
-                    <label class="text-[12px] text-(--mut)">Token</label>
-                    @if ($mcpNewToken)
-                        <input
-                            type="text"
-                            readonly
-                            onclick="this.select()"
-                            value="{{ $mcpNewToken }}"
-                            class="mt-1 w-full rounded-[8px] border border-(--ac) bg-(--in) px-3 py-2 font-mono text-sm text-(--tx)"
-                        />
-                        <p class="mt-1 text-xs text-(--warn)">Ce token ne sera plus jamais affiché en clair — copie-le maintenant.</p>
-                    @else
-                        <input
-                            type="text"
-                            readonly
-                            value="{{ $this->mcpHasToken ? '••••••••••••••••' : 'Aucun token généré' }}"
-                            class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-sm text-(--mut)"
-                        />
-                    @endif
-                </div>
+                    <x-copy-field label="URL de l'endpoint" :value="$this->mcpEndpointUrl" />
 
-                <div class="flex justify-end pt-1">
-                    @php
-                        $mcpConfirmMessage = $this->mcpHasToken
-                            ? "Régénérer le token révoque immédiatement l'ancien. Continuer ?"
-                            : 'Générer un nouveau token ?';
-                    @endphp
-                    <x-btn variant="secondary" wire:click="generateMcpToken" wire:confirm="{{ $mcpConfirmMessage }}">
-                        {{ $this->mcpHasToken ? 'Régénérer le token' : 'Générer un token' }}
-                    </x-btn>
-                </div>
+                    <div>
+                        @if ($mcpNewToken)
+                            <x-copy-field label="Token" :value="$mcpNewToken" />
+                            <p class="mt-2 flex items-start gap-1.5 text-[12.5px] font-medium text-(--warn)">
+                                <span aria-hidden="true">!</span>
+                                Ce token ne sera plus jamais affiché en clair — copie-le maintenant.
+                            </p>
+                        @else
+                            <x-copy-field
+                                label="Token"
+                                :copyable="false"
+                                :display="$this->mcpHasToken ? '••••••••••••••••' : 'Aucun token généré'"
+                            />
+                        @endif
+                    </div>
+
+                    <x-slot:actions>
+                        @php
+                            $mcpConfirmMessage = $this->mcpHasToken
+                                ? "Régénérer le token révoque immédiatement l'ancien. Continuer ?"
+                                : 'Générer un nouveau token ?';
+                        @endphp
+                        <x-btn variant="secondary" wire:click="generateMcpToken" wire:confirm="{{ $mcpConfirmMessage }}">
+                            {{ $this->mcpHasToken ? 'Régénérer le token' : 'Générer un token' }}
+                        </x-btn>
+                    </x-slot:actions>
+                </x-connection-card>
+
+                <x-card padding="18" tone="sunk">
+                    <div x-data="{ open: false }">
+                        <button type="button" x-on:click="open = ! open" class="flex w-full items-center justify-between text-left text-[13px] font-semibold text-(--tx)">
+                            Configuration côté Hermes
+                            <span aria-hidden="true" class="text-(--mut)" x-text="open ? '−' : '+'"></span>
+                        </button>
+
+                        <div x-show="open" x-cloak class="mt-3.5 space-y-2.5">
+                            <x-copy-field label="URL" :value="$this->mcpEndpointUrl" />
+                            <x-copy-field label="Header" value="Authorization: Bearer <token>" />
+                            <p class="text-[12.5px] leading-[1.6] text-(--mut)">
+                                Depuis un conteneur Docker sur ce même VPS, utilise <span class="font-semibold text-(--tx)">172.17.0.1</span>
+                                à la place du domaine ; le domaine public reste nécessaire si Hermes tourne ailleurs.
+                            </p>
+                        </div>
+                    </div>
+                </x-card>
             </div>
 
-            <div class="space-y-4 rounded-[18px] bg-(--surf) p-5">
-                <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-(--mut)">Statut</span>
-                    <span class="inline-flex items-center gap-1.5 font-mono text-[10.5px] text-(--mut)">
-                        <span class="size-1.5 rounded-full {{ $this->mcpStatus['lastCallAt'] ? 'bg-(--ok)' : 'bg-(--bd2)' }}"></span>
+            <x-card padding="22" class="flex flex-col gap-4">
+                <div class="flex items-center justify-between gap-3">
+                    <p class="text-[14px] font-semibold text-(--tx)">Journal des appels</p>
+                    <span class="inline-flex items-center gap-2 text-[12.5px] text-(--mut)">
+                        <span class="size-[8px] rounded-full {{ $this->mcpStatus['lastCallAt'] ? 'bg-(--ai)' : 'bg-(--bd2)' }}" aria-hidden="true"></span>
                         {{ $this->mcpStatus['lastCallAt'] ? 'Dernier appel '.$this->mcpStatus['lastCallAt']->diffForHumans() : 'Aucun appel' }}
                     </span>
                 </div>
 
-                <dl class="space-y-2 font-mono text-xs text-(--mut)">
-                    <div class="flex justify-between">
-                        <dt>Appels (7 jours)</dt>
-                        <dd class="text-(--tx)">{{ $this->mcpStatus['callsLast7Days'] }}</dd>
-                    </div>
-                </dl>
+                <div class="flex items-baseline gap-2 border-y border-(--bd) py-3">
+                    <span class="font-display text-[26px] font-bold text-(--tx)">{{ $this->mcpStatus['callsLast7Days'] }}</span>
+                    <span class="text-[13px] text-(--mut)">{{ Str::plural('appel', $this->mcpStatus['callsLast7Days']) }} sur 7 jours</span>
+                </div>
 
-                <div class="flex flex-wrap gap-2 pt-1">
-                    <select wire:model.live="mcpFilterTool" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                <div class="flex flex-wrap gap-2">
+                    <x-select variant="technical" wire:model.live="mcpFilterTool">
                         <option value="">Tous les outils</option>
                         @foreach ($this->mcpTools as $tool)
                             <option value="{{ $tool }}">{{ $tool }}</option>
                         @endforeach
-                    </select>
-                    <select wire:model.live="mcpFilterStatus" class="rounded-[8px] border border-(--bd2) bg-(--in) px-2.5 py-1.5 font-mono text-xs text-(--tx)">
+                    </x-select>
+                    <x-select variant="technical" wire:model.live="mcpFilterStatus">
                         <option value="">Tous les statuts</option>
                         @foreach (\App\Enums\McpCallStatus::cases() as $status)
                             <option value="{{ $status->value }}">{{ $status->value }}</option>
                         @endforeach
-                    </select>
+                    </x-select>
                 </div>
 
-                <div class="max-h-72 space-y-1 overflow-y-auto">
+                <div class="max-h-[340px] divide-y divide-(--bd) overflow-y-auto">
                     @forelse ($this->mcpCalls as $call)
-                        <div class="flex items-center gap-2 rounded-[8px] px-2 py-1.5 hover:bg-(--surf2)" wire:key="mcp-call-{{ $call->id }}">
-                            <span class="font-mono text-[10.5px] text-(--tx)">{{ $call->tool }}</span>
+                        <div class="flex items-center gap-2.5 py-2" wire:key="mcp-call-{{ $call->id }}">
+                            <span class="font-mono text-[12px] font-semibold text-(--tx)">{{ $call->tool }}</span>
                             <x-badge type="status" :value="$call->status->value" />
-                            <span class="font-mono text-[10.5px] text-(--mut)">{{ $call->duration_ms }}ms</span>
-                            <span class="ml-auto truncate text-xs text-(--mut)">{{ Str::limit($call->result_summary ?? $call->error_message, 60) }}</span>
+                            <span class="font-mono text-[11.5px] text-(--mut)">{{ $call->duration_ms }}ms</span>
+                            <span class="ml-auto min-w-0 truncate text-[12.5px] text-(--mut)">{{ Str::limit($call->result_summary ?? $call->error_message, 60) }}</span>
                         </div>
                     @empty
-                        <p class="p-4 text-center text-sm text-(--mut)">Aucun appel pour l'instant.</p>
+                        <p class="py-5 text-center text-[13.5px] text-(--mut)">Aucun appel pour l'instant.</p>
                     @endforelse
                 </div>
-            </div>
+            </x-card>
         </div>
+    </section>
 
-        <div class="mt-4 rounded-[18px] bg-(--surf) p-5">
-            <h3 class="text-xs font-semibold text-(--mut)">Configuration côté Hermes</h3>
-            <dl class="mt-3 space-y-1.5 font-mono text-xs text-(--tx)">
-                <div>URL : {{ $this->mcpEndpointUrl }}</div>
-                <div>Header : Authorization: Bearer &lt;token&gt;</div>
-                <div class="text-(--mut)">
-                    Depuis un conteneur Docker sur ce même VPS, utilise <span class="text-(--tx)">172.17.0.1</span> à la place du domaine ;
-                    le domaine public reste nécessaire si Hermes tourne ailleurs.
-                </div>
-            </dl>
-        </div>
-    </div>
+    <section id="google" class="mb-12">
+        <h2 class="font-display mb-2 text-[22px] font-semibold text-(--tx)">Connexions — Google</h2>
+        <p class="mb-6 max-w-[620px] text-[15px] leading-[1.65] text-(--mut)">
+            Un seul compte Google, deux accès : le calendrier dans les deux sens, la boîte Gmail en lecture seule.
+        </p>
 
-    <div class="mt-8">
-        <h2 id="google" class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Connexions — Google Calendar</h2>
+        <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+            <x-connection-card
+                title="Google"
+                :subtitle="$this->googleCalendarConnection
+                    ? ($this->googleCalendarConnection->google_account_email ?? 'Compte Google connecté')
+                    : 'Aucun compte connecté'"
+                :status="match (true) {
+                    $this->googleCalendarConnection === null => 'Non connecté',
+                    $this->googleCalendarConnection->needs_reconnect => 'Reconnexion requise',
+                    $this->googleAccessesMissing => 'Accès partiel',
+                    default => 'Connecté',
+                }"
+                :tone="match (true) {
+                    $this->googleCalendarConnection === null => 'sunk',
+                    $this->googleCalendarConnection->needs_reconnect => 'danger',
+                    $this->googleAccessesMissing => 'warn',
+                    default => 'agent',
+                }"
+            >
+                <x-slot:mark>
+                    <x-brand-google class="size-[21px]" />
+                </x-slot:mark>
 
-        <div class="mt-4 max-w-xl space-y-4 rounded-[18px] bg-(--surf) p-5">
-            @if ($this->googleCalendarConnection)
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-(--tx)">{{ $this->googleCalendarConnection->google_account_email ?? 'Compte Google connecté' }}</p>
-                        <p class="mt-0.5 font-mono text-[10.5px] text-(--mut)">
-                            Dernière synchro : {{ $this->googleCalendarConnection->last_synced_at?->diffForHumans() ?? 'jamais' }}
-                        </p>
+                @if ($this->googleCalendarConnection)
+                    <div class="grid grid-cols-1 gap-2">
+                        @foreach ($this->googleAccesses as $access)
+                            <div class="flex items-center gap-3 rounded-[13px] bg-(--surf2) px-3.5 py-3">
+                                <span
+                                    class="flex size-[20px] shrink-0 items-center justify-center rounded-full text-[12px] font-bold {{ $access['granted'] ? 'bg-(--aibg) text-(--ai)' : 'bg-(--dgrbg) text-(--dgr)' }}"
+                                    aria-hidden="true"
+                                >{{ $access['granted'] ? '✓' : '✕' }}</span>
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-[13.5px] font-semibold text-(--tx)">{{ $access['label'] }}</p>
+                                    <p class="text-[12.5px] text-(--mut)">{{ $access['detail'] }}</p>
+                                </div>
+                                @unless ($access['granted'])
+                                    <x-badge type="pill" tone="danger" class="shrink-0">non accordé</x-badge>
+                                @endunless
+                            </div>
+                        @endforeach
                     </div>
-                    @if ($this->googleCalendarConnection->needs_reconnect)
-                        <x-badge type="status" value="failed" label="Reconnexion requise" />
-                    @endif
-                </div>
 
-                @if ($this->googleCalendarConnection->needs_reconnect)
-                    <p class="rounded-[8px] bg-(--warnbg) px-3 py-2 text-xs text-(--warn)">
-                        Google a révoqué l'accès (souvent parce que l'écran de consentement OAuth est resté en mode "Test", où les jetons expirent après 7 jours — voir le guide ci-dessous pour passer en production). Reconnecte-toi ci-dessus.
+                    <dl class="flex items-baseline gap-2 text-[13px]">
+                        <dt class="text-(--mut)">Dernière synchro</dt>
+                        <dd class="font-semibold text-(--tx)">{{ $this->googleCalendarConnection->last_synced_at?->diffForHumans() ?? 'jamais' }}</dd>
+                    </dl>
+
+                    @if ($this->googleCalendarConnection->needs_reconnect)
+                        <p class="rounded-[13px] bg-(--dgrbg) px-3.5 py-3 text-[12.5px] leading-[1.6] text-(--dgr)">
+                            Google a révoqué l'accès — souvent parce que l'écran de consentement OAuth est resté en mode « Test »,
+                            où les jetons expirent après 7 jours. Reconnecte le compte ci-dessous.
+                        </p>
+                    @elseif ($this->googleAccessesMissing)
+                        <p class="rounded-[13px] bg-(--warnbg) px-3.5 py-3 text-[12.5px] leading-[1.6] text-(--warn)">
+                            Un accès demandé n'a pas été accordé : case décochée sur l'écran de consentement, ou scope absent
+                            de la configuration OAuth. Réautorise le compte pour le réclamer.
+                        </p>
+                    @endif
+
+                    @if ($googleCalendarSyncMessage)
+                        <p class="text-[12.5px] leading-[1.6] text-(--mut)">{{ $googleCalendarSyncMessage }}</p>
+                    @endif
+
+                    <x-slot:actions>
+                        <x-btn variant="danger" size="xs" wire:click="disconnectGoogleCalendar" wire:confirm="Déconnecter le compte Google ?">Déconnecter</x-btn>
+
+                        @if ($this->googleCalendarConnection->needs_reconnect || $this->googleAccessesMissing)
+                            <x-btn variant="secondary" wire:click="syncGoogleCalendarNow">
+                                <span wire:loading.remove wire:target="syncGoogleCalendarNow">Synchroniser</span>
+                                <span wire:loading wire:target="syncGoogleCalendarNow">Synchronisation…</span>
+                            </x-btn>
+                            <x-btn-google :href="route('google-calendar.connect')" label="Réautoriser" />
+                        @else
+                            <x-btn variant="ghost" :href="route('google-calendar.connect')">Réautoriser</x-btn>
+                            <x-btn variant="primary" wire:click="syncGoogleCalendarNow">
+                                <span wire:loading.remove wire:target="syncGoogleCalendarNow">Synchroniser</span>
+                                <span wire:loading wire:target="syncGoogleCalendarNow">Synchronisation…</span>
+                            </x-btn>
+                        @endif
+                    </x-slot:actions>
+                @elseif ($this->googleCalendarConfigured)
+                    <p class="text-[13.5px] leading-[1.65] text-(--mut)">
+                        Tars demandera deux accès à ton compte : <span class="font-semibold text-(--tx)">lecture et écriture
+                        des événements</span> du calendrier, et <span class="font-semibold text-(--tx)">lecture seule</span> de Gmail.
+                    </p>
+
+                    <x-slot:actions>
+                        <x-btn-google :href="route('google-calendar.connect')" />
+                    </x-slot:actions>
+                @else
+                    <p class="rounded-[13px] bg-(--warnbg) px-3.5 py-3 text-[12.5px] leading-[1.6] text-(--warn)">
+                        Aucun identifiant OAuth Google n'est configuré côté serveur. Suis le guide à droite pour en créer un —
+                        ça prend 5 minutes et ne se fait qu'une fois.
                     </p>
                 @endif
+            </x-connection-card>
 
-                @if ($googleCalendarSyncMessage)
-                    <p class="text-[12px] text-(--mut)">{{ $googleCalendarSyncMessage }}</p>
-                @endif
+            <x-card padding="22" tone="sunk">
+                <div x-data="{ open: {{ $this->googleCalendarConfigured ? 'false' : 'true' }} }">
+                    <button type="button" x-on:click="open = ! open" class="flex w-full items-center justify-between text-left text-[13px] font-semibold text-(--tx)">
+                        Comment connecter un compte Google ?
+                        <span aria-hidden="true" class="text-(--mut)" x-text="open ? '−' : '+'"></span>
+                    </button>
 
-                <div class="flex justify-end gap-2 pt-1">
-                    <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="syncGoogleCalendarNow">Synchroniser maintenant</x-btn>
-                    <x-btn variant="danger" class="!px-3 !py-1.5 text-xs" wire:click="disconnectGoogleCalendar" wire:confirm="Déconnecter Google Calendar ?">Déconnecter</x-btn>
+                    <div x-show="open" x-cloak class="mt-4 space-y-4 text-[12.5px] leading-[1.65] text-(--mut)">
+                        <ol class="space-y-3">
+                            <li class="flex gap-2.5">
+                                <span class="font-display shrink-0 font-bold text-(--tx)">1.</span>
+                                <span>Ouvre la <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" class="font-semibold text-(--ac) underline">Google Cloud Console</a> et crée un projet (ou réutilise un projet existant).</span>
+                            </li>
+                            <li class="flex gap-2.5">
+                                <span class="font-display shrink-0 font-bold text-(--tx)">2.</span>
+                                <span>Active les API <span class="font-semibold text-(--tx)">Google Calendar API</span> et <span class="font-semibold text-(--tx)">Gmail API</span> (menu « API et services » → « Bibliothèque »).</span>
+                            </li>
+                            <li class="flex gap-2.5">
+                                <span class="font-display shrink-0 font-bold text-(--tx)">3.</span>
+                                <span>
+                                    Configure l'écran de consentement OAuth en type « Externe », puis ajoute les deux scopes :
+                                    <code class="rounded-[5px] bg-(--surf2) px-1.5 py-0.5 font-mono text-[11.5px] text-(--tx)">.../auth/calendar.events</code>
+                                    et
+                                    <code class="rounded-[5px] bg-(--surf2) px-1.5 py-0.5 font-mono text-[11.5px] text-(--tx)">.../auth/gmail.readonly</code>.
+                                    Passe la publication en <span class="font-semibold text-(--tx)">Production</span> dès que possible : laissée en « Test »,
+                                    Google expire le jeton tous les 7 jours.
+                                </span>
+                            </li>
+                            <li class="flex gap-2.5">
+                                <span class="font-display shrink-0 font-bold text-(--tx)">4.</span>
+                                <span>Crée des identifiants → « ID client OAuth » → type « Application Web ».</span>
+                            </li>
+                            <li class="flex flex-col gap-2">
+                                <span class="flex gap-2.5">
+                                    <span class="font-display shrink-0 font-bold text-(--tx)">5.</span>
+                                    <span>Ajoute cette URI de redirection autorisée, à l'identique :</span>
+                                </span>
+                                <x-copy-field :value="$this->googleCalendarRedirectUri" class="pl-6" />
+                            </li>
+                            <li class="flex gap-2.5">
+                                <span class="font-display shrink-0 font-bold text-(--tx)">6.</span>
+                                <span>
+                                    Copie l'« ID client » et le « Code secret » dans le
+                                    <code class="rounded-[5px] bg-(--surf2) px-1.5 py-0.5 font-mono text-[11.5px] text-(--tx)">.env</code> du serveur
+                                    (<code class="rounded-[5px] bg-(--surf2) px-1.5 py-0.5 font-mono text-[11.5px] text-(--tx)">GOOGLE_CLIENT_ID</code>,
+                                    <code class="rounded-[5px] bg-(--surf2) px-1.5 py-0.5 font-mono text-[11.5px] text-(--tx)">GOOGLE_CLIENT_SECRET</code>), puis redémarre l'application.
+                                </span>
+                            </li>
+                            <li class="flex gap-2.5">
+                                <span class="font-display shrink-0 font-bold text-(--tx)">7.</span>
+                                <span>Reviens ici et clique sur « Continuer avec Google ».</span>
+                            </li>
+                        </ol>
+
+                        <p class="border-t border-(--bd) pt-3.5">
+                            <span class="font-semibold text-(--tx)">À savoir sur Gmail :</span>
+                            <code class="rounded-[5px] bg-(--surf2) px-1.5 py-0.5 font-mono text-[11.5px] text-(--tx)">gmail.readonly</code>
+                            est un scope « restreint » chez Google. Sur un projet personnel non vérifié, l'écran de consentement
+                            affichera un avertissement « application non validée » à accepter à la main, et Google peut exiger une
+                            validation pour rester en Production. Si la connexion redemande une autorisation tous les 7 jours,
+                            c'est ce point-là qu'il faut regarder.
+                        </p>
+                    </div>
                 </div>
-            @elseif ($this->googleCalendarConfigured)
-                <p class="text-sm text-(--mut)">Connecte un compte Google pour synchroniser tes événements avec Google Calendar dans les deux sens.</p>
-                <div class="flex justify-end pt-1">
-                    <x-btn variant="primary" href="{{ route('google-calendar.connect') }}">Connecter Google Calendar</x-btn>
-                </div>
-            @else
-                <p class="text-sm text-(--mut)">
-                    Aucun identifiant OAuth Google n'est configuré côté serveur. Suis le guide ci-dessous pour en créer un — ça prend 5 minutes et ne se fait qu'une fois.
-                </p>
-            @endif
-
-            <div x-data="{ open: {{ $this->googleCalendarConfigured ? 'false' : 'true' }} }" class="border-t border-(--bd) pt-3">
-                <button type="button" @click="open = !open" class="flex w-full items-center justify-between text-left text-xs font-medium text-(--mut) hover:text-(--tx)">
-                    Comment connecter Google Calendar ?
-                    <span aria-hidden="true" x-text="open ? '−' : '+'"></span>
-                </button>
-
-                <div x-show="open" x-cloak class="mt-3 space-y-3 text-xs text-(--mut)">
-                    <ol class="list-inside list-decimal space-y-2">
-                        <li>Ouvre la <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" class="text-(--ac) underline">Google Cloud Console</a> et crée un projet (ou réutilise un projet existant).</li>
-                        <li>Active l'API <span class="text-(--tx)">Google Calendar API</span> pour ce projet (menu "API et services" → "Bibliothèque").</li>
-                        <li>
-                            Configure l'écran de consentement OAuth : type "Externe", ajoute le scope <code class="rounded-[4px] bg-(--surf2) px-1 py-0.5 font-mono text-(--tx)">.../auth/calendar.events</code>.
-                            Passe le statut de publication en <span class="text-(--tx)">Production</span> dès que possible — laissé en "Test", Google expire le jeton de connexion tous les 7 jours et il faut se reconnecter en boucle.
-                        </li>
-                        <li>Crée des identifiants → "ID client OAuth" → type "Application Web".</li>
-                        <li>
-                            Ajoute cette URI de redirection autorisée (copie-la exactement) :
-                            <input
-                                type="text"
-                                readonly
-                                onclick="this.select()"
-                                value="{{ $this->googleCalendarRedirectUri }}"
-                                class="mt-1 w-full rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-2 font-mono text-[11px] text-(--tx)"
-                            />
-                        </li>
-                        <li>
-                            Copie l'"ID client" et le "Code secret du client" dans le fichier <code class="rounded-[4px] bg-(--surf2) px-1 py-0.5 font-mono text-(--tx)">.env</code> du serveur :
-                            <code class="rounded-[4px] bg-(--surf2) px-1 py-0.5 font-mono text-(--tx)">GOOGLE_CLIENT_ID</code> et
-                            <code class="rounded-[4px] bg-(--surf2) px-1 py-0.5 font-mono text-(--tx)">GOOGLE_CLIENT_SECRET</code>, puis redémarre l'application.
-                        </li>
-                        <li>Reviens sur cette page et clique sur "Connecter Google Calendar".</li>
-                    </ol>
-                </div>
-            </div>
+            </x-card>
         </div>
-    </div>
+    </section>
 
-    <div class="mt-8">
-        <div class="flex items-center justify-between">
-            <h2 id="ia" class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Fournisseurs IA</h2>
+    <section id="ia" class="mb-12">
+        <div class="flex items-center justify-between gap-4">
+            <h2 class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Fournisseurs IA</h2>
             <x-btn variant="primary" wire:click="openCreateProviderModal">+ Nouveau fournisseur</x-btn>
         </div>
 
-        @error('deleteProvider') <p class="mt-2 text-xs text-(--dgr)">{{ $message }}</p> @enderror
+        @error('deleteProvider') <p class="mb-2 text-[12.5px] text-(--dgr)">{{ $message }}</p> @enderror
 
-        <div class="mt-4 divide-y divide-(--bd) rounded-[12px] border border-(--bd) bg-(--surf)">
+        <div class="divide-y divide-(--bd) overflow-hidden rounded-[18px] bg-(--surf)">
             @forelse ($this->aiProviders as $provider)
                 <div class="flex items-center gap-3 px-4 py-3" wire:key="provider-{{ $provider->id }}">
                     <div class="flex-1">
@@ -909,90 +1040,97 @@ new #[Title('Réglages')] class extends Component
                     </button>
                 </div>
             @empty
-                <p class="p-5 text-center text-sm text-(--mut)">Aucun fournisseur pour l'instant.</p>
+                <p class="p-5 text-center text-[13.5px] text-(--mut)">Aucun fournisseur pour l'instant.</p>
             @endforelse
         </div>
-    </div>
+    </section>
 
-    <div class="mt-8">
-        <h2 id="revue" class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Revue</h2>
+    <section id="revue" class="mb-12">
+        <h2 class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Revue</h2>
 
-        <div class="mt-4 space-y-3 rounded-[18px] bg-(--surf) p-4" wire:loading.class="opacity-50" wire:target="saveReviewSettings">
-            <div class="flex items-center gap-3">
-                <label class="text-sm text-(--tx)">Heure de la revue hebdomadaire (dimanche)</label>
-                <input
-                    type="time"
-                    wire:model="reviewWeeklyTime"
-                    wire:loading.attr="disabled"
-                    wire:target="saveReviewSettings"
-                    class="rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-1.5 font-mono text-sm text-(--tx)"
-                />
+        <x-card padding="22" class="space-y-5" wire:loading.class="opacity-50" wire:target="saveReviewSettings">
+            <div class="grid items-start gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                <div>
+                    <label class="text-[12px] font-medium text-(--mut)">Heure de la revue hebdomadaire (dimanche)</label>
+                    <x-input
+                        variant="technical"
+                        type="time"
+                        wire:model="reviewWeeklyTime"
+                        wire:loading.attr="disabled"
+                        wire:target="saveReviewSettings"
+                        class="mt-1.5 w-full"
+                    />
+                    @error('reviewWeeklyTime') <p class="mt-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
+                </div>
+
+                <div>
+                    <label class="text-[12px] font-medium text-(--mut)">Email de notification</label>
+                    <x-input
+                        type="email"
+                        wire:model="reviewNotificationEmail"
+                        wire:loading.attr="disabled"
+                        wire:target="saveReviewSettings"
+                        placeholder="toi@exemple.com"
+                        class="mt-1.5 w-full"
+                    />
+                    @error('reviewNotificationEmail') <p class="mt-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
+                </div>
+
+                <div class="flex items-center gap-5 sm:col-span-2 xl:col-span-1">
+                    <p class="text-[14px] text-(--tx)">Recevoir un email quand une revue est générée</p>
+                    <x-toggle class="ml-auto shrink-0" wire:model="reviewNotificationsEnabled" wire:loading.attr="disabled" wire:target="saveReviewSettings" />
+                </div>
             </div>
-            @error('reviewWeeklyTime') <p class="text-xs text-(--dgr)">{{ $message }}</p> @enderror
 
-            <div class="flex items-center gap-3">
-                <label class="w-64 text-sm text-(--tx)">Email de notification</label>
-                <input
-                    type="email"
-                    wire:model="reviewNotificationEmail"
-                    wire:loading.attr="disabled"
-                    wire:target="saveReviewSettings"
-                    placeholder="toi@exemple.com"
-                    class="flex-1 rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-1.5 text-sm text-(--tx)"
-                />
-            </div>
-            @error('reviewNotificationEmail') <p class="text-xs text-(--dgr)">{{ $message }}</p> @enderror
-
-            <label class="flex items-center gap-2 text-sm text-(--tx)">
-                <input type="checkbox" wire:model="reviewNotificationsEnabled" wire:loading.attr="disabled" wire:target="saveReviewSettings" class="rounded-[4px] border-(--bd2) text-(--ac) focus:ring-0" />
-                Recevoir un email quand une revue est générée
-            </label>
-
-            <div class="flex items-center justify-end gap-2">
+            <div class="flex items-center justify-end gap-3 border-t border-(--bd) pt-4">
                 @if ($reviewSettingsSaved)
-                    <p class="text-xs text-(--ok)" wire:loading.remove wire:target="saveReviewSettings">✓ Enregistré</p>
+                    <p class="text-[12.5px] font-semibold text-(--ok)" wire:loading.remove wire:target="saveReviewSettings">✓ Enregistré</p>
                 @endif
-                <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="saveReviewSettings" wire:loading.attr="disabled" wire:target="saveReviewSettings">
+                <x-btn variant="primary" wire:click="saveReviewSettings" wire:loading.attr="disabled" wire:target="saveReviewSettings">
                     <span wire:loading wire:target="saveReviewSettings">Enregistrement…</span>
                     <span wire:loading.remove wire:target="saveReviewSettings">Enregistrer</span>
                 </x-btn>
             </div>
-        </div>
-    </div>
+        </x-card>
+    </section>
 
-    <div class="mt-8">
-        <h2 id="archivage" class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Archivage</h2>
+    <section id="archivage" class="mb-12">
+        <h2 class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Archivage</h2>
 
-        <div class="mt-4 space-y-3 rounded-[18px] bg-(--surf) p-4" wire:loading.class="opacity-50" wire:target="saveArchiveSettings">
-            <div class="flex items-center gap-3">
-                <label class="w-64 text-sm text-(--tx)">Archiver après (jours)</label>
-                <input
-                    type="number"
-                    min="1"
-                    wire:model="archiveAfterDays"
-                    wire:loading.attr="disabled"
-                    wire:target="saveArchiveSettings"
-                    placeholder="désactivé"
-                    class="w-32 rounded-[8px] border border-(--bd2) bg-(--in) px-3 py-1.5 font-mono text-sm text-(--tx)"
-                />
+        <x-card padding="22" class="space-y-5" wire:loading.class="opacity-50" wire:target="saveArchiveSettings">
+            <div class="grid items-start gap-5 sm:grid-cols-[200px_minmax(0,1fr)]">
+                <div>
+                    <label class="text-[12px] font-medium text-(--mut)">Archiver après (jours)</label>
+                    <x-input
+                        variant="technical"
+                        type="number"
+                        min="1"
+                        wire:model="archiveAfterDays"
+                        wire:loading.attr="disabled"
+                        wire:target="saveArchiveSettings"
+                        placeholder="désactivé"
+                        class="mt-1.5 w-full"
+                    />
+                    @error('archiveAfterDays') <p class="mt-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
+                </div>
+
+                <p class="max-w-[620px] text-[13px] leading-[1.65] text-(--mut) sm:mt-6">
+                    Laisser vide pour désactiver. Les tâches terminées et éléments de liste cochés depuis plus de N jours
+                    seront masqués — mais conservés — automatiquement.
+                </p>
             </div>
-            @error('archiveAfterDays') <p class="text-xs text-(--dgr)">{{ $message }}</p> @enderror
 
-            <p class="text-[12px] text-(--mut)">
-                Laisser vide pour désactiver. Les tâches terminées et éléments de liste cochés depuis plus de N jours seront masqués (mais conservés) automatiquement.
-            </p>
-
-            <div class="flex items-center justify-end gap-2">
+            <div class="flex items-center justify-end gap-3 border-t border-(--bd) pt-4">
                 @if ($archiveSettingsSaved)
-                    <p class="text-xs text-(--ok)" wire:loading.remove wire:target="saveArchiveSettings">✓ Enregistré</p>
+                    <p class="text-[12.5px] font-semibold text-(--ok)" wire:loading.remove wire:target="saveArchiveSettings">✓ Enregistré</p>
                 @endif
-                <x-btn variant="secondary" class="!px-3 !py-1.5 text-xs" wire:click="saveArchiveSettings" wire:loading.attr="disabled" wire:target="saveArchiveSettings">
+                <x-btn variant="primary" wire:click="saveArchiveSettings" wire:loading.attr="disabled" wire:target="saveArchiveSettings">
                     <span wire:loading wire:target="saveArchiveSettings">Enregistrement…</span>
                     <span wire:loading.remove wire:target="saveArchiveSettings">Enregistrer</span>
                 </x-btn>
             </div>
-        </div>
-    </div>
+        </x-card>
+    </section>
 
         </div>
     </div>
