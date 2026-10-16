@@ -2,6 +2,8 @@
 
 namespace App\Support\Brain;
 
+use App\Support\Brain\Schema\SchemaValidationResult;
+
 readonly class ParsedDocument
 {
     /**
@@ -14,5 +16,6 @@ readonly class ParsedDocument
         public string $content,
         public array $wikilinks,
         public string $hash,
+        public SchemaValidationResult $schema,
     ) {}
 }

@@ -4,6 +4,7 @@ use App\Models\Entity;
 use App\Models\Goal;
 use App\Support\Brain\AnchorResolver;
 use App\Support\Brain\ParsedDocument;
+use App\Support\Brain\Schema\FrontmatterSchema;
 
 test('resolves an entity by fuzzy name', function () {
     $entity = Entity::factory()->create(['name' => 'SARL Alpha']);
@@ -38,6 +39,7 @@ test('resolves anchors from frontmatter and wikilinks', function () {
         content: 'Vu [[Semi-marathon 2027]] et passage par [[Appart Lilas]].',
         wikilinks: ['Semi-marathon 2027', 'Appart Lilas'],
         hash: 'abc',
+        schema: (new FrontmatterSchema)->validate(['entity' => 'SARL Alpha']),
     );
 
     $resolved = (new AnchorResolver)->resolve($document);
@@ -55,6 +57,7 @@ test('ignores frontmatter anchors that do not resolve to anything', function () 
         content: 'Rien.',
         wikilinks: [],
         hash: 'abc',
+        schema: (new FrontmatterSchema)->validate(['entity' => 'Inconnu']),
     );
 
     $resolved = (new AnchorResolver)->resolve($document);

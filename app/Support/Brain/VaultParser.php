@@ -2,10 +2,13 @@
 
 namespace App\Support\Brain;
 
+use App\Support\Brain\Schema\FrontmatterSchema;
 use Symfony\Component\Yaml\Yaml;
 
 class VaultParser
 {
+    public function __construct(private readonly FrontmatterSchema $schema = new FrontmatterSchema) {}
+
     public function parse(string $raw, string $fallbackTitle): ParsedDocument
     {
         [$frontmatter, $body] = $this->splitFrontmatter($raw);
@@ -18,6 +21,7 @@ class VaultParser
             content: $body,
             wikilinks: $this->extractWikilinks($body),
             hash: hash('sha256', $raw),
+            schema: $this->schema->validate($frontmatter),
         );
     }
 
