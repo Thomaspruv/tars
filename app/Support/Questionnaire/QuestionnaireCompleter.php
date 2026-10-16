@@ -22,6 +22,14 @@ class QuestionnaireCompleter
      * marks the run completed. Reused by both the MCP answer_questionnaire
      * tool and the in-app fill-in form — the only two ways a run completes.
      */
+    /**
+     * The bilans live alongside the journal in the target tree (§A.4).
+     */
+    public static function pathFor(QuestionnaireRun $run): string
+    {
+        return "Journal/Bilans/{$run->due_date->toDateString()} — {$run->questionnaire->name}.md";
+    }
+
     public function complete(QuestionnaireRun $run): void
     {
         if ($run->status === QuestionnaireRunStatus::Completed) {
@@ -30,7 +38,7 @@ class QuestionnaireCompleter
 
         $run->loadMissing(['questionnaire', 'answers']);
 
-        $relativePath = "TARS/Journal/Bilans/{$run->due_date->toDateString()} — {$run->questionnaire->name}.md";
+        $relativePath = self::pathFor($run);
 
         $numericAnswers = [];
         $lines = [];

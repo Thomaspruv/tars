@@ -47,7 +47,7 @@ test('writes the vault note, commits, reindexes and marks the run completed', fu
     $run->refresh();
     expect($run->status->value)->toBe('completed')
         ->and($run->completed_at)->not->toBeNull()
-        ->and($run->note_path)->toBe('TARS/Journal/Bilans/2026-07-01 — Retro perso.md');
+        ->and($run->note_path)->toBe('Journal/Bilans/2026-07-01 — Retro perso.md');
 
     $absolutePath = "{$this->vaultPath}/{$run->note_path}";
     expect(File::exists($absolutePath))->toBeTrue();

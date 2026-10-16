@@ -57,6 +57,20 @@ class GitRepository
      * rewritten, so the write may land locally and the push job carries it
      * later. Anything else that makes the pull fail does block the write.
      */
+    /**
+     * A pull git refuses to even start, because Thomas has uncommitted changes
+     * in the vault right now. Writing is still safe — nothing was rewritten —
+     * but the vault is behind, so it is reported as a warning rather than
+     * swallowed or treated as a divergence.
+     */
+    private const array LOCAL_CHANGES_PATTERNS = [
+        'cannot pull with rebase',
+        'you have unstaged changes',
+        'local changes would be overwritten',
+        'your index contains uncommitted changes',
+        'please commit or stash',
+    ];
+
     private const array UNREACHABLE_REMOTE_PATTERNS = [
         'there is no tracking information',
         'could not read from remote repository',
@@ -75,9 +89,10 @@ class GitRepository
      * tree is left exactly as it was, and reported as unsuccessful so the
      * caller writes nothing.
      *
-     * A pull that *refuses to start* — unstaged changes in the working tree,
-     * typically because Thomas is editing in Obsidian right now — blocks the
-     * write just the same: the §A.8 guarantee has to hold or be reported.
+     * A pull that refuses to start, or a remote out of reach, is not a
+     * divergence: nothing was rewritten, so the write lands locally and the
+     * reason comes back as a `warning` for Réglages → Cerveau. Anything else
+     * blocks the write — the §A.8 guarantee holds or is reported.
      */
     public function pullRebase(string $path): GitPullResult
     {
@@ -95,14 +110,33 @@ class GitRepository
             return new GitPullResult(successful: false, message: $message);
         }
 
-        return new GitPullResult(successful: $this->isUnreachableRemote($message), message: $message);
+        if ($this->matches($message, self::LOCAL_CHANGES_PATTERNS)) {
+            return new GitPullResult(
+                successful: true,
+                message: $message,
+                warning: "Le vault n'a pas pu être mis à jour avant l'écriture : des modifications ne sont pas encore committées dans le dépôt local. La synchro reprendra d'elle-même ensuite.",
+            );
+        }
+
+        if ($this->matches($message, self::UNREACHABLE_REMOTE_PATTERNS)) {
+            return new GitPullResult(
+                successful: true,
+                message: $message,
+                warning: "Le dépôt distant est injoignable : l'écriture est locale, le push suivra.",
+            );
+        }
+
+        return new GitPullResult(successful: false, message: $message);
     }
 
-    private function isUnreachableRemote(string $message): bool
+    /**
+     * @param  list<string>  $patterns
+     */
+    private function matches(string $message, array $patterns): bool
     {
         $normalized = mb_strtolower($message);
 
-        foreach (self::UNREACHABLE_REMOTE_PATTERNS as $pattern) {
+        foreach ($patterns as $pattern) {
             if (str_contains($normalized, $pattern)) {
                 return true;
             }
@@ -187,8 +221,37 @@ class GitRepository
      */
     public function commitPaths(string $path, array $relativePaths, string $message): void
     {
-        Process::path($path)->run(['git', 'add', '--', ...$relativePaths])->throw();
-        Process::path($path)->run(['git', 'commit', '-m', $message, '--', ...$relativePaths])->throw();
+        $stageable = $this->stageable($path, $relativePaths);
+
+        if ($stageable === []) {
+            return;
+        }
+
+        Process::path($path)->run(['git', 'add', '--', ...$stageable])->throw();
+        Process::path($path)->run(['git', 'commit', '-m', $message, '--', ...$stageable])->throw();
+    }
+
+    /**
+     * Paths git can actually stage: on disk, or tracked and therefore
+     * stageable as a deletion. A note created in Obsidian and archived before
+     * the git plugin committed it has a source path git never knew — passing it
+     * to `git add` would abort the whole commit.
+     *
+     * @param  list<string>  $relativePaths
+     * @return list<string>
+     */
+    private function stageable(string $path, array $relativePaths): array
+    {
+        $tracked = Process::path($path)
+            ->run(['git', '-c', 'core.quotePath=false', 'ls-files', '--', ...$relativePaths])
+            ->output();
+
+        $tracked = array_filter(explode("\n", str_replace("\r", '', $tracked)));
+
+        return array_values(array_filter(
+            $relativePaths,
+            fn (string $relativePath): bool => File::exists("{$path}/{$relativePath}") || in_array($relativePath, $tracked, true),
+        ));
     }
 
     private function hasConflictMarkers(string $porcelainOutput): bool

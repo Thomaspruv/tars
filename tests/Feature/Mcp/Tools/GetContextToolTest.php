@@ -74,7 +74,7 @@ test('reports the memory: size, conformance rate and available summaries', funct
 test('never includes the journal', function () {
     config(['brain.remote_url' => 'git@example.com:vault.git']);
 
-    BrainDocument::factory()->create(['path' => 'TARS/Journal/2026/2026-10-16.md', 'content' => 'Journée difficile, humeur en berne.']);
+    BrainDocument::factory()->create(['path' => 'Journal/2026/2026-10-16.md', 'content' => 'Journée difficile, humeur en berne.']);
 
     TarsServer::tool(GetContextTool::class, [])
         ->assertOk()

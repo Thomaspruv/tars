@@ -45,7 +45,7 @@ class JournalWriter
         $existing = JournalEntry::whereDate('date', $date->toDateString())->first();
 
         $vaultPath = rtrim($this->settings->localPath(), '/');
-        $relativePath = "TARS/Journal/{$date->format('Y')}/{$date->format('Y-m-d')}.md";
+        $relativePath = self::pathFor($date);
         $absolutePath = "{$vaultPath}/{$relativePath}";
 
         [$frontmatter, $body] = $existing && File::exists($absolutePath)
@@ -84,6 +84,14 @@ class JournalWriter
         }
 
         return JournalEntry::create([...$attributes, 'date' => $date]);
+    }
+
+    /**
+     * The journal lives in the target tree (§A.4), one file per day.
+     */
+    public static function pathFor(CarbonInterface $date): string
+    {
+        return "Journal/{$date->format('Y')}/{$date->format('Y-m-d')}.md";
     }
 
     public function resolveDate(?CarbonInterface $date): CarbonInterface
@@ -153,7 +161,7 @@ class JournalWriter
 
         $frontmatter = $this->frontmatter->upgrade(
             frontmatter: $frontmatter,
-            relativePath: "Journal/{$date->format('Y')}/{$date->format('Y-m-d')}.md",
+            relativePath: self::pathFor($date),
             fallbackTitle: "Journal du {$date->toDateString()}",
             source: 'thomas',
             patch: ['type' => NoteType::Journal->value, 'date' => $date->toDateString()],

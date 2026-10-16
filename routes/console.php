@@ -24,7 +24,9 @@ Schedule::command(SyncBrainCommand::class, ['--scheduled'])->everyMinute()->with
 Schedule::command(GenerateReviewCommand::class, ['--scheduled'])->everyMinute()->withoutOverlapping();
 Schedule::command(CuratorTodoCommand::class, ['--scheduled'])->hourly()->withoutOverlapping();
 Schedule::command(CuratorTidyCommand::class, ['--scheduled'])->dailyAt('22:00')->withoutOverlapping();
-Schedule::command(CuratorConformanceCommand::class, ['--scheduled'])->weeklyOn(0, '21:00')->withoutOverlapping();
+// Trois lots de 40 par dimanche : la migration du vault avance par paliers
+// digestes, et Thomas n'a jamais plus de 120 propositions à relire d'un coup.
+Schedule::command(CuratorConformanceCommand::class, ['--scheduled', '--limit=120'])->weeklyOn(0, '21:00')->withoutOverlapping();
 Schedule::command(TriageInboxCommand::class, ['--scheduled'])->hourly()->withoutOverlapping();
 Schedule::command(GeneratePlannerProposalCommand::class, ['--scheduled'])->everyMinute()->withoutOverlapping();
 Schedule::command(QuestionnaireSchedulerCommand::class, ['--scheduled'])->hourly()->withoutOverlapping();

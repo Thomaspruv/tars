@@ -145,7 +145,8 @@ test('status is conflict when the working tree has unmerged paths', function () 
 });
 
 test('commit stages and commits the given file', function () {
-    File::ensureDirectoryExists($this->path);
+    File::ensureDirectoryExists($this->path.'/notes');
+    File::put($this->path.'/notes/example.md', '# Exemple');
     Process::fake();
 
     (new GitRepository)->commit($this->path, 'notes/example.md', 'tars: edit notes/example.md');
@@ -155,7 +156,10 @@ test('commit stages and commits the given file', function () {
 });
 
 test('commitPaths commits exactly the given paths and nothing else', function () {
-    File::ensureDirectoryExists($this->path);
+    File::ensureDirectoryExists($this->path.'/Notes');
+    File::ensureDirectoryExists($this->path.'/Archives');
+    File::put($this->path.'/Notes/a.md', '# A');
+    File::put($this->path.'/Archives/a.md', '# A');
     Process::fake();
 
     (new GitRepository)->commitPaths($this->path, ['Notes/a.md', 'Archives/a.md'], 'tars: curator move Notes/a.md');
@@ -220,15 +224,6 @@ test('isRepository tells a clone from a plain folder', function () {
     expect((new GitRepository)->isRepository($this->path))->toBeTrue();
 });
 
-test('pullRebase blocks the write when the pull refuses to start', function () {
-    File::ensureDirectoryExists($this->path.'/.git');
-    Process::fake(fn () => Process::result(errorOutput: 'error: cannot pull with rebase: You have unstaged changes.', exitCode: 1));
-
-    $result = (new GitRepository)->pullRebase($this->path);
-
-    expect($result->successful)->toBeFalse();
-});
-
 test('pullRebase lets a local write through only when the remote is out of reach', function (string $message) {
     File::ensureDirectoryExists($this->path.'/.git');
     Process::fake(fn () => Process::result(errorOutput: $message, exitCode: 1));
@@ -239,3 +234,41 @@ test('pullRebase lets a local write through only when the remote is out of reach
     'hôte injoignable' => ['ssh: Could not resolve host github.com'],
     'dépôt inaccessible' => ['fatal: unable to access https://github.com/x/y.git'],
 ]);
+
+test('pullRebase reports a dirty working tree as a warning, not a divergence', function () {
+    File::ensureDirectoryExists($this->path.'/.git');
+    Process::fake(fn () => Process::result(errorOutput: 'error: cannot pull with rebase: You have unstaged changes.', exitCode: 1));
+
+    $result = (new GitRepository)->pullRebase($this->path);
+
+    // Nothing was rewritten, so the write may land — but Thomas is told.
+    expect($result->successful)->toBeTrue()
+        ->and($result->warning)->toContain('pas encore committées');
+});
+
+test('pullRebase blocks the write on anything it cannot explain', function () {
+    File::ensureDirectoryExists($this->path.'/.git');
+    Process::fake(fn () => Process::result(errorOutput: 'fatal: something nobody expected', exitCode: 1));
+
+    expect((new GitRepository)->pullRebase($this->path)->successful)->toBeFalse();
+});
+
+test('commitPaths skips a path git has never known', function () {
+    File::ensureDirectoryExists($this->path);
+    Process::fake(fn ($process) => ($process->command[3] ?? null) === 'ls-files' ? Process::result('') : Process::result());
+
+    // Neither on disk nor tracked: passing it to `git add` would abort the commit.
+    (new GitRepository)->commitPaths($this->path, ['Notes/jamais-vue.md'], 'tars: archive');
+
+    Process::assertNotRan(fn ($process) => ($process->command[1] ?? null) === 'add');
+    Process::assertNotRan(fn ($process) => ($process->command[1] ?? null) === 'commit');
+});
+
+test('commitPaths stages a tracked path that has just been deleted', function () {
+    File::ensureDirectoryExists($this->path);
+    Process::fake(fn ($process) => ($process->command[3] ?? null) === 'ls-files' ? Process::result("Notes/deplacee.md\n") : Process::result());
+
+    (new GitRepository)->commitPaths($this->path, ['Notes/deplacee.md'], 'tars: curator move');
+
+    Process::assertRan(fn ($process) => $process->command === ['git', 'add', '--', 'Notes/deplacee.md']);
+});

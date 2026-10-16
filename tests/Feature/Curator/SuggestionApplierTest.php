@@ -86,7 +86,7 @@ test('applies a merge suggestion writing the merged content and archiving the so
     app(SuggestionApplier::class)->apply($suggestion);
 
     expect(File::get($this->vaultPath.'/Notes/appart-lilas.md'))->toContain('avec le plombier')
-        ->and(File::exists($this->vaultPath.'/Archives/plombier.md'))->toBeTrue()
+        ->and(File::exists($this->vaultPath.'/Archives/Notes/plombier.md'))->toBeTrue()
         ->and(File::exists($this->vaultPath.'/Notes/plombier.md'))->toBeFalse();
 });
 
@@ -100,7 +100,9 @@ test('applies an archive suggestion by moving the file to Archives with an archi
 
     app(SuggestionApplier::class)->apply($suggestion);
 
-    $archived = File::get($this->vaultPath.'/Archives/plombier.md');
+    // The origin folder is kept, so two notes sharing a filename cannot
+    // overwrite each other on their way to Archives/.
+    $archived = File::get($this->vaultPath.'/Archives/Notes/plombier.md');
     expect($archived)->toContain('archived:')
         ->and(File::exists($this->vaultPath.'/Notes/plombier.md'))->toBeFalse();
 });

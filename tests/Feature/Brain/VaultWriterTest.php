@@ -4,6 +4,7 @@ use App\Enums\VaultWriteStatus;
 use App\Jobs\PushVaultJob;
 use App\Models\BrainDocument;
 use App\Support\Brain\BrainSettings;
+use App\Support\Brain\NoteArchiver;
 use App\Support\Brain\Schema\FrontmatterBuilder;
 use App\Support\Brain\Schema\NoteType;
 use App\Support\Brain\VaultOperation;
@@ -214,4 +215,24 @@ test('refuses a move whose source would leave the vault', function () {
     $result = app(VaultWriter::class)->move('../ailleurs.md', 'Personnes/marc.md', ($this->frontmatter)(), 'Corps.', 'move');
 
     expect($result->status)->toBe(VaultWriteStatus::Invalid);
+});
+
+test('archiving keeps the origin folder so two notes cannot collide', function () {
+    Queue::fake();
+
+    File::ensureDirectoryExists($this->vaultPath.'/Personnes');
+    File::put($this->vaultPath.'/Notes/homonyme.md', "---\nschema: 3\ntype: note\ntitle: Homonyme\ndate: 2026-10-16\n---\n\nLa note.\n");
+    File::put($this->vaultPath.'/Personnes/homonyme.md', "---\nschema: 3\ntype: person\ntitle: Homonyme\ndate: 2026-10-16\n---\n\nLa personne.\n");
+
+    $archiver = app(NoteArchiver::class);
+    $archiver->archive('Notes/homonyme.md', 'hermes', 'archive Notes/homonyme.md');
+    $archiver->archive('Personnes/homonyme.md', 'hermes', 'archive Personnes/homonyme.md');
+
+    expect(File::get($this->vaultPath.'/Archives/Notes/homonyme.md'))->toContain('La note.')
+        ->and(File::get($this->vaultPath.'/Archives/Personnes/homonyme.md'))->toContain('La personne.');
+});
+
+test('archiving a note that has already left the vault says so', function () {
+    expect(fn () => app(NoteArchiver::class)->archive('Notes/fantome.md', 'hermes', 'archive'))
+        ->toThrow(RuntimeException::class, "n'est plus dans le vault");
 });

@@ -462,7 +462,7 @@ test('does not resurrect a sas note the same round just archived', function () {
     app(CuratorAgent::class)->process(AgentRunTrigger::Scheduled, 'todo');
 
     expect(File::exists($this->vaultPath.'/TARS/note.md'))->toBeFalse()
-        ->and(File::exists($this->vaultPath.'/Archives/note.md'))->toBeTrue();
+        ->and(File::exists($this->vaultPath.'/Archives/TARS/note.md'))->toBeTrue();
 });
 
 test('marks the sas note from what is on disk, not from a stale index', function () {

@@ -3,7 +3,6 @@
 use App\Mcp\Servers\TarsServer;
 use App\Mcp\Tools\DeleteNoteTool;
 use App\Models\BrainDocument;
-use App\Support\Brain\GitRepository;
 use Illuminate\Support\Facades\File;
 
 beforeEach(function () {
@@ -16,21 +15,36 @@ afterEach(function () {
     File::deleteDirectory($this->vaultPath);
 });
 
-test('deletes the note file, commits the deletion, and removes the index row', function () {
+test('archives the note instead of deleting it, and follows it in the index', function () {
     $relativePath = 'TARS/2026-07-27-carreleur.md';
     File::put($this->vaultPath.'/'.$relativePath, "# Carreleur\n\nLe carreleur passe mardi.");
     $document = BrainDocument::factory()->create(['path' => $relativePath, 'title' => 'Carreleur']);
 
-    $this->mock(GitRepository::class, function ($mock) use ($relativePath): void {
-        $mock->shouldReceive('commit')->once()->with(Mockery::type('string'), $relativePath, Mockery::type('string'));
-    });
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once()->with(
+        Mockery::type('string'),
+        ['Archives/TARS/2026-07-27-carreleur.md', $relativePath],
+        'hermes: archive TARS/2026-07-27-carreleur.md',
+    ));
 
     TarsServer::tool(DeleteNoteTool::class, ['note' => 'carreleur'])
         ->assertOk()
-        ->assertSee('supprimée');
+        ->assertSee('archivée dans Archives/TARS/');
 
+    $archived = File::get($this->vaultPath.'/Archives/TARS/2026-07-27-carreleur.md');
+
+    // Nothing is lost: the body survives and the date of archiving is recorded.
     expect(File::exists($this->vaultPath.'/'.$relativePath))->toBeFalse()
-        ->and(BrainDocument::find($document->id))->toBeNull();
+        ->and($archived)->toContain('Le carreleur passe mardi')
+        ->and($archived)->toContain('archived: ')
+        ->and($document->fresh()->path)->toBe('Archives/TARS/2026-07-27-carreleur.md');
+});
+
+test('says so when the note has already left the vault', function () {
+    BrainDocument::factory()->create(['path' => 'TARS/disparue.md', 'title' => 'Disparue']);
+
+    mockVaultGit();
+
+    TarsServer::tool(DeleteNoteTool::class, ['note' => 'disparue'])->assertHasErrors();
 });
 
 test('fails cleanly when the vault is not configured', function () {

@@ -11,6 +11,7 @@ use App\Models\Goal;
 use App\Models\Task;
 use App\Support\Brain\AnchorResolver;
 use App\Support\Brain\BrainSettings;
+use App\Support\Brain\NoteArchiver;
 use App\Support\Brain\Schema\FrontmatterBuilder;
 use App\Support\Brain\VaultOperation;
 use App\Support\Brain\VaultWriter;
@@ -29,6 +30,7 @@ class SuggestionApplier
         private readonly AnchorResolver $anchorResolver,
         private readonly FuzzyMatcher $fuzzyMatcher,
         private readonly FrontmatterBuilder $frontmatter,
+        private readonly NoteArchiver $archiver,
     ) {}
 
     /**
@@ -164,8 +166,6 @@ class SuggestionApplier
             throw new RuntimeException('Fusion incomplète : destination ou contenu fusionné manquant.');
         }
 
-        $archivePath = 'Archives/'.basename($document->path);
-
         // The merged content may or may not carry its own frontmatter: what
         // counts is its body — the frontmatter stays TARS's business.
         [$mergedFrontmatter, $mergedBody] = $this->splitFrontmatter($suggestion->merged_content);
@@ -178,36 +178,17 @@ class SuggestionApplier
                 fallbackTitle: $this->fallbackTitle($target, $mergedBody),
                 source: 'agent-curateur',
             ), $mergedBody),
-            $this->archiveOperation($document->path, $archivePath),
+            $this->archiver->operationFor($document->path, 'agent-curateur'),
         ];
     }
 
     private function archiveSuggestionOperation(BrainSuggestion $suggestion): VaultOperation
     {
-        $document = $suggestion->brainDocument;
-
-        return $this->archiveOperation($document->path, 'Archives/'.basename($document->path), $suggestion->frontmatter_patch ?? []);
-    }
-
-    /**
-     * Nothing is ever deleted: the source file moves under Archives/ with the
-     * date it was archived.
-     *
-     * @param  array<string, mixed>  $extraFrontmatter
-     */
-    private function archiveOperation(string $sourcePath, string $archivePath, array $extraFrontmatter = []): VaultOperation
-    {
-        [$frontmatter, $body] = $this->splitFrontmatter($this->read($sourcePath));
-
-        $frontmatter = $this->frontmatter->upgrade(
-            frontmatter: $frontmatter,
-            relativePath: $sourcePath,
-            fallbackTitle: $this->fallbackTitle($sourcePath, $body),
-            source: 'agent-curateur',
-            patch: [...$extraFrontmatter, 'archived' => now()->toDateString()],
+        return $this->archiver->operationFor(
+            $suggestion->brainDocument->path,
+            'agent-curateur',
+            $suggestion->frontmatter_patch ?? [],
         );
-
-        return VaultOperation::move($sourcePath, $archivePath, $frontmatter, $body);
     }
 
     /**

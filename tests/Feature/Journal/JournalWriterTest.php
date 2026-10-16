@@ -34,7 +34,7 @@ test('writes a new entry to the vault and the database', function () {
         ->and($entry->summary)->toBe('Belle journée, bien avancé sur le projet.')
         ->and($entry->highlights)->toBe(['Rappel du plombier réglé'])
         ->and($entry->source)->toBe('hermes')
-        ->and($entry->note_path)->toBe("TARS/Journal/{$entry->date->format('Y')}/{$entry->date->format('Y-m-d')}.md");
+        ->and($entry->note_path)->toBe("Journal/{$entry->date->format('Y')}/{$entry->date->format('Y-m-d')}.md");
 
     $absolutePath = "{$this->vaultPath}/{$entry->note_path}";
     expect(File::exists($absolutePath))->toBeTrue();

@@ -90,6 +90,8 @@ class VaultWriter
             if (! $pull->successful) {
                 return $this->divertToSas($operations, $pull->message);
             }
+
+            $this->settings->recordSyncWarning($pull->warning);
         }
 
         foreach ($operations as $operation) {

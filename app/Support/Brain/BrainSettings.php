@@ -85,6 +85,24 @@ class BrainSettings
         $this->set('last_push_error', $message);
     }
 
+    public function lastSyncWarning(): ?string
+    {
+        return $this->get('last_sync_warning');
+    }
+
+    /**
+     * Why the vault was not up to date when TARS last wrote to it — nothing was
+     * lost, but Thomas should see it in Réglages → Cerveau.
+     */
+    public function recordSyncWarning(?string $message): void
+    {
+        if ($message === null && $this->get('last_sync_warning') === null) {
+            return;
+        }
+
+        $this->set('last_sync_warning', $message);
+    }
+
     public function lastConflictAt(): ?Carbon
     {
         $value = $this->get('last_conflict_at');

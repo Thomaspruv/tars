@@ -179,3 +179,15 @@ test('forcing the sync reports a conflict instead of pushing', function () {
         ->call('forceBrainSync')
         ->assertSee('Le pull-rebase a échoué');
 });
+
+test('shows why the vault was not up to date on the last write', function () {
+    $this->actingAs(User::factory()->create());
+    app(BrainSettings::class)->recordSyncWarning("Le vault n'a pas pu être mis à jour avant l'écriture : des modifications ne sont pas encore committées dans le dépôt local.");
+
+    $this->mock(GitRepository::class, function ($mock): void {
+        $mock->shouldReceive('status')->andReturn(GitSyncStatus::Synced);
+        $mock->shouldReceive('lastPushAt')->andReturnNull();
+    });
+
+    Livewire::test('pages::settings-app')->assertSee('pas encore committées');
+});

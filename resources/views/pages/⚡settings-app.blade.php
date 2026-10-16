@@ -266,7 +266,7 @@ new #[Title('Réglages')] class extends Component
     }
 
     /**
-     * @return array{lastSynced: ?Carbon, lastIndexed: ?Carbon, documentsCount: int, gitStatus: GitSyncStatus, lastPushed: ?Carbon, lastPushError: ?string, lastConflictAt: ?Carbon, lastConflictMessage: ?string}
+     * @return array{lastSynced: ?Carbon, lastIndexed: ?Carbon, documentsCount: int, gitStatus: GitSyncStatus, lastPushed: ?Carbon, lastPushError: ?string, lastSyncWarning: ?string, lastConflictAt: ?Carbon, lastConflictMessage: ?string}
      */
     #[Computed]
     public function brainStatus(): array
@@ -281,6 +281,7 @@ new #[Title('Réglages')] class extends Component
             'gitStatus' => $git->status($settings->localPath()),
             'lastPushed' => $git->lastPushAt($settings->localPath()),
             'lastPushError' => $settings->lastPushError(),
+            'lastSyncWarning' => $settings->lastSyncWarning(),
             'lastConflictAt' => $settings->lastConflictAt(),
             'lastConflictMessage' => $settings->lastConflictMessage(),
         ];
@@ -651,6 +652,10 @@ new #[Title('Réglages')] class extends Component
                         </p>
                         <p class="text-[12px] leading-[1.6] text-(--mut)">{{ $this->brainStatus['lastConflictMessage'] }}</p>
                     </div>
+                @endif
+
+                @if ($this->brainStatus['lastSyncWarning'])
+                    <p class="text-[12px] leading-[1.6] text-(--warn)">{{ $this->brainStatus['lastSyncWarning'] }}</p>
                 @endif
 
                 @if ($this->brainStatus['lastPushError'])
