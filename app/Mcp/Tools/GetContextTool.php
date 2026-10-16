@@ -7,6 +7,7 @@ use App\Models\Checklist;
 use App\Models\Entity;
 use App\Models\Goal;
 use App\Support\Brain\BrainSettings;
+use App\Support\Brain\IndexFileGenerator;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -39,6 +40,10 @@ class GetContextTool extends LoggedTool
             return Response::text($summary);
         }
 
+        // The "projets actifs" section lands with the Projets iteration (#8).
+
+        $summary .= "\n\n".$this->memorySection();
+
         $profile = BrainDocument::where('path', 'like', 'Profil/%')->get();
 
         if ($profile->isEmpty()) {
@@ -48,5 +53,27 @@ class GetContextTool extends LoggedTool
         $profileText = $profile->map(fn (BrainDocument $document): string => "{$document->title} : {$document->content}")->implode("\n\n");
 
         return Response::text("{$profileText}\n\n{$summary}");
+    }
+
+    /**
+     * Enough for Hermes to know how big the memory is, how healthy it is, and
+     * which summaries exist — never the journal.
+     */
+    private function memorySection(): string
+    {
+        $total = BrainDocument::count();
+        $underContract = BrainDocument::underContract()->count();
+        $conformant = BrainDocument::underContract()->where('is_conformant', true)->count();
+        $rate = $underContract > 0 ? (int) round(($conformant / $underContract) * 100) : 100;
+
+        $indexes = collect(IndexFileGenerator::INDEXED_FOLDERS)
+            ->filter(fn (string $folder): bool => BrainDocument::where('path', "{$folder}/_index.md")->exists())
+            ->implode(', ');
+
+        $line = "Mémoire : {$total} note(s), {$rate} % conformes au contrat v3.";
+
+        return $indexes === ''
+            ? $line.' Aucun sommaire disponible — appelle get_memory_map après une indexation.'
+            : $line." Sommaires disponibles : {$indexes}.";
     }
 }

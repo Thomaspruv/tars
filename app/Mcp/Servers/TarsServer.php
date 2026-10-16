@@ -22,18 +22,22 @@ use App\Mcp\Tools\GetEntityTool;
 use App\Mcp\Tools\GetGoalTool;
 use App\Mcp\Tools\GetJournalTool;
 use App\Mcp\Tools\GetListTool;
+use App\Mcp\Tools\GetMemoryMapTool;
 use App\Mcp\Tools\GetPendingQuestionnairesTool;
 use App\Mcp\Tools\GetTodayTool;
 use App\Mcp\Tools\LinkEntitiesTool;
 use App\Mcp\Tools\ListEntitiesTool;
 use App\Mcp\Tools\ListGoalsTool;
+use App\Mcp\Tools\ListNotesTool;
 use App\Mcp\Tools\ListTasksTool;
 use App\Mcp\Tools\LogDecisionTool;
 use App\Mcp\Tools\LogJournalTool;
+use App\Mcp\Tools\ReadNoteTool;
 use App\Mcp\Tools\RenameListTool;
 use App\Mcp\Tools\SearchBrainTool;
 use App\Mcp\Tools\UnlinkEntitiesTool;
 use App\Mcp\Tools\UpdateEntityTool;
+use App\Mcp\Tools\UpsertNoteTool;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Tool;
 
@@ -72,6 +76,10 @@ class TarsServer extends Server
         GetEntityTool::class,
         AddEventTool::class,
         AddNoteTool::class,
+        UpsertNoteTool::class,
+        ReadNoteTool::class,
+        ListNotesTool::class,
+        GetMemoryMapTool::class,
         SearchBrainTool::class,
         GetContextTool::class,
         LogDecisionTool::class,

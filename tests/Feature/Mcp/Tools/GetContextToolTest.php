@@ -57,3 +57,26 @@ test('never exposes journal content — confidentiality is by explicit get_journ
         ->assertDontSee('Contenu très personnel du journal')
         ->assertDontSee('secret');
 });
+
+test('reports the memory: size, conformance rate and available summaries', function () {
+    config(['brain.remote_url' => 'git@example.com:vault.git']);
+
+    BrainDocument::factory()->create(['path' => 'Notes/conforme.md', 'is_conformant' => true]);
+    BrainDocument::factory()->create(['path' => 'Notes/pas-conforme.md', 'is_conformant' => false]);
+    BrainDocument::factory()->create(['path' => 'Personnes/_index.md', 'is_conformant' => true]);
+
+    TarsServer::tool(GetContextTool::class, [])
+        ->assertOk()
+        ->assertSee('Mémoire : 3 note(s), 50 % conformes')
+        ->assertSee('Sommaires disponibles : Personnes');
+});
+
+test('never includes the journal', function () {
+    config(['brain.remote_url' => 'git@example.com:vault.git']);
+
+    BrainDocument::factory()->create(['path' => 'TARS/Journal/2026/2026-10-16.md', 'content' => 'Journée difficile, humeur en berne.']);
+
+    TarsServer::tool(GetContextTool::class, [])
+        ->assertOk()
+        ->assertDontSee('humeur en berne');
+});
