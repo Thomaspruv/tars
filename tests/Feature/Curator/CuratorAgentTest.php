@@ -84,7 +84,7 @@ test('auto-applies an anchor action at high confidence', function () {
     $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md', 'frontmatter' => ['type' => 'note']]);
 
     mockVaultGit(function ($mock): void {
-        $mock->shouldReceive('commit')->once()->with(Mockery::type('string'), 'Notes/plombier.md', Mockery::type('string'));
+        $mock->shouldReceive('commitPaths')->once()->with(Mockery::type('string'), ['Notes/plombier.md'], Mockery::type('string'));
     });
 
     $this->mock(AgentRunner::class, function ($mock) {
@@ -116,7 +116,7 @@ test('auto-applies a move action at high confidence during the tidy mission', fu
     File::put($this->vaultPath.'/Notes/plombier.md', "---\ntype: note\n---\n\nLe plombier passe mardi.");
     BrainDocument::factory()->create(['path' => 'Notes/plombier.md']);
 
-    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitAll')->once());
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once());
 
     $this->mock(AgentRunner::class, function ($mock) {
         $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
@@ -257,7 +257,7 @@ test('auto-applies create_task at high confidence with no duplicate', function (
     File::put($this->vaultPath.'/TARS/note.md', "---\ntype: a-traiter\n---\n\nRappeler Marc.");
     $document = BrainDocument::factory()->create(['path' => 'TARS/note.md', 'frontmatter' => ['type' => 'a-traiter']]);
 
-    mockVaultGit(fn ($mock) => $mock->shouldReceive('commit')->once());
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once());
 
     $this->mock(AgentRunner::class, function ($mock) {
         $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
@@ -283,7 +283,7 @@ test('falls back to pending when an auto-applicable task duplicates an open task
     File::put($this->vaultPath.'/TARS/note.md', "---\ntype: a-traiter\n---\n\nRappeler Marc.");
     BrainDocument::factory()->create(['path' => 'TARS/note.md', 'frontmatter' => ['type' => 'a-traiter']]);
 
-    mockVaultGit(fn ($mock) => $mock->shouldReceive('commit')->once());
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once());
 
     $this->mock(AgentRunner::class, function ($mock) {
         $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
@@ -307,7 +307,7 @@ test('never auto-applies create_task at medium confidence', function () {
     File::put($this->vaultPath.'/TARS/note.md', "---\ntype: a-traiter\n---\n\nRappeler Marc.");
     BrainDocument::factory()->create(['path' => 'TARS/note.md', 'frontmatter' => ['type' => 'a-traiter']]);
 
-    mockVaultGit(fn ($mock) => $mock->shouldReceive('commit')->once());
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once());
 
     $this->mock(AgentRunner::class, function ($mock) {
         $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
@@ -329,7 +329,7 @@ test('auto-applies create_goal at high confidence', function () {
     File::put($this->vaultPath.'/TARS/note.md', "---\ntype: a-traiter\n---\n\nNouvel objectif.");
     BrainDocument::factory()->create(['path' => 'TARS/note.md', 'frontmatter' => ['type' => 'a-traiter']]);
 
-    mockVaultGit(fn ($mock) => $mock->shouldReceive('commit')->once());
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once());
 
     $this->mock(AgentRunner::class, function ($mock) {
         $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
@@ -355,7 +355,7 @@ test('falls back to pending when create_goal at high confidence duplicates an ex
     File::put($this->vaultPath.'/TARS/note.md', "---\ntype: a-traiter\n---\n\nNouvel objectif.");
     BrainDocument::factory()->create(['path' => 'TARS/note.md', 'frontmatter' => ['type' => 'a-traiter']]);
 
-    mockVaultGit(fn ($mock) => $mock->shouldReceive('commit')->once());
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once());
 
     $this->mock(AgentRunner::class, function ($mock) {
         $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
@@ -379,7 +379,7 @@ test('auto-applies create_list_item into the matching list', function () {
     File::put($this->vaultPath.'/TARS/note.md', "---\ntype: a-traiter\n---\n\nAcheter du lait.");
     BrainDocument::factory()->create(['path' => 'TARS/note.md', 'frontmatter' => ['type' => 'a-traiter']]);
 
-    mockVaultGit(fn ($mock) => $mock->shouldReceive('commit')->once());
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once());
 
     $this->mock(AgentRunner::class, function ($mock) {
         $mock->shouldReceive('run')->once()->andReturn(AgentRun::factory()->create(['status' => AgentRunStatus::Success, 'output' => json_encode([[
@@ -406,7 +406,7 @@ test('marks a-traiter notes as done and commits after processing the todo missio
     $document = BrainDocument::factory()->create(['path' => 'TARS/note.md', 'frontmatter' => ['type' => 'a-traiter', 'date' => '2026-07-27']]);
 
     mockVaultGit(function ($mock): void {
-        $mock->shouldReceive('commit')->once()->with(Mockery::type('string'), 'TARS/note.md', Mockery::type('string'));
+        $mock->shouldReceive('commitPaths')->once()->with(Mockery::type('string'), ['TARS/note.md'], Mockery::type('string'));
     });
 
     $this->mock(AgentRunner::class, function ($mock) {

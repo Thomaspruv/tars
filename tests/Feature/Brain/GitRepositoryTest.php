@@ -150,18 +150,19 @@ test('commit stages and commits the given file', function () {
 
     (new GitRepository)->commit($this->path, 'notes/example.md', 'tars: edit notes/example.md');
 
-    Process::assertRan(fn ($process) => $process->command === ['git', 'add', 'notes/example.md']);
-    Process::assertRan(fn ($process) => $process->command === ['git', 'commit', '-m', 'tars: edit notes/example.md']);
+    Process::assertRan(fn ($process) => $process->command === ['git', 'add', '--', 'notes/example.md']);
+    Process::assertRan(fn ($process) => $process->command === ['git', 'commit', '-m', 'tars: edit notes/example.md', '--', 'notes/example.md']);
 });
 
-test('commitAll stages every change and commits', function () {
+test('commitPaths commits exactly the given paths and nothing else', function () {
     File::ensureDirectoryExists($this->path);
     Process::fake();
 
-    (new GitRepository)->commitAll($this->path, 'tars: curator move notes/example.md');
+    (new GitRepository)->commitPaths($this->path, ['Notes/a.md', 'Archives/a.md'], 'tars: curator move Notes/a.md');
 
-    Process::assertRan(fn ($process) => $process->command === ['git', 'add', '-A']);
-    Process::assertRan(fn ($process) => $process->command === ['git', 'commit', '-m', 'tars: curator move notes/example.md']);
+    Process::assertRan(fn ($process) => $process->command === ['git', 'add', '--', 'Notes/a.md', 'Archives/a.md']);
+    Process::assertRan(fn ($process) => $process->command === ['git', 'commit', '-m', 'tars: curator move Notes/a.md', '--', 'Notes/a.md', 'Archives/a.md']);
+    Process::assertNotRan(fn ($process) => in_array('-A', $process->command, true));
 });
 
 test('pullRebase reports success when the rebase goes through', function () {

@@ -167,17 +167,17 @@ class VaultWriter
      */
     private function commit(string $vaultPath, array $operations, string $commitMessage): void
     {
-        $message = $this->prefix($operations[0]->frontmatter).$commitMessage;
+        $paths = [];
 
-        $needsFullStage = count($operations) > 1 || $operations[0]->isMove();
+        foreach ($operations as $operation) {
+            $paths[] = $operation->relativePath;
 
-        if ($needsFullStage) {
-            $this->git->commitAll($vaultPath, $message);
-
-            return;
+            if ($operation->isMove()) {
+                $paths[] = (string) $operation->movedFrom;
+            }
         }
 
-        $this->git->commit($vaultPath, $operations[0]->relativePath, $message);
+        $this->git->commitPaths($vaultPath, $paths, $this->prefix($operations[0]->frontmatter).$commitMessage);
     }
 
     /**

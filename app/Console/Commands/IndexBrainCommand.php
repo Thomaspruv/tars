@@ -30,6 +30,10 @@ class IndexBrainCommand extends Command
 
         $summary = $indexer->indexAll(fresh: (bool) $this->option('fresh'));
 
+        // The vault documents itself from its own index: README and _index.md
+        // are reposed right after, and only if their content moved.
+        $this->call(WriteBrainIndexCommand::class, ['--scheduled' => true]);
+
         $this->info(sprintf(
             '%d créé(s), %d mis à jour, %d inchangé(s), %d supprimé(s).',
             $summary->created,

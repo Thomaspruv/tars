@@ -17,7 +17,7 @@ afterEach(function () {
 
 test('writes a note file in TARS/, commits it, and indexes it', function () {
     mockVaultGit(function ($mock): void {
-        $mock->shouldReceive('commit')->once();
+        $mock->shouldReceive('commitPaths')->once();
     });
 
     TarsServer::tool(AddNoteTool::class, ['content' => 'Le carreleur passe mardi'])

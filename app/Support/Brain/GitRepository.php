@@ -142,19 +142,23 @@ class GitRepository
 
     public function commit(string $path, string $relativePath, string $message): void
     {
-        Process::path($path)->run(['git', 'add', $relativePath])->throw();
-        Process::path($path)->run(['git', 'commit', '-m', $message])->throw();
+        $this->commitPaths($path, [$relativePath], $message);
     }
 
     /**
-     * Like commit(), but stages every pending change in the working tree —
-     * needed for actions that touch more than one path at once (a move's
-     * source+destination, a merge's destination+archived source).
+     * Commits exactly the given paths and nothing else — a move's source and
+     * destination, a batch of regenerated indexes.
+     *
+     * The pathspec matters: Thomas edits the same working tree in Obsidian, so
+     * a `git add -A` here would sweep his in-progress changes (or a pending
+     * deletion) into TARS's commit.
+     *
+     * @param  list<string>  $relativePaths
      */
-    public function commitAll(string $path, string $message): void
+    public function commitPaths(string $path, array $relativePaths, string $message): void
     {
-        Process::path($path)->run(['git', 'add', '-A'])->throw();
-        Process::path($path)->run(['git', 'commit', '-m', $message])->throw();
+        Process::path($path)->run(['git', 'add', '--', ...$relativePaths])->throw();
+        Process::path($path)->run(['git', 'commit', '-m', $message, '--', ...$relativePaths])->throw();
     }
 
     private function hasConflictMarkers(string $porcelainOutput): bool

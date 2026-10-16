@@ -51,7 +51,7 @@ expect()->extend('toBeOne', function () {
  * Mocks the vault's git repository with the surface every machine write
  * touches before it writes anything — is this a repository, pull before
  * writing, push afterwards — so a test only has to declare the writes it
- * actually cares about (`commit`, `commitAll`).
+ * actually cares about (`commit`, `commitPaths`).
  *
  * @param  ?Closure(MockInterface): void  $expectations
  */

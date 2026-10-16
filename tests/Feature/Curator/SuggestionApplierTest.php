@@ -24,7 +24,7 @@ test('applies an anchor suggestion by patching frontmatter and committing', func
     $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md', 'frontmatter' => ['type' => 'note']]);
 
     mockVaultGit(function ($mock): void {
-        $mock->shouldReceive('commit')->once()->with(Mockery::type('string'), 'Notes/plombier.md', Mockery::type('string'));
+        $mock->shouldReceive('commitPaths')->once()->with(Mockery::type('string'), ['Notes/plombier.md'], Mockery::type('string'));
     });
 
     $suggestion = BrainSuggestion::factory()->create([
@@ -45,7 +45,7 @@ test('applies a move suggestion by renaming the file and reindexing under the ne
     File::put($this->vaultPath.'/Notes/plombier.md', "---\ntype: note\n---\n\nLe plombier passe mardi.");
     $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md']);
 
-    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitAll')->once());
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once());
 
     $suggestion = BrainSuggestion::factory()->create([
         'brain_document_id' => $document->id,
@@ -74,7 +74,7 @@ test('applies a merge suggestion writing the merged content and archiving the so
     File::put($this->vaultPath.'/Notes/appart-lilas.md', "---\ntype: note\n---\n\nAppart Lilas.");
     $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md']);
 
-    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitAll')->once());
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once());
 
     $suggestion = BrainSuggestion::factory()->create([
         'brain_document_id' => $document->id,
@@ -94,7 +94,7 @@ test('applies an archive suggestion by moving the file to Archives with an archi
     File::put($this->vaultPath.'/Notes/plombier.md', "---\ntype: note\n---\n\nPérimé.");
     $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md']);
 
-    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitAll')->once());
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once());
 
     $suggestion = BrainSuggestion::factory()->create(['brain_document_id' => $document->id, 'action' => 'archive']);
 

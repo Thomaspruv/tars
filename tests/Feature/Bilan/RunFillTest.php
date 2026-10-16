@@ -12,7 +12,7 @@ beforeEach(function () {
     File::ensureDirectoryExists($this->vaultPath);
     config(['brain.local_path' => $this->vaultPath, 'brain.remote_url' => 'git@example.com:vault.git']);
     mockVaultGit(function ($mock): void {
-        $mock->shouldReceive('commit');
+        $mock->shouldReceive('commitPaths');
     });
 
     $this->questionnaire = Questionnaire::factory()->create([

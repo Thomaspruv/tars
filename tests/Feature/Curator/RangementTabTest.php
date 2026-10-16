@@ -39,7 +39,7 @@ test('accepts an anchor suggestion, applies it, and removes it from the pending 
     $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md', 'frontmatter' => ['type' => 'note']]);
 
     mockVaultGit(function ($mock) {
-        $mock->shouldReceive('commit')->once();
+        $mock->shouldReceive('commitPaths')->once();
         $mock->shouldReceive('status')->andReturn(GitSyncStatus::Synced);
     });
 

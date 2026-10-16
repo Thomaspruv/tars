@@ -85,7 +85,7 @@ test('editing and saving writes the file, commits, and reindexes', function () {
 
     mockVaultGit(function ($mock): void {
         $mock->shouldReceive('status')->andReturn(GitSyncStatus::Synced);
-        $mock->shouldReceive('commit')->once()->with($this->vaultPath, 'note.md', 'tars: edit note.md');
+        $mock->shouldReceive('commitPaths')->once()->with($this->vaultPath, ['note.md'], 'tars: edit note.md');
     });
 
     Livewire::test('pages::brain')
@@ -127,7 +127,7 @@ test('creates a note, commits it, and indexes it', function () {
     $this->actingAs(User::factory()->create());
 
     mockVaultGit(function ($mock): void {
-        $mock->shouldReceive('commit')->once()->with($this->vaultPath, 'nouvelle-note.md', 'tars: create nouvelle-note.md');
+        $mock->shouldReceive('commitPaths')->once()->with($this->vaultPath, ['nouvelle-note.md'], 'tars: create nouvelle-note.md');
         $mock->shouldReceive('status')->andReturn(GitSyncStatus::Synced);
     });
 
