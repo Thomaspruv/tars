@@ -127,3 +127,46 @@ test('the vault notes section is hidden when the vault is not configured', funct
 
     $this->get(route('goals.show', $goal))->assertDontSee('Notes du vault');
 });
+
+/**
+ * Écran 8 du doc de refonte : le jalon qui vient est la seule ligne mise en
+ * avant, parce que c'est la seule qu'on peut cocher aujourd'hui.
+ */
+test('the next milestone is the only one the sheet puts forward', function () {
+    $this->actingAs(User::factory()->create());
+
+    $goal = Goal::factory()->create();
+    Milestone::factory()->for($goal)->create(['title' => '3 km sans pause', 'status' => 'done', 'position' => 0]);
+    Milestone::factory()->for($goal)->create(['title' => '5 km sans pause', 'status' => 'pending', 'position' => 1]);
+    Milestone::factory()->for($goal)->create(['title' => '10 km d\'une traite', 'status' => 'pending', 'position' => 2]);
+
+    $html = Livewire::test('pages::goals.show', ['goal' => $goal])->html();
+
+    expect(substr_count($html, 'Le suivant'))->toBe(1)
+        ->and($html)->toContain('bg-(--acbg)')
+        ->and($html)->toContain('1 / 3');
+});
+
+test('the journal only tells what the base actually knows', function () {
+    $this->actingAs(User::factory()->create());
+
+    $goal = Goal::factory()->create(['title' => 'Courir 10 km', 'created_at' => now()->subMonths(3)]);
+    Milestone::factory()->for($goal)->create(['title' => '3 km sans pause', 'status' => 'done']);
+    Task::factory()->for($goal)->create(['title' => 'Courir 5 km', 'status' => 'done', 'completed_at' => now()->subDay()]);
+
+    Livewire::test('pages::goals.show', ['goal' => $goal])
+        ->assertSee('Jalon « 3 km sans pause » coché.')
+        ->assertSee('Tâche « Courir 5 km » cochée.')
+        ->assertSee('Objectif posé.')
+        ->assertSee('hier');
+});
+
+test('a goal with no activity says it in French rather than drawing a flat chart', function () {
+    $this->actingAs(User::factory()->create());
+
+    $goal = Goal::factory()->create(['created_at' => now()->subMonths(4)]);
+
+    Livewire::test('pages::goals.show', ['goal' => $goal])
+        ->assertSee('Rythme · 12 dernières semaines')
+        ->assertSee('Aucune tâche terminée depuis trois mois.');
+});

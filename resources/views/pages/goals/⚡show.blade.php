@@ -2,11 +2,15 @@
 
 use App\Enums\GoalStatus;
 use App\Enums\MilestoneStatus;
+use App\Enums\TaskStatus;
 use App\Models\Goal;
 use App\Models\Milestone;
+use App\Models\Note;
 use App\Models\Review;
 use App\Models\Task;
 use App\Support\Brain\BrainSettings;
+use App\Support\Goals\GoalRhythm;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -31,10 +35,23 @@ new #[Title('Objectif')] class extends Component
         $this->goal->load(['milestones' => fn ($query) => $query->orderBy('position'), 'entity']);
     }
 
+    /**
+     * @return Collection<int, Task>
+     */
     #[Computed]
     public function tasks(): Collection
     {
         return $this->goal->tasks()->topLevel()->with(['entity', 'subtasks.goal', 'subtasks.entity'])->orderByRaw('status = "done"')->orderBy('due_date')->get();
+    }
+
+    /**
+     * Le jalon qui vient — la seule ligne de la fiche mise en avant, parce que
+     * c'est la seule qu'on peut cocher aujourd'hui.
+     */
+    #[Computed]
+    public function nextMilestone(): ?Milestone
+    {
+        return $this->goal->milestones->firstWhere('status', MilestoneStatus::Pending);
     }
 
     /**
@@ -87,12 +104,73 @@ new #[Title('Objectif')] class extends Component
             ->all();
     }
 
+    /**
+     * Le journal de l'objectif : ce qui a bougé, dans l'ordre du temps.
+     *
+     * Il se lit entièrement dans les données existantes — un jalon coché, une
+     * tâche cochée, une note écrite, une revue qui en a parlé. Il n'y a pas de
+     * table d'audit dans Tars, donc pas de « reporté deux fois puis
+     * supprimé » : ce que la base ne sait pas, le journal ne le raconte pas.
+     *
+     * @return list<array{at: CarbonInterface, text: string}>
+     */
+    #[Computed]
+    public function journal(): array
+    {
+        $lines = [];
+
+        foreach ($this->goal->milestones->where('status', MilestoneStatus::Done) as $milestone) {
+            $lines[] = ['at' => $milestone->updated_at, 'text' => 'Jalon « '.$milestone->title.' » coché.'];
+        }
+
+        $completed = $this->goal->tasks()
+            ->withArchived()
+            ->whereNotNull('completed_at')
+            ->orderByDesc('completed_at')
+            ->limit(8)
+            ->get(['id', 'title', 'completed_at']);
+
+        foreach ($completed as $task) {
+            $lines[] = ['at' => $task->completed_at, 'text' => 'Tâche « '.$task->title.' » cochée.'];
+        }
+
+        foreach (Note::where('goal_id', $this->goal->id)->latest()->limit(4)->get() as $note) {
+            $lines[] = ['at' => $note->created_at, 'text' => 'Note : '.Str::limit(strip_tags($note->content), 90).''];
+        }
+
+        foreach ($this->reviewExcerpts as $excerpt) {
+            $lines[] = ['at' => $excerpt['date'], 'text' => 'La revue du '.$excerpt['date']->translatedFormat('j F').' en a parlé.'];
+        }
+
+        $lines[] = ['at' => $this->goal->created_at, 'text' => 'Objectif posé.'];
+
+        usort($lines, fn (array $a, array $b): int => $b['at']->getTimestamp() <=> $a['at']->getTimestamp());
+
+        return array_slice($lines, 0, 7);
+    }
+
+    /**
+     * « auj. », « hier », puis la date courte — la colonne de gauche du journal
+     * fait 52px, elle ne peut pas porter une date longue.
+     */
+    public function shortDate(CarbonInterface $at): string
+    {
+        return match (true) {
+            $at->isToday() => 'auj.',
+            $at->isYesterday() => 'hier',
+            default => $at->translatedFormat('j M'),
+        };
+    }
+
     #[Computed]
     public function brainConfigured(): bool
     {
         return app(BrainSettings::class)->isConfigured();
     }
 
+    /**
+     * @return Collection<int, \App\Models\BrainDocument>
+     */
     #[Computed]
     public function brainDocuments(): Collection
     {
@@ -100,40 +178,55 @@ new #[Title('Objectif')] class extends Component
     }
 
     /**
+     * Douze semaines, comme le doc : un trimestre se lit d'un coup d'œil, sept
+     * semaines ne disaient pas si la saison était bonne.
+     *
      * @return list<int>
      */
     #[Computed]
     public function weeklyActivity(): array
     {
-        $completed = $this->goal->tasks()
-            ->withArchived()
-            ->where('status', 'done')
-            ->where('completed_at', '>=', now()->subWeeks(7))
-            ->get(['completed_at']);
-
-        return collect(range(6, 0))->map(function (int $weeksAgo) use ($completed): int {
-            $weekStart = now()->subWeeks($weeksAgo)->startOfWeek();
-            $weekEnd = $weekStart->copy()->endOfWeek();
-
-            return $completed->filter(fn ($task) => $task->completed_at->between($weekStart, $weekEnd))->count();
-        })->all();
+        return GoalRhythm::weeklyActivity($this->goal, 12);
     }
 
     #[Computed]
-    public function isSlowing(): bool
+    public function lastActivity(): CarbonInterface
     {
-        $activity = $this->weeklyActivity;
-        $recent = array_sum(array_slice($activity, -2));
-        $before = array_sum(array_slice($activity, 0, -2));
+        return GoalRhythm::lastActivityAt($this->goal);
+    }
 
-        return $before > 0 && $recent * 2 < $before / max(1, count($activity) - 2) * 2;
+    #[Computed]
+    public function isStagnant(): bool
+    {
+        return $this->goal->status === GoalStatus::Active && GoalRhythm::isStagnant($this->lastActivity);
+    }
+
+    /**
+     * Le nombre de semaines à zéro en fin de série — ce que la légende du
+     * rythme dit sous les barres.
+     */
+    #[Computed]
+    public function silentWeeks(): int
+    {
+        $silent = 0;
+
+        foreach (array_reverse($this->weeklyActivity) as $count) {
+            if ($count > 0) {
+                break;
+            }
+
+            $silent++;
+        }
+
+        return $silent;
     }
 
     public function toggleTask(int $taskId): void
     {
         Task::findOrFail($taskId)->toggleCompletion();
 
-        unset($this->tasks, $this->weeklyActivity, $this->isSlowing);
+        $this->forgetRhythm();
+        unset($this->tasks);
     }
 
     public function createSubtask(int $parentTaskId, string $title): void
@@ -146,7 +239,8 @@ new #[Title('Objectif')] class extends Component
 
         Task::findOrFail($parentTaskId)->subtasks()->create(['title' => $title, 'status' => 'todo']);
 
-        unset($this->tasks, $this->weeklyActivity);
+        $this->forgetRhythm();
+        unset($this->tasks);
     }
 
     public function addTask(string $title): void
@@ -173,6 +267,7 @@ new #[Title('Objectif')] class extends Component
 
         $this->newMilestoneTitle = '';
         $this->goal->load('milestones');
+        unset($this->nextMilestone);
     }
 
     public function toggleMilestone(int $milestoneId): void
@@ -181,12 +276,15 @@ new #[Title('Objectif')] class extends Component
         $milestone->update(['status' => $milestone->status === MilestoneStatus::Done ? 'pending' : 'done']);
 
         $this->goal->load('milestones');
+        $this->forgetRhythm();
+        unset($this->nextMilestone);
     }
 
     public function deleteMilestone(int $milestoneId): void
     {
         Milestone::findOrFail($milestoneId)->delete();
         $this->goal->load('milestones');
+        unset($this->nextMilestone, $this->journal);
     }
 
     public function updateStatus(string $status): void
@@ -225,6 +323,11 @@ new #[Title('Objectif')] class extends Component
 
         return $this->redirect(route('goals.index'), navigate: true);
     }
+
+    private function forgetRhythm(): void
+    {
+        unset($this->weeklyActivity, $this->lastActivity, $this->isStagnant, $this->silentWeeks, $this->journal);
+    }
 };
 ?>
 
@@ -232,73 +335,105 @@ new #[Title('Objectif')] class extends Component
     $milestonesTotal = $goal->milestones->count();
     $milestonesDone = $goal->milestones->where('status', MilestoneStatus::Done)->count();
     $maxActivity = max([1, ...$this->weeklyActivity]);
+    $hue = 'var(--goal-'.$goal->color_slot.')';
 @endphp
 
-{{-- Registre fiche : pas de bande d'état, une colonne de lecture, du blanc.
-     Un objet, son contexte, ses relations. --}}
+{{-- La fiche est une page de lecture-action : les jalons se cochent à gauche,
+     les tâches liées juste en dessous, et la colonne de droite porte ce qu'on
+     ne fait que lire — ce que les revues en ont dit, le rythme, le journal. --}}
 <div>
-    <div class="mb-[26px] flex max-w-[1200px] flex-wrap items-center gap-3.5">
-        <a href="{{ route('goals.index') }}" wire:navigate class="text-[13px] text-(--mut) hover:text-(--tx)">← Objectifs</a>
+    <nav class="mb-1.5 flex items-center gap-2 text-[13px] text-(--mut)" aria-label="Fil d'Ariane">
+        <a href="{{ route('goals.index') }}" wire:navigate class="hover:text-(--tx)">Objectifs</a>
+        <span aria-hidden="true">/</span>
+        <span class="min-w-0 truncate text-(--tx)">{{ $goal->title }}</span>
+    </nav>
 
-        <span class="flex items-center gap-2 text-[13px] text-(--mut)">
-            <span class="size-[8px] rounded-full" style="background: var(--goal-{{ $goal->color_slot }})" aria-hidden="true"></span>
-            {{ $goal->entity?->name ?? 'Sans entité' }}
-        </span>
+    <div class="mb-[26px] flex max-w-[1200px] flex-wrap items-start gap-4">
+        <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-3">
+                <span class="size-[12px] shrink-0 rounded-[3px]" style="background: {{ $hue }}" aria-hidden="true"></span>
+                <h1 class="font-display min-w-0 text-[34px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">{{ $goal->title }}</h1>
+            </div>
 
-        <div class="ml-auto flex flex-wrap gap-2">
-            @if ($goal->status !== GoalStatus::Paused)
-                <x-btn variant="secondary" wire:click="updateStatus('paused')">Mettre en pause</x-btn>
-            @else
-                <x-btn variant="secondary" wire:click="updateStatus('active')">Reprendre</x-btn>
-            @endif
-            @if ($goal->status !== GoalStatus::Done)
-                <x-btn variant="secondary" wire:click="updateStatus('done')">Marquer atteint</x-btn>
-            @endif
+            {{-- Une seule ligne de contexte, dans l'ordre du doc : d'où ça
+                 vient, jusqu'où ça va, depuis quand. --}}
+            <p class="mt-2 text-[13px] text-(--mut)">
+                @php
+                    // L'horizon dit déjà « échéance dépassée » : le répéter
+                    // avec la date donnait « échéance dépassée · échéance 30
+                    // septembre ». Une échéance passée se dit une seule fois.
+                    $overdue = $goal->target_date?->isPast() ?? false;
+                @endphp
+                {{ collect([
+                    $goal->entity?->name,
+                    $overdue ? null : $goal->horizon_label,
+                    $goal->target_date
+                        ? ($overdue ? 'échéance dépassée le ' : 'échéance ').$goal->target_date->translatedFormat('j F')
+                        : null,
+                    'posé le '.$goal->created_at->translatedFormat('j F Y'),
+                ])->filter()->implode(' · ') }}
+            </p>
+        </div>
+
+        <div class="flex shrink-0 items-center gap-2">
             <x-btn variant="secondary" wire:click="openEditModal">Modifier</x-btn>
-            <x-btn variant="danger" wire:click="delete" wire:confirm="Supprimer cet objectif ?">Supprimer</x-btn>
+
+            <flux:dropdown position="bottom" align="end">
+                <button
+                    type="button"
+                    aria-label="Autres actions sur l'objectif"
+                    class="press rounded-full bg-(--surf2) px-3.5 py-[9px] text-[13px] text-(--tx) hover:bg-(--bd2)"
+                >···</button>
+
+                <flux:menu>
+                    @if ($goal->status !== GoalStatus::Paused)
+                        <flux:menu.item as="button" wire:click="updateStatus('paused')" icon="pause">Mettre en pause</flux:menu.item>
+                    @else
+                        <flux:menu.item as="button" wire:click="updateStatus('active')" icon="play">Reprendre</flux:menu.item>
+                    @endif
+
+                    @if ($goal->status !== GoalStatus::Done)
+                        <flux:menu.item as="button" wire:click="updateStatus('done')" icon="check">Marquer atteint</flux:menu.item>
+                    @endif
+
+                    <flux:menu.separator />
+
+                    <flux:menu.item
+                        as="button"
+                        variant="danger"
+                        icon="trash"
+                        wire:click="delete"
+                        wire:confirm="Supprimer cet objectif ?"
+                    >Supprimer</flux:menu.item>
+                </flux:menu>
+            </flux:dropdown>
         </div>
     </div>
 
-    <div class="grid max-w-[1200px] grid-cols-1 gap-8 xl:grid-cols-[1fr_320px] xl:gap-12">
-        <div class="max-w-[620px]">
-            <div class="mb-3 flex flex-wrap items-center gap-3">
-                <span class="text-[11px] tracking-[.12em] uppercase {{ $goal->status === GoalStatus::Paused ? 'text-(--mut)' : 'text-(--ai)' }}">
-                    {{ $goal->status === GoalStatus::Done ? 'Atteint' : ($goal->status === GoalStatus::Paused ? 'En pause' : 'En cours') }}
-                </span>
-                @if ($goal->target_date)
-                    <span class="text-[13px] text-(--mut)">
-                        cible : {{ $goal->target_date->translatedFormat('j F') }} ·
-                        {{ $goal->target_date->isPast() ? 'dépassée' : 'dans '.(int) ceil(today()->diffInWeeks($goal->target_date)).' semaines' }}
-                    </span>
-                @endif
-            </div>
-
-            <h1 class="font-display mb-4 text-[38px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">{{ $goal->title }}</h1>
-
+    <div class="grid max-w-[1200px] grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div class="flex min-w-0 flex-col gap-4">
             @if ($goal->description)
-                <p class="mb-[30px] text-[16px] leading-[1.65] text-(--mut)">{{ $goal->description }}</p>
+                <p class="max-w-[620px] text-[16px] leading-[1.65] text-(--mut)">{{ $goal->description }}</p>
             @endif
 
-            <div class="mb-3.5 flex flex-wrap items-baseline gap-3">
-                <h2 class="font-display text-[20px] font-semibold text-(--tx)">Jalons</h2>
-                <span class="text-[13px] text-(--mut)">{{ $milestonesDone }} sur {{ $milestonesTotal }}</span>
-                @if ($milestonesTotal > 0)
-                    <div class="ml-auto flex w-[200px] gap-[5px]">
-                        @foreach ($goal->milestones as $milestone)
-                            <div
-                                class="h-[8px] flex-1 rounded-full {{ $milestone->status === MilestoneStatus::Done ? 'bg-(--ai)' : 'bg-(--bd2)' }}"
-                                aria-hidden="true"
-                            ></div>
-                        @endforeach
-                    </div>
-                @endif
-            </div>
+            {{-- Les jalons --}}
+            <x-card padding="0" class="overflow-hidden">
+                <div class="flex items-center justify-between border-b border-(--bd) px-[18px] py-3">
+                    <h2 class="font-display text-[17px] font-semibold text-(--tx)">Jalons</h2>
+                    <span class="font-display text-[13px] tabular-nums text-(--mut)">{{ $milestonesDone }} / {{ $milestonesTotal }}</span>
+                </div>
 
-            <div class="mb-[30px] flex flex-col">
                 @foreach ($goal->milestones as $milestone)
-                    @php $isDone = $milestone->status === MilestoneStatus::Done; @endphp
+                    @php
+                        $isDone = $milestone->status === MilestoneStatus::Done;
+                        $isNext = $this->nextMilestone?->is($milestone) ?? false;
+                    @endphp
                     <div
-                        class="group flex items-center gap-3.5 border-b border-(--bd) px-1 py-[13px] transition-opacity duration-(--dur-swap) ease-(--ease) {{ $isDone ? 'opacity-50' : '' }}"
+                        @class([
+                            'group flex items-center gap-3.5 border-b border-(--bd) px-[18px] py-[15px] last:border-b-0',
+                            'bg-(--acbg)' => $isNext,
+                            'opacity-50' => $isDone,
+                        ])
                         wire:key="milestone-{{ $milestone->id }}"
                     >
                         <button
@@ -308,15 +443,26 @@ new #[Title('Objectif')] class extends Component
                             wire:loading.attr="disabled"
                             wire:loading.class="scale-90 opacity-60"
                             aria-label="{{ $isDone ? 'Rouvrir le jalon' : 'Marquer le jalon fait' }}"
-                            class="flex size-[19px] shrink-0 items-center justify-center rounded-[6px] border-2 transition-[background-color,border-color,scale] duration-(--dur-swap) ease-(--ease) active:scale-[.88] {{ $isDone ? 'border-(--ai) bg-(--ai)' : 'border-(--bd3)' }}"
+                            @class([
+                                'flex size-[20px] shrink-0 items-center justify-center rounded-[6px] border-2 transition-[background-color,border-color,scale] duration-(--dur-swap) ease-(--ease) active:scale-[.88]',
+                                'border-(--ai) bg-(--ai)' => $isDone,
+                                'border-(--ac)' => ! $isDone && $isNext,
+                                'border-(--bd3)' => ! $isDone && ! $isNext,
+                            ])
                         >
                             @if ($isDone)<span aria-hidden="true" class="animate-tick-in text-[11px] leading-none text-(--aiT)">✓</span>@endif
                         </button>
 
-                        <span class="min-w-0 flex-1 text-[15px] {{ $isDone ? 'text-(--tx) line-through' : 'text-(--tx)' }}">{{ $milestone->title }}</span>
+                        <span class="min-w-0 flex-1 text-[15px] {{ $isDone ? 'text-(--tx) line-through' : ($isNext ? 'font-semibold text-(--tx)' : 'text-(--tx)') }}">{{ $milestone->title }}</span>
 
-                        @if ($isDone)
-                            <span class="shrink-0 text-[12px] text-(--mut)">fait</span>
+                        @if ($isNext)
+                            <span class="shrink-0 text-[11px] tracking-[.1em] text-(--ac) uppercase">Le suivant</span>
+                        @elseif ($isDone)
+                            <span class="shrink-0 text-[12px] text-(--mut)">{{ $this->shortDate($milestone->updated_at) }}</span>
+                        @elseif ($milestone->target_date)
+                            <span class="shrink-0 text-[12px] text-(--mut)">avant le {{ $milestone->target_date->translatedFormat('j M') }}</span>
+                        @else
+                            <span class="shrink-0 text-[12px] text-(--mut)" aria-hidden="true">—</span>
                         @endif
 
                         <button
@@ -328,8 +474,8 @@ new #[Title('Objectif')] class extends Component
                     </div>
                 @endforeach
 
-                <form wire:submit="addMilestone" class="flex items-center gap-3.5 px-1 py-3">
-                    <span aria-hidden="true" class="w-[19px] shrink-0 text-center text-(--mut)">+</span>
+                <form wire:submit="addMilestone" class="flex items-center gap-3.5 px-[18px] py-[13px]">
+                    <span aria-hidden="true" class="w-[20px] shrink-0 text-center text-(--mut)">+</span>
                     <input
                         type="text"
                         wire:model="newMilestoneTitle"
@@ -337,44 +483,23 @@ new #[Title('Objectif')] class extends Component
                         class="w-full bg-transparent text-[15px] text-(--tx) placeholder:text-(--mut) focus:outline-none"
                     />
                 </form>
-                @error('newMilestoneTitle') <p class="px-1 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
-            </div>
+                @error('newMilestoneTitle') <p class="px-[18px] pb-3 text-[12px] text-(--dgr)">{{ $message }}</p> @enderror
+            </x-card>
 
-            <div class="mb-3 flex flex-wrap items-baseline gap-3">
-                <h2 class="font-display text-[20px] font-semibold text-(--tx)">Rythme</h2>
-                @if ($this->isSlowing)
-                    <span class="text-[13px] text-(--warn)">le rythme ralentit depuis deux semaines</span>
-                @endif
-            </div>
-
-            {{-- Un histogramme entièrement plat ne dit rien : on préfère le
-                 dire en français. --}}
-            @if (array_sum($this->weeklyActivity) === 0)
-                <p class="text-[14px] text-(--mut)">Aucune tâche terminée sur les sept dernières semaines.</p>
-            @else
-                <div class="mb-2 flex h-[60px] items-end gap-1.5">
-                    @foreach ($this->weeklyActivity as $count)
-                        <div
-                            class="flex-1 rounded-t-[4px] {{ $loop->last && $this->isSlowing ? 'bg-(--warn)' : 'bg-(--bd2)' }}"
-                            style="height: {{ max(12, (int) round(($count / $maxActivity) * 100)) }}%"
-                            aria-hidden="true"
-                        ></div>
-                    @endforeach
+            {{-- Les tâches liées : la fiche les coche, elle ne les range pas. --}}
+            <x-card padding="0" class="overflow-hidden">
+                <div class="flex items-center justify-between border-b border-(--bd) px-[18px] py-3">
+                    <h2 class="font-display text-[17px] font-semibold text-(--tx)">Tâches liées</h2>
+                    <span class="text-[13px] text-(--mut)">{{ $this->tasks->count() }}</span>
                 </div>
-                <p class="text-[12px] text-(--mut)">Tâches terminées par semaine · 7 dernières semaines</p>
-            @endif
-        </div>
 
-        <div>
-            <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Tâches ouvertes</p>
-            <div class="mb-[30px] flex flex-col gap-3">
-                @foreach ($this->tasks as $task)
-                    <div class="flex items-center gap-3 text-[14px]" wire:key="task-{{ $task->id }}">
-                        @php
-                            $isDone = $task->status === \App\Enums\TaskStatus::Done;
-                            $dueDate = $task->due_date ?? $task->scheduled_date;
-                            $isOverdue = $dueDate && ! $isDone && $dueDate->isPast() && ! $dueDate->isToday();
-                        @endphp
+                @forelse ($this->tasks as $task)
+                    @php
+                        $isDone = $task->status === TaskStatus::Done;
+                        $dueDate = $task->due_date ?? $task->scheduled_date;
+                        $isOverdue = $dueDate && ! $isDone && $dueDate->isPast() && ! $dueDate->isToday();
+                    @endphp
+                    <div class="flex items-center gap-3.5 border-b border-(--bd) px-[18px] py-[13px]" wire:key="task-{{ $task->id }}">
                         <button
                             type="button"
                             wire:click="toggleTask({{ $task->id }})"
@@ -382,57 +507,107 @@ new #[Title('Objectif')] class extends Component
                             wire:loading.attr="disabled"
                             wire:loading.class="scale-90 opacity-60"
                             aria-label="{{ $isDone ? 'Marquer non terminée' : 'Marquer terminée' }}"
-                            class="flex size-[17px] shrink-0 items-center justify-center rounded-[6px] border-2 transition-[background-color,border-color,scale] duration-(--dur-swap) ease-(--ease) active:scale-[.88] {{ $isDone ? 'border-(--ai) bg-(--ai)' : ($isOverdue ? 'border-(--dgr)' : 'border-(--bd3)') }}"
+                            class="flex size-[20px] shrink-0 items-center justify-center rounded-[6px] border-2 transition-[background-color,border-color,scale] duration-(--dur-swap) ease-(--ease) active:scale-[.88] {{ $isDone ? 'border-(--ai) bg-(--ai)' : ($isOverdue ? 'border-(--dgr)' : 'border-(--bd3)') }}"
                         >
-                            @if ($isDone)<span aria-hidden="true" class="animate-tick-in text-[10px] leading-none text-(--aiT)">✓</span>@endif
+                            @if ($isDone)<span aria-hidden="true" class="animate-tick-in text-[11px] leading-none text-(--aiT)">✓</span>@endif
                         </button>
-                        <span class="min-w-0 flex-1 {{ $isDone ? 'text-(--mut) line-through opacity-50' : 'text-(--tx)' }}">{{ $task->title }}</span>
+
+                        <span class="min-w-0 flex-1 text-[15px] {{ $isDone ? 'text-(--mut) line-through opacity-60' : 'text-(--tx)' }}">{{ $task->title }}</span>
+
+                        <span class="shrink-0 text-[12px] {{ $isOverdue ? 'text-(--dgr)' : 'text-(--mut)' }}">
+                            {{ $dueDate ? $dueDate->translatedFormat('D j') : 'sans date' }}
+                        </span>
                     </div>
-                @endforeach
+                @empty
+                    <p class="border-b border-(--bd) px-[18px] py-[13px] text-[14px] text-(--mut)">Aucune tâche liée.</p>
+                @endforelse
 
                 <form
                     x-data="{ title: '' }"
                     @submit.prevent="$wire.addTask(title); title = ''"
-                    class="flex items-center gap-3 text-[14px]"
+                    class="flex items-center gap-3.5 px-[18px] py-[13px]"
                 >
-                    <span aria-hidden="true" class="w-[17px] shrink-0 text-center text-(--mut)">+</span>
+                    <span aria-hidden="true" class="w-[20px] shrink-0 text-center text-(--mut)">+</span>
                     <input
                         type="text"
                         x-model="title"
                         placeholder="Ajouter une tâche"
-                        class="w-full bg-transparent text-(--tx) placeholder:text-(--mut) focus:outline-none"
+                        class="w-full bg-transparent text-[15px] text-(--tx) placeholder:text-(--mut) focus:outline-none"
                     />
                 </form>
-            </div>
+            </x-card>
+        </div>
 
-            @if ($this->relatedEntities->isNotEmpty())
-                <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Entités rattachées</p>
-                <div class="mb-[30px] flex flex-wrap gap-2">
-                    @foreach ($this->relatedEntities as $entity)
-                        <a
-                            href="{{ route('entities.show', $entity) }}"
-                            wire:navigate
-                            wire:key="entity-{{ $entity->id }}"
-                            class="press rounded-full bg-(--surf) px-3.5 py-[7px] text-[13px] text-(--tx) hover:bg-(--surf2)"
-                        >{{ $entity->name }}</a>
-                    @endforeach
-                </div>
+        <div class="flex min-w-0 flex-col gap-4">
+            @if ($this->reviewExcerpts !== [])
+                @foreach ($this->reviewExcerpts as $excerpt)
+                    <x-agent-block padding="16" rail="3" wire:key="excerpt-{{ $loop->index }}">
+                        <p class="mb-1.5 text-[11px] tracking-[.1em] text-(--ai) uppercase">Revue du {{ $excerpt['date']->translatedFormat('j F') }}</p>
+                        <p class="text-[14px] leading-[1.55] text-(--tx)">{{ $excerpt['excerpt'] }}</p>
+                    </x-agent-block>
+                @endforeach
             @endif
 
-            @if ($this->reviewExcerpts !== [])
-                <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Ce que les revues en ont dit</p>
-                <div class="mb-[30px] flex flex-col gap-3">
-                    @foreach ($this->reviewExcerpts as $excerpt)
-                        <x-agent-block
-                            padding="14"
-                            rail="3"
-                            class="!rounded-[14px]"
-                            wire:key="excerpt-{{ $loop->index }}"
-                        >
-                            <p class="mb-[5px] text-[12px] text-(--ai)">Revue du {{ $excerpt['date']->translatedFormat('j F') }}</p>
-                            <p class="text-[13px] leading-[1.55] text-(--tx)">{{ $excerpt['excerpt'] }}</p>
-                        </x-agent-block>
-                    @endforeach
+            {{-- Le rythme : douze semaines, une barre par semaine. Un
+                 histogramme entièrement plat ne dit rien — on le dit alors en
+                 français. --}}
+            <x-card padding="16">
+                <p class="mb-3 text-[11px] tracking-[.1em] text-(--mut) uppercase">Rythme · 12 dernières semaines</p>
+
+                @if (array_sum($this->weeklyActivity) === 0)
+                    <p class="text-[14px] text-(--mut)">Aucune tâche terminée depuis trois mois.</p>
+                @else
+                    <div class="mb-2 flex h-[48px] items-end gap-1">
+                        @foreach ($this->weeklyActivity as $count)
+                            <div
+                                @class([
+                                    'flex-1 rounded-[3px]',
+                                    'bg-(--bd2)' => $count === 0,
+                                ])
+                                @if ($count > 0) style="height: {{ max(14, (int) round(($count / $maxActivity) * 100)) }}%; background: {{ $hue }};" @else style="height: 8%;" @endif
+                                aria-hidden="true"
+                            ></div>
+                        @endforeach
+                    </div>
+
+                    <div class="flex items-baseline justify-between text-[12px] text-(--mut)">
+                        <span>{{ now()->subWeeks(11)->translatedFormat('M') }}</span>
+                        <span>
+                            @if ($this->silentWeeks > 0)
+                                {{ $this->silentWeeks }} {{ Str::plural('sem.', $this->silentWeeks) }} à zéro
+                            @else
+                                {{ array_sum($this->weeklyActivity) }} {{ Str::plural('tâche', array_sum($this->weeklyActivity)) }} cochées
+                            @endif
+                        </span>
+                    </div>
+                @endif
+            </x-card>
+
+            {{-- Le journal : ce que la base sait, daté. --}}
+            <x-card padding="0" class="overflow-hidden">
+                <p class="border-b border-(--bd) px-[18px] py-2.5 text-[11px] tracking-[.1em] text-(--mut) uppercase">Journal</p>
+
+                @foreach ($this->journal as $line)
+                    <div class="flex gap-3 border-b border-(--bd) px-[18px] py-2.5 text-[13px] leading-[1.5] last:border-b-0" wire:key="journal-{{ $loop->index }}">
+                        <span class="w-[52px] shrink-0 font-semibold text-(--mut)">{{ $this->shortDate($line['at']) }}</span>
+                        <span class="min-w-0 text-(--tx)">{{ $line['text'] }}</span>
+                    </div>
+                @endforeach
+            </x-card>
+
+            @if ($this->relatedEntities->isNotEmpty())
+                <div>
+                    <p class="mb-2.5 text-[11px] tracking-[.1em] text-(--mut) uppercase">Entités rattachées</p>
+                    <div class="flex flex-wrap gap-2">
+                        @foreach ($this->relatedEntities as $entity)
+                            <a
+                                href="{{ route('entities.show', $entity) }}"
+                                wire:navigate
+                                wire:key="entity-{{ $entity->id }}"
+                                class="press rounded-full bg-(--surf) px-3.5 py-[7px] text-[13px] text-(--tx) hover:bg-(--surf2)"
+                            >{{ $entity->name }}</a>
+                        @endforeach
+                    </div>
                 </div>
             @endif
 
