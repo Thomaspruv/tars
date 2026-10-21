@@ -1,5 +1,5 @@
 <flux:dropdown position="top" align="start" class="w-full">
-    <button type="button" class="flex w-full items-center gap-[11px] border-t border-(--bd) px-4 pt-3 text-[13px] text-(--tx)" data-test="sidebar-menu-button">
+    <button type="button" class="sidebar-aside flex w-full items-center gap-[11px] border-t border-(--bd) px-4 pt-3 text-(--tx)" data-test="sidebar-menu-button">
         <span class="inline-flex size-[28px] items-center justify-center rounded-full bg-(--ac) text-[13px] font-bold text-(--acT)">
             {{ auth()->user()->initials() }}
         </span>

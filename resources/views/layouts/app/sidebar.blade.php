@@ -15,10 +15,10 @@ $aside = Spaces::aside();
 
 ?>
 
-<aside class="sticky top-0 z-20 hidden h-screen w-[232px] shrink-0 flex-col px-4 py-[22px] lg:flex">
+<aside class="sidebar sticky top-0 z-20 hidden h-screen shrink-0 flex-col px-4 py-[22px] lg:flex">
     <a href="{{ route('today') }}" wire:navigate class="mb-[22px] flex items-center gap-[11px] px-2.5">
-        <x-app-logo-icon class="size-[22px]" />
-        <span class="font-display text-[16px] font-extrabold tracking-[-.01em] text-(--tx)">TARS</span>
+        <x-app-logo-icon class="size-[22px] shrink-0" />
+        <span class="sidebar-brand font-display font-extrabold tracking-[-.01em] text-(--tx)">TARS</span>
     </a>
 
     {{-- La capture est le seul geste toujours disponible : elle a donc le seul
@@ -27,7 +27,7 @@ $aside = Spaces::aside();
         type="button"
         x-data
         x-on:click="window.dispatchEvent(new CustomEvent('open-quick-add'))"
-        class="mb-[22px] flex items-center gap-2 rounded-full bg-(--ac) px-4 py-3 text-[14px] font-bold whitespace-nowrap text-(--acT) shadow-[0_2px_0_var(--acsh)] transition-[background-color,box-shadow,translate] duration-(--dur-tap) ease-(--ease) hover:bg-(--achov) active:translate-y-[2px] active:shadow-none"
+        class="sidebar-door mb-[22px] flex items-center gap-2 rounded-full bg-(--ac) px-4 py-3 font-bold whitespace-nowrap text-(--acT) shadow-[0_2px_0_var(--acsh)] transition-[background-color,box-shadow,translate] duration-(--dur-tap) ease-(--ease) hover:bg-(--achov) active:translate-y-[2px] active:shadow-none"
     >
         <span aria-hidden="true" class="text-[17px] leading-none">+</span>
         Poser quelque chose
@@ -42,7 +42,7 @@ $aside = Spaces::aside();
                 wire:navigate
                 @if ($isCurrent) aria-current="page" @endif
                 @class([
-                    'press flex items-center rounded-full px-4 py-2.5 text-[14px] font-semibold',
+                    'sidebar-door press flex items-center rounded-full px-4 py-2.5 font-semibold',
                     'bg-(--surf2) text-(--tx)' => $isCurrent,
                     'text-(--tx) hover:bg-(--surf)' => ! $isCurrent,
                 ])
@@ -62,7 +62,7 @@ $aside = Spaces::aside();
                     wire:navigate
                     @if ($isCurrent) aria-current="page" @endif
                     @class([
-                        'press flex items-center rounded-full px-4 py-[9px] text-[13px] font-semibold',
+                        'sidebar-aside press flex items-center rounded-full px-4 py-[9px] font-semibold',
                         'bg-(--surf2) text-(--tx)' => $isCurrent,
                         'text-(--mut) hover:text-(--tx)' => ! $isCurrent,
                     ])
@@ -75,9 +75,9 @@ $aside = Spaces::aside();
             <a
                 href="{{ route('settings.index') }}"
                 wire:navigate
-                class="press rounded-full px-4 py-[9px] text-[13px] font-semibold {{ request()->routeIs('settings.index') ? 'bg-(--surf2) text-(--tx)' : 'text-(--mut) hover:text-(--tx)' }}"
+                class="sidebar-aside press rounded-full px-4 py-[9px] font-semibold {{ request()->routeIs('settings.index') ? 'bg-(--surf2) text-(--tx)' : 'text-(--mut) hover:text-(--tx)' }}"
             >Réglages</a>
-            <x-theme-toggle class="press rounded-full px-4 py-[9px] text-left text-[13px] font-semibold text-(--mut) hover:text-(--tx)" />
+            <x-theme-toggle class="sidebar-aside press rounded-full px-4 py-[9px] text-left font-semibold text-(--mut) hover:text-(--tx)" />
         </nav>
 
         <x-desktop-user-menu />

@@ -270,6 +270,25 @@ html[data-theme] body {
     transition: background-color .25s, color .25s;
 }
 
+/* Le même texte paraît plus léger en clair-sur-sombre qu'en sombre-sur-clair :
+   c'est de l'irradiation, pas une illusion de graisse. Les maquettes sont en
+   clair, le thème par défaut de l'app est sombre — à graisses identiques, le
+   sombre lisait plus mince. Le corps part donc de 500 en sombre et de 400 en
+   clair. Tout ce qui porte une graisse explicite (600, 700, 800) n'est pas
+   touché : la compensation ne concerne que le texte courant. */
+:root,
+[data-theme='dark'] {
+    --body-weight: 500;
+}
+
+[data-theme='light'] {
+    --body-weight: 400;
+}
+
+html[data-theme] body {
+    font-weight: var(--body-weight);
+}
+
 html[data-theme] ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -371,6 +390,35 @@ html[data-theme] ::-webkit-scrollbar-thumb {
     padding: 8px 12px;
     border-bottom: 1px solid var(--bd);
     text-align: left;
+}
+
+/* La barre latérale grandit avec l'écran.
+
+   232px fixes pesaient 17 % d'un écran de 1440 — la proportion de la maquette —
+   mais plus que 9 % d'un 2560 : le menu devenait un filet sur le côté. Sa
+   largeur et son corps suivent donc la fenêtre, entre le format portable et un
+   plafond au-delà duquel un menu n'a plus rien à gagner.
+
+   `clamp()` plutôt que des points de rupture : les variantes arbitraires de
+   Tailwind s'ordonnent de façon imprévisible face à `lg:` et `xl:`, et une
+   largeur de menu n'a pas à dépendre de cet ordre. */
+.sidebar {
+    /* 16,7vw, c'est exactement la proportion de la maquette (240 sur 1440) :
+       à 1440 la barre fait donc 240 au pixel près, et elle grandit ensuite
+       jusqu'à 400 — au-delà, un menu ne gagne plus rien à s'élargir. */
+    width: clamp(232px, 16.7vw, 400px);
+}
+
+.sidebar-door {
+    font-size: clamp(14px, .72vw, 18px);
+}
+
+.sidebar-aside {
+    font-size: clamp(13px, .62vw, 16px);
+}
+
+.sidebar-brand {
+    font-size: clamp(16px, .88vw, 23px);
 }
 
 /* Le micro-libellé en capitales — sur-titre d'écran, en-tête de carte, nom de

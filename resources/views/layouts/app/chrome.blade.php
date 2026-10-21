@@ -25,7 +25,11 @@ $moreGroups = [
     <head>
         @include('partials.head')
     </head>
-    <body class="min-h-screen bg-(--bg) font-sans text-(--tx) antialiased">
+    {{-- Pas d'`antialiased` : sur macOS, `-webkit-font-smoothing: antialiased`
+         amincit visiblement les traits, et la maquette ne le déclare nulle part.
+         C'est ce qui faisait paraître la police moins épaisse que le design à
+         graisses pourtant identiques. --}}
+    <body class="min-h-screen bg-(--bg) font-sans text-(--tx)">
         {{ $slot }}
 
         {{-- Chrome mobile : quatre espaces et « Plus », plus le bouton de
