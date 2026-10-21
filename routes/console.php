@@ -11,6 +11,7 @@ use App\Console\Commands\QuestionnaireSchedulerCommand;
 use App\Console\Commands\SyncBrainCommand;
 use App\Console\Commands\SyncGoogleCalendarCommand;
 use App\Console\Commands\TriageInboxCommand;
+use App\Console\Commands\WatchMissionsCommand;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -32,3 +33,6 @@ Schedule::command(GeneratePlannerProposalCommand::class, ['--scheduled'])->every
 Schedule::command(QuestionnaireSchedulerCommand::class, ['--scheduled'])->hourly()->withoutOverlapping();
 Schedule::command(ArchiveStaleItemsCommand::class, ['--scheduled'])->daily();
 Schedule::command(SyncGoogleCalendarCommand::class, ['--scheduled'])->everyFiveMinutes()->withoutOverlapping();
+// Une veille se réveille à la minute : c'est la granularité la plus fine qu'on
+// puisse lui offrir, et l'intervalle réel est porté par la mission elle-même.
+Schedule::command(WatchMissionsCommand::class, ['--scheduled'])->everyMinute()->withoutOverlapping();

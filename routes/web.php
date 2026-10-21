@@ -24,6 +24,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('bilan-de-vie/questionnaires/{questionnaire}', 'pages::bilan.questionnaire')->name('bilan.questionnaire.edit');
     Route::livewire('bilan-de-vie/runs/{run}', 'pages::bilan.run')->name('bilan.run.fill');
     Route::livewire('agents', 'pages::agents')->name('agents.index');
+    // Les deux URL rendent la même messagerie : la seconde ouvre un fil.
+    Route::livewire('missions', 'pages::missions')->name('missions.index');
+    Route::livewire('missions/{mission}', 'pages::missions')->name('missions.show');
+    Route::livewire('equipe', 'pages::team')->name('team.index');
+    Route::livewire('skills', 'pages::skills')->name('skills.index');
     Route::livewire('reglages', 'pages::settings-app')->name('settings.index');
 
     Route::get('reglages/google-calendar/connecter', [GoogleCalendarOAuthController::class, 'redirect'])->name('google-calendar.connect');

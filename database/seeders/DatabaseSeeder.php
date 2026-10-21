@@ -21,5 +21,6 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call(ReferenceScenarioSeeder::class);
+        $this->call(TeamAgentSeeder::class);
     }
 }

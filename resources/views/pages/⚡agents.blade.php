@@ -364,14 +364,10 @@ new #[Title('Agents')] class extends Component
         $activeAgents = $availableAgents->filter(fn ($agent) => ! empty($enabled[$agent->value]))->count();
     @endphp
 
-    {{-- Les agents vivent sous les Réglages depuis que la barre latérale ne
-         nomme plus que les cinq espaces : on remonte donc là d'où on vient. --}}
-    <a href="{{ route('settings.index') }}#agents" wire:navigate class="mb-3.5 inline-block text-[13px] text-(--mut) hover:text-(--tx)">← Réglages</a>
-
     <x-screen-header
         :kicker="count($this->agentNames()).' agents · '.$activeAgents.' '.Str::plural('actif', $activeAgents)"
-        title="Agents"
-        class="mb-5"
+        title="Agents système"
+        class="mb-4"
     >
         <x-slot:actions>
             {{-- Même jauge que les jauges de saison : 6px, un aplat, un mot. --}}
@@ -390,6 +386,10 @@ new #[Title('Agents')] class extends Component
             </div>
         </x-slot:actions>
     </x-screen-header>
+
+    {{-- Les agents système sont l'onglet « réglage » de l'espace Agents : ils
+         tournent tout seuls, on vient ici choisir leur modèle, pas les lancer. --}}
+    <x-space-tabs space="hermes" class="mb-5" />
 
     <div class="mb-[26px] grid items-start gap-3.5" style="grid-template-columns: repeat(auto-fill, minmax(380px, 1fr))">
         @foreach ($this->agentNames() as $agentName)

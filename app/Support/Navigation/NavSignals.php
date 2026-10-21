@@ -3,9 +3,11 @@
 namespace App\Support\Navigation;
 
 use App\Enums\BrainSuggestionStatus;
+use App\Enums\MissionStatus;
 use App\Enums\OpenDecisionStatus;
 use App\Models\BrainSuggestion;
 use App\Models\InboxItem;
+use App\Models\Mission;
 use App\Models\OpenDecision;
 use App\Models\QuestionnaireRun;
 use App\Models\Review;
@@ -73,6 +75,12 @@ final class NavSignals
                 'tone' => 'agent',
                 'display' => 'count',
                 'sr' => 'bilan à remplir',
+            ],
+            'missions' => [
+                'count' => Mission::whereIn('status', [MissionStatus::Queued->value, MissionStatus::Running->value])->count(),
+                'tone' => 'agent',
+                'display' => 'dot',
+                'sr' => 'mission en cours',
             ],
             'review' => [
                 'count' => $review,

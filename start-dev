@@ -21,11 +21,15 @@ fi
 echo "Valet is serving ${SITE_URL}"
 valet open "$SITE_NAME"
 
+# Les missions d'agents ont leur propre worker : une mission dure des minutes
+# et lance un `claude` au premier plan. Sur la file commune, elle retiendrait
+# derrière elle la poussée du vault et les agents système.
 npx concurrently \
-    -c "#93c5fd,#86efac,#c4b5fd,#fdba74" \
-    --names=queue,sched,logs,vite \
+    -c "#93c5fd,#f9a8d4,#86efac,#c4b5fd,#fdba74" \
+    --names=queue,missions,sched,logs,vite \
     --kill-others-on-fail \
     "php artisan queue:listen --tries=1 --timeout=0" \
+    "php artisan queue:listen --queue=missions --tries=1 --timeout=0" \
     "php artisan schedule:work" \
     "php artisan pail --timeout=0" \
     "npm run dev"
