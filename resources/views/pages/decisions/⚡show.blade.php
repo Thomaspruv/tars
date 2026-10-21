@@ -495,7 +495,7 @@ new #[Title('Décision')] class extends Component
     @endif
 
     <x-card padding="22" class="mb-4">
-        <label class="text-[13px] tracking-[.12em] font-semibold text-(--mut) uppercase">Contexte</label>
+        <label class="text-[13px] font-semibold text-(--mut) kicker">Contexte</label>
         <textarea
             wire:model.blur="contextDraft"
             @disabled(! $this->isEditable)
@@ -543,7 +543,7 @@ new #[Title('Décision')] class extends Component
                 <table class="w-full border-separate border-spacing-0 text-[15px]">
                     <thead>
                         <tr>
-                            <th class="sticky left-0 z-10 w-[280px] min-w-[280px] bg-(--surf) px-[22px] py-4 text-left text-[13px] tracking-[.12em] font-semibold text-(--mut) uppercase">
+                            <th class="sticky left-0 z-10 w-[280px] min-w-[280px] bg-(--surf) px-[22px] py-4 text-left text-[13px] font-semibold text-(--mut) kicker">
                                 Critère
                             </th>
                             @foreach ($this->decision->options as $option)
@@ -652,7 +652,7 @@ new #[Title('Décision')] class extends Component
 
                         @if ($this->decision->options->isNotEmpty())
                             <tr>
-                                <td class="sticky left-0 z-10 border-t border-(--bd) bg-(--surf) px-[22px] py-3.5 align-top text-[13px] tracking-[.12em] font-semibold text-(--mut) uppercase">
+                                <td class="sticky left-0 z-10 border-t border-(--bd) bg-(--surf) px-[22px] py-3.5 align-top text-[13px] font-semibold text-(--mut) kicker">
                                     Notes
                                 </td>
                                 @foreach ($this->decision->options as $option)
@@ -676,7 +676,7 @@ new #[Title('Décision')] class extends Component
                     @if ($this->decision->options->isNotEmpty())
                         <tfoot>
                             <tr>
-                                <td class="sticky left-0 z-10 border-t-2 border-(--bd2) bg-(--surf) px-[22px] py-4 text-[13px] tracking-[.12em] font-bold text-(--tx) uppercase">
+                                <td class="sticky left-0 z-10 border-t-2 border-(--bd2) bg-(--surf) px-[22px] py-4 text-[13px] font-bold text-(--tx) kicker">
                                     Score{{ $this->maxScore > 0 ? ' sur '.$this->maxScore : '' }}
                                 </td>
                                 @foreach ($this->decision->options as $option)

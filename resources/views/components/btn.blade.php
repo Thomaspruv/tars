@@ -30,9 +30,9 @@
         'primary' => 'bg-(--ac) text-(--acT) font-bold hover:bg-(--achov) [--sh:var(--acsh)] '.$pressable,
         // Le vert est celui de l'agent — et aussi celui du « fait ».
         'agent' => 'bg-(--ai) text-(--aiT) font-bold hover:bg-(--aihov) [--sh:var(--aish)] '.$pressable,
-        'secondary' => 'bg-(--surf2) text-(--tx) font-medium hover:bg-(--bd2) '.$flatPress,
-        'ghost' => 'bg-transparent text-(--mut) font-normal hover:text-(--tx) '.$flatPress,
-        'danger' => 'bg-transparent text-(--dgr) font-medium hover:bg-(--dgrbg) '.$flatPress,
+        'secondary' => 'bg-(--surf2) text-(--tx) font-bold hover:bg-(--bd2) '.$flatPress,
+        'ghost' => 'bg-transparent text-(--mut) font-semibold hover:text-(--tx) '.$flatPress,
+        'danger' => 'bg-transparent text-(--dgr) font-semibold hover:bg-(--dgrbg) '.$flatPress,
     ];
 
     $classes = $base.' '.($sizes[$size] ?? $sizes['sm']).' '.($variants[$variant] ?? $variants['secondary']);

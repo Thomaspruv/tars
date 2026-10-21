@@ -204,7 +204,7 @@ new #[Title('Skills')] class extends Component
     @endif
 
     @if ($this->searching)
-        <h2 class="mb-3 text-[12px] tracking-[.12em] text-(--mut) uppercase">
+        <h2 class="mb-3 text-[12px] text-(--mut) kicker">
             Sur skills.sh · {{ count($this->results) }}
         </h2>
 
@@ -275,7 +275,7 @@ new #[Title('Skills')] class extends Component
     @endif
 
     @forelse ($this->grouped as $scope => $skills)
-        <h2 class="mb-3 text-[12px] tracking-[.12em] text-(--mut) uppercase">
+        <h2 class="mb-3 text-[12px] text-(--mut) kicker">
             {{ $scope === 'projet' ? 'Dans ce projet' : 'Installés, disponibles partout' }} · {{ count($skills) }}
         </h2>
 

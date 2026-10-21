@@ -583,16 +583,16 @@ new #[Title('Réglages')] class extends Component
     <div class="grid grid-cols-1 items-start gap-8 xl:grid-cols-[200px_minmax(0,1fr)] xl:gap-12">
         <nav class="sticky top-6 hidden flex-col gap-4 xl:flex">
             <div class="flex flex-col gap-0.5">
-                <p class="px-3.5 pb-1 text-[11px] tracking-[.1em] text-(--mut) uppercase">Compte</p>
-                <a href="{{ route('profile.edit') }}" wire:navigate class="press rounded-full px-3.5 py-2 text-[13px] text-(--mut) hover:bg-(--surf) hover:text-(--tx)">Profil & sécurité</a>
-                <a href="{{ route('missions.index') }}" wire:navigate class="press rounded-full px-3.5 py-2 text-[13px] text-(--mut) hover:bg-(--surf) hover:text-(--tx)">Hermès</a>
+                <p class="px-3.5 pb-1 text-[11px] text-(--mut) kicker">Compte</p>
+                <a href="{{ route('profile.edit') }}" wire:navigate class="press rounded-full px-3.5 py-2 text-[13px] font-semibold text-(--mut) hover:bg-(--surf) hover:text-(--tx)">Profil & sécurité</a>
+                <a href="{{ route('missions.index') }}" wire:navigate class="press rounded-full px-3.5 py-2 text-[13px] font-semibold text-(--mut) hover:bg-(--surf) hover:text-(--tx)">Hermès</a>
             </div>
 
             @foreach ($groups as $heading => $sections)
                 <div class="flex flex-col gap-0.5">
-                    <p class="px-3.5 pb-1 text-[11px] tracking-[.1em] text-(--mut) uppercase">{{ $heading }}</p>
+                    <p class="px-3.5 pb-1 text-[11px] text-(--mut) kicker">{{ $heading }}</p>
                     @foreach ($sections as $anchor => $label)
-                        <a href="#{{ $anchor }}" class="press rounded-full px-3.5 py-2 text-[13px] text-(--mut) hover:bg-(--surf) hover:text-(--tx)">{{ $label }}</a>
+                        <a href="#{{ $anchor }}" class="press rounded-full px-3.5 py-2 text-[13px] font-semibold text-(--mut) hover:bg-(--surf) hover:text-(--tx)">{{ $label }}</a>
                     @endforeach
                 </div>
             @endforeach
@@ -604,7 +604,7 @@ new #[Title('Réglages')] class extends Component
         <div class="min-w-0">
 
     <section id="palette" class="mb-12">
-        <h2 class="font-display mb-2 text-[22px] font-semibold text-(--tx)">Objectifs &amp; teintes</h2>
+        <h2 class="font-display mb-2 text-[22px] font-bold text-(--tx)">Objectifs &amp; teintes</h2>
         <p class="mb-6 max-w-[620px] text-[15px] leading-[1.65] text-(--mut)">
             Chaque objectif porte une des sept teintes de saison, la même partout : calendrier, tâches, bande
             d'état, fiches. Au-delà de sept objectifs, la série recommence.
@@ -633,7 +633,7 @@ new #[Title('Réglages')] class extends Component
     </section>
 
     <section id="rituels" class="mb-12">
-        <h2 class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Rituels &amp; jauges</h2>
+        <h2 class="font-display mb-5 text-[22px] font-bold text-(--tx)">Rituels &amp; jauges</h2>
 
         <x-card padding="22" class="flex flex-col divide-y divide-(--bd)">
             <div class="flex items-start gap-5 py-4 first:pt-0 last:pb-0">
@@ -670,7 +670,7 @@ new #[Title('Réglages')] class extends Component
     </section>
 
     <section id="cerveau" class="mb-12">
-        <h2 class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Mémoire — le vault</h2>
+        <h2 class="font-display mb-5 text-[22px] font-bold text-(--tx)">Mémoire — le vault</h2>
 
         <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
             <form wire:submit="saveBrainSettings" class="space-y-4 rounded-[18px] bg-(--surf) p-5" wire:loading.class="opacity-50" wire:target="saveBrainSettings">
@@ -781,7 +781,7 @@ new #[Title('Réglages')] class extends Component
          « Notifications » du doc de refonte : il n'y en a qu'une, parce qu'il
          n'y a qu'un chemin sortant (`alert_thomas`). --}}
     <section id="notifications" class="mb-12">
-        <h2 class="font-display mb-2 text-[22px] font-semibold text-(--tx)">Notifications</h2>
+        <h2 class="font-display mb-2 text-[22px] font-bold text-(--tx)">Notifications</h2>
         <p class="mb-6 max-w-[620px] text-[15px] leading-[1.65] text-(--mut)">
             Un webhook plutôt qu'un canal en dur : branche-le sur ce que tu lis vraiment.
         </p>
@@ -820,7 +820,7 @@ new #[Title('Réglages')] class extends Component
     </section>
 
     <section id="mcp" class="mb-12">
-        <h2 class="font-display mb-2 text-[22px] font-semibold text-(--tx)">Serveur MCP — la porte d'Hermès</h2>
+        <h2 class="font-display mb-2 text-[22px] font-bold text-(--tx)">Serveur MCP — la porte d'Hermès</h2>
         <p class="mb-6 max-w-[620px] text-[15px] leading-[1.65] text-(--mut)">
             Le serveur MCP est la porte par laquelle Hermes lit et écrit dans Tars. Un seul jeton à la fois :
             en régénérer un révoque l'ancien sur-le-champ.
@@ -937,7 +937,7 @@ new #[Title('Réglages')] class extends Component
     </section>
 
     <section id="google" class="mb-12">
-        <h2 class="font-display mb-2 text-[22px] font-semibold text-(--tx)">Connexions — Google</h2>
+        <h2 class="font-display mb-2 text-[22px] font-bold text-(--tx)">Connexions — Google</h2>
         <p class="mb-6 max-w-[620px] text-[15px] leading-[1.65] text-(--mut)">
             Un seul compte Google, deux accès : le calendrier dans les deux sens, la boîte Gmail en lecture seule.
         </p>
@@ -1111,7 +1111,7 @@ new #[Title('Réglages')] class extends Component
          configuration et un historique de runs. Ils ont donc quitté la barre
          latérale pour vivre ici, à côté des fournisseurs qui les font tourner. --}}
     <section id="agents" class="mb-12">
-        <h2 class="font-display mb-2 text-[22px] font-semibold text-(--tx)">Agents</h2>
+        <h2 class="font-display mb-2 text-[22px] font-bold text-(--tx)">Agents</h2>
         <p class="mb-6 max-w-[620px] text-[15px] leading-[1.65] text-(--mut)">
             Le reviewer, le curateur, le triage et le planner : leur fournisseur, leur modèle, leur
             déclenchement et l'historique de leurs passages.
@@ -1121,7 +1121,7 @@ new #[Title('Réglages')] class extends Component
 
     <section id="ia" class="mb-12">
         <div class="flex items-center justify-between gap-4">
-            <h2 class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Fournisseurs IA</h2>
+            <h2 class="font-display mb-5 text-[22px] font-bold text-(--tx)">Fournisseurs IA</h2>
             <x-btn variant="primary" wire:click="openCreateProviderModal">+ Nouveau fournisseur</x-btn>
         </div>
 
@@ -1164,7 +1164,7 @@ new #[Title('Réglages')] class extends Component
     </section>
 
     <section id="revue" class="mb-12">
-        <h2 class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Revue</h2>
+        <h2 class="font-display mb-5 text-[22px] font-bold text-(--tx)">Revue</h2>
 
         <x-card padding="22" class="space-y-5" wire:loading.class="opacity-50" wire:target="saveReviewSettings">
             <div class="grid items-start gap-5 sm:grid-cols-2 xl:grid-cols-3">
@@ -1213,7 +1213,7 @@ new #[Title('Réglages')] class extends Component
     </section>
 
     <section id="archivage" class="mb-12">
-        <h2 class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Archivage</h2>
+        <h2 class="font-display mb-5 text-[22px] font-bold text-(--tx)">Archivage</h2>
 
         <x-card padding="22" class="space-y-5" wire:loading.class="opacity-50" wire:target="saveArchiveSettings">
             <div class="grid items-start gap-5 sm:grid-cols-[200px_minmax(0,1fr)]">

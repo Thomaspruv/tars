@@ -477,7 +477,7 @@ new #[Title('À trier')] class extends Component
          acceptable. --}}
     @if ($this->settledThisWeek->isNotEmpty())
         <x-card tone="sunk" padding="18" class="mt-6">
-            <p class="mb-3 text-[11px] tracking-[.12em] text-(--mut) uppercase">
+            <p class="mb-3 text-[11px] text-(--mut) kicker">
                 Cette semaine · {{ $this->settledThisWeek->count() }} {{ Str::plural('posé', $this->settledThisWeek->count()) }}
             </p>
 

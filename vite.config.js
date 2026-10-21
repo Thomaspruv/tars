@@ -20,7 +20,10 @@ export default defineConfig({
             // identifiants de run sur l'écran Agents).
             fonts: [
                 bunny('Outfit', {
-                    weights: [400, 500, 600, 700],
+                    // 800 pour les titres d'écran et les chiffres : la maquette
+                    // les pose là, et sans le fichier la classe retombe
+                    // silencieusement sur 700.
+                    weights: [400, 500, 600, 700, 800],
                 }),
                 bunny('Karla', {
                     weights: [400, 500, 600, 700],

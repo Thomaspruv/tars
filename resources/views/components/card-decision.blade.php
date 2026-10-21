@@ -13,7 +13,7 @@
     padding="22"
     {{ $attributes->merge(['class' => $decision['response'] ? 'opacity-60' : '']) }}
 >
-    <p class="mb-2.5 text-[11px] tracking-[.12em] text-(--ai) uppercase">
+    <p class="mb-2.5 text-[11px] text-(--ai) kicker">
         Décision {{ $index + 1 }} sur {{ $total }}@if ($context) · {{ $context }} @endif
     </p>
 

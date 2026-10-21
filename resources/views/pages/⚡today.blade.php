@@ -384,7 +384,7 @@ new #[Title('Aujourd\'hui')] class extends Component
             @if ($this->celebratedGoal)
                 <x-card tone="agent" padding="20" class="mb-3.5 flex flex-wrap items-center gap-5">
                     <div class="min-w-0">
-                        <p class="mb-2 text-[11px] tracking-[.14em] text-(--ai) uppercase">Objectif atteint</p>
+                        <p class="mb-2 text-[11px] text-(--ai) kicker">Objectif atteint</p>
                         <p class="font-display mb-1 text-[23px] font-bold tracking-[-.02em] text-(--tx)">{{ $this->celebratedGoal->title }}</p>
                         <p class="text-[13px] text-(--mut)">
                             {{ $this->celebratedGoal->milestones_count }} {{ Str::plural('jalon', $this->celebratedGoal->milestones_count) }} ·
@@ -423,7 +423,7 @@ new #[Title('Aujourd\'hui')] class extends Component
                 @endif
 
                 @if ($this->nextTask)
-                    <p class="mb-2 text-[11px] tracking-[.12em] text-(--ac) uppercase">La suivante</p>
+                    <p class="mb-2 text-[11px] text-(--ac) kicker">La suivante</p>
                     <div class="flex flex-wrap items-center gap-4">
                         <p class="font-display min-w-0 flex-1 text-[23px] leading-[1.2] font-semibold text-(--tx)">{{ $this->nextTask->title }}</p>
                         <div class="ml-auto flex shrink-0 gap-2.5">
@@ -544,7 +544,7 @@ new #[Title('Aujourd\'hui')] class extends Component
 
             @if ($this->upcomingEvents->isNotEmpty())
                 <x-card padding="18">
-                    <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Sept jours</p>
+                    <p class="mb-3.5 text-[11px] text-(--mut) kicker">Sept jours</p>
                     <div class="flex flex-col gap-[13px]">
                         @foreach ($this->upcomingEvents as $event)
                             <div class="flex items-center gap-3" wire:key="event-{{ $event->id }}">

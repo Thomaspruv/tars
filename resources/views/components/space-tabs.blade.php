@@ -31,10 +31,10 @@
                 wire:navigate
                 @if ($isCurrent) aria-current="page" @endif
                 @class([
-                    'press flex items-center gap-2 rounded-full text-[13px]',
+                    'press flex items-center gap-2 rounded-full text-[13px] font-semibold',
                     'px-3.5 py-2' => $variant === 'bar',
                     'px-3 py-2' => $variant === 'column',
-                    'bg-(--surf2) font-semibold text-(--tx)' => $isCurrent,
+                    'bg-(--surf2) text-(--tx)' => $isCurrent,
                     'text-(--mut) hover:bg-(--surf) hover:text-(--tx)' => ! $isCurrent,
                 ])
             >

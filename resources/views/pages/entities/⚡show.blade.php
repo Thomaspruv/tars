@@ -357,7 +357,7 @@ new #[Title('Entité')] class extends Component
         >{{ $initials }}</span>
 
         <div class="min-w-0 flex-1">
-            <h1 class="font-display text-[34px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">{{ $entity->name }}</h1>
+            <h1 class="font-display text-[34px] leading-[1.1] font-extrabold tracking-[-.03em] text-(--tx)">{{ $entity->name }}</h1>
             <p class="mt-1 text-[13px] text-(--mut)">
                 {{ $entity->type->label() }} · {{ ucfirst($entity->context->value) }} ·
                 suivie depuis {{ $entity->created_at->translatedFormat('F Y') }}
@@ -367,7 +367,7 @@ new #[Title('Entité')] class extends Component
         {{-- Le silence est dit en blé, pas en rouge : c'est une information,
              pas une faute — même règle que l'objectif qui dort. --}}
         @if ($this->silentDays !== null)
-            <span class="shrink-0 rounded-full bg-(--warnbg) px-3 py-1.5 text-[13px] font-semibold text-(--warn)">
+            <span class="shrink-0 rounded-full bg-(--warnbg) px-3 py-1.5 text-[13px] font-bold text-(--warn)">
                 Muet depuis {{ $this->silentDays }} jours
             </span>
         @endif
@@ -381,7 +381,7 @@ new #[Title('Entité')] class extends Component
     <div class="grid max-w-[1200px] grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <x-card padding="0" class="min-w-0 overflow-hidden">
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-(--bd) px-[18px] py-3">
-                <h2 class="font-display text-[17px] font-semibold text-(--tx)">Historique</h2>
+                <h2 class="font-display text-[17px] font-bold text-(--tx)">Historique</h2>
 
                 <div class="flex items-center gap-1 rounded-full bg-(--surf2) p-1">
                     @foreach ($this->historyFilters as $key => $label)
@@ -389,8 +389,8 @@ new #[Title('Entité')] class extends Component
                             type="button"
                             wire:click="showHistoryFilter('{{ $key }}')"
                             @class([
-                                'press rounded-full px-3 py-1 text-[12px]',
-                                'bg-(--surf) font-semibold text-(--tx)' => $this->historyFilter === $key,
+                                'press rounded-full px-3 py-1 text-[12px] font-semibold',
+                                'bg-(--surf) text-(--tx)' => $this->historyFilter === $key,
                                 'text-(--mut) hover:text-(--tx)' => $this->historyFilter !== $key,
                             ])
                             @if ($this->historyFilter === $key) aria-current="true" @endif
@@ -400,7 +400,7 @@ new #[Title('Entité')] class extends Component
             </div>
 
             @if ($this->upcoming !== [])
-                <p class="border-b border-(--bd) bg-(--sunk) px-[18px] py-2 text-[11px] tracking-[.1em] text-(--mut) uppercase">À venir</p>
+                <p class="border-b border-(--bd) bg-(--sunk) px-[18px] py-2 text-[11px] text-(--mut) kicker">À venir</p>
 
                 @foreach ($this->upcoming as $line)
                     @include('pages.entities.history-row', ['line' => $line, 'key' => 'up-'.$loop->index])
@@ -408,7 +408,7 @@ new #[Title('Entité')] class extends Component
             @endif
 
             @if ($this->past !== [])
-                <p class="border-b border-(--bd) bg-(--sunk) px-[18px] py-2 text-[11px] tracking-[.1em] text-(--mut) uppercase">Passé</p>
+                <p class="border-b border-(--bd) bg-(--sunk) px-[18px] py-2 text-[11px] text-(--mut) kicker">Passé</p>
 
                 @foreach ($this->past as $line)
                     @include('pages.entities.history-row', ['line' => $line, 'key' => 'past-'.$loop->index])
@@ -436,12 +436,12 @@ new #[Title('Entité')] class extends Component
         <div class="flex min-w-0 flex-col gap-4">
             @if ($this->filledDetails !== [])
                 <x-card padding="0" class="overflow-hidden">
-                    <p class="border-b border-(--bd) px-4 py-2.5 text-[11px] tracking-[.1em] text-(--mut) uppercase">Coordonnées</p>
+                    <p class="border-b border-(--bd) px-4 py-2.5 text-[11px] text-(--mut) kicker">Coordonnées</p>
 
                     @foreach ($this->filledDetails as $pair)
                         <div class="flex items-baseline justify-between gap-3 border-b border-(--bd) px-4 py-2.5 text-[14px] last:border-b-0" wire:key="detail-{{ $loop->index }}">
                             <span class="shrink-0 text-(--mut)">{{ $pair['label'] }}</span>
-                            <span class="min-w-0 text-right font-medium text-(--tx)">{{ $pair['value'] }}</span>
+                            <span class="min-w-0 text-right font-semibold text-(--tx)">{{ $pair['value'] }}</span>
                         </div>
                     @endforeach
                 </x-card>
@@ -453,7 +453,7 @@ new #[Title('Entité')] class extends Component
                      carte à Oto — on ne signe pas d'une voix qui n'a pas
                      parlé. --}}
                 <x-card padding="16">
-                    <p class="mb-2 text-[11px] tracking-[.1em] text-(--mut) uppercase">Silence</p>
+                    <p class="mb-2 text-[11px] text-(--mut) kicker">Silence</p>
                     <p class="text-[14px] leading-[1.55] text-(--tx)">
                         Dernier échange le {{ $this->lastExchangeAt->translatedFormat('j F') }}, il y a
                         {{ $this->silentDays }} jours. Rien n'est prévu de ton côté depuis.
@@ -463,7 +463,7 @@ new #[Title('Entité')] class extends Component
 
             @if ($entity->goals->isNotEmpty() || $this->notes->isNotEmpty() || $this->relations->isNotEmpty() || $this->relatedFrom->isNotEmpty())
                 <x-card padding="0" class="overflow-hidden">
-                    <p class="border-b border-(--bd) px-4 py-2.5 text-[11px] tracking-[.1em] text-(--mut) uppercase">Lié à</p>
+                    <p class="border-b border-(--bd) px-4 py-2.5 text-[11px] text-(--mut) kicker">Lié à</p>
 
                     @foreach ($entity->goals as $goal)
                         @php $done = $goal->milestones->where('status', \App\Enums\MilestoneStatus::Done)->count(); @endphp
@@ -516,7 +516,7 @@ new #[Title('Entité')] class extends Component
 
             @if ($this->recurringTasks->isNotEmpty())
                 <x-card padding="0" class="overflow-hidden">
-                    <p class="border-b border-(--bd) px-4 py-2.5 text-[11px] tracking-[.1em] text-(--mut) uppercase">Échéances récurrentes</p>
+                    <p class="border-b border-(--bd) px-4 py-2.5 text-[11px] text-(--mut) kicker">Échéances récurrentes</p>
 
                     @foreach ($this->recurringTasks as $task)
                         <div class="flex items-center gap-2.5 border-b border-(--bd) px-4 py-2.5 last:border-b-0" wire:key="recurring-{{ $task->id }}">

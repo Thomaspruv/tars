@@ -334,7 +334,7 @@ new #[Title('Tâches')] class extends Component
 
     @forelse ($this->groupedTasks as $label => $tasks)
         <div class="mb-2 flex items-center gap-2.5" wire:key="group-{{ Str::slug($label) }}">
-            <span class="text-[11px] tracking-[.12em] uppercase {{ $label === 'En retard' ? 'text-(--dgr)' : 'text-(--mut)' }}">{{ $label }}</span>
+            <span class="text-[11px] kicker {{ $label === 'En retard' ? 'text-(--dgr)' : 'text-(--mut)' }}">{{ $label }}</span>
             <span class="text-[12px] text-(--mut)">{{ $tasks->count() }}</span>
         </div>
 

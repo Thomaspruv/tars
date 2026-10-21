@@ -398,7 +398,7 @@ new #[Title('Planning · Mois')] class extends Component
 
     <p class="mb-3.5 border-b border-(--bd) pb-3.5 text-[12px] text-(--mut)">{{ $this->syncLabel }}</p>
 
-    <div class="mb-1.5 grid grid-cols-7 gap-1.5 text-[11px] tracking-[.1em] text-(--mut) uppercase">
+    <div class="mb-1.5 grid grid-cols-7 gap-1.5 text-[11px] text-(--mut) kicker">
         @foreach (['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as $label)
             <div class="pl-1">{{ $label }}</div>
         @endforeach
@@ -431,10 +431,10 @@ new #[Title('Planning · Mois')] class extends Component
                         wire:key="day-{{ $date }}"
                     >
                         <div @class([
-                            'font-display mb-1 text-[15px]',
-                            'font-bold text-(--ac)' => $day->isToday(),
-                            'font-medium text-(--tx)' => ! $day->isToday() && $isCurrentMonth,
-                            'font-medium text-(--mut)' => ! $isCurrentMonth,
+                            'font-display mb-1 text-[15px] font-extrabold',
+                            'text-(--ac)' => $day->isToday(),
+                            'text-(--tx)' => ! $day->isToday() && $isCurrentMonth,
+                            'text-(--mut)' => ! $isCurrentMonth,
                         ])>{{ $day->day }}</div>
 
                         @if ($counts !== '')

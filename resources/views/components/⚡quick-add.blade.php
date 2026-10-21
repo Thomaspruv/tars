@@ -231,7 +231,7 @@ new class extends Component
         <div class="animate-veil-in absolute inset-0 bg-black/60" x-on:click="open = false"></div>
 
         <div class="animate-palette-in relative w-full max-w-[640px] rounded-[22px] bg-(--surf) p-5 shadow-[0_2px_0_var(--bd2)]">
-            <p class="mb-2.5 px-1 text-[11px] tracking-[.12em] text-(--ac) uppercase">Poser quelque chose</p>
+            <p class="mb-2.5 px-1 text-[11px] text-(--ac) kicker">Poser quelque chose</p>
 
             <form wire:submit="submit">
                 <input
@@ -299,7 +299,7 @@ new class extends Component
                                 :class="sel === {{ $index }} ? 'bg-(--surf2)' : ''"
                                 class="flex items-center gap-3 rounded-[14px] px-3 py-2.5 hover:bg-(--surf2)"
                             >
-                                <span class="w-[68px] shrink-0 text-[11px] tracking-[.1em] text-(--mut) uppercase">{{ $hit->kind }}</span>
+                                <span class="w-[68px] shrink-0 text-[11px] text-(--mut) kicker">{{ $hit->kind }}</span>
                                 <span class="min-w-0 flex-1 truncate text-[14px] text-(--tx)">{{ $hit->label }}</span>
                                 @if ($hit->hint)
                                     <span class="max-w-[38%] shrink-0 truncate text-[12px] text-(--mut)">{{ $hit->hint }}</span>

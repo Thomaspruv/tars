@@ -367,6 +367,20 @@ html[data-theme] ::-webkit-scrollbar-thumb {
     text-align: left;
 }
 
+/* Le micro-libellé en capitales — sur-titre d'écran, en-tête de carte, nom de
+   colonne, « LE SUIVANT ». Il revient une quarantaine de fois dans l'app et la
+   maquette le pose *toujours* en 700 : sans classe commune il retombait à 400
+   partout, et c'est ce qui donnait à l'interface son air délavé. La taille et
+   la couleur restent au point d'appel — seules la graisse, l'interlettrage et
+   la casse sont communs. */
+.kicker {
+    font-weight: 700;
+    /* .08em, la valeur unique des 43 libellés en capitales de la maquette —
+       l'app en avait trois (.1, .12, .14) selon l'écran. */
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
 /* Registre « lecture » — Revue et Bilan de vie. Ces deux écrans ne sont pas de
    l'interface mais du texte : colonne de 680px, corps à 17px/1.8. */
 .reading-body {

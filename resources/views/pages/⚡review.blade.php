@@ -282,7 +282,7 @@ new #[Layout('layouts::reading')] #[Title('Revue')] class extends Component
     @if (! $this->currentReview)
         <div class="flex flex-1 justify-center px-5 pt-10 pb-16 lg:px-10">
             <div class="w-full max-w-[680px]">
-                <h1 class="font-display mb-3 text-[42px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">Aucune revue</h1>
+                <h1 class="font-display mb-3 text-[42px] leading-[1.1] font-extrabold tracking-[-.03em] text-(--tx)">Aucune revue</h1>
                 <p class="reading-body text-(--mut)">
                     L'agent qui les écrit s'active sur l'écran Agents. Une fois configuré, il passe le dimanche
                     et la revue apparaît ici.
@@ -296,7 +296,7 @@ new #[Layout('layouts::reading')] #[Title('Revue')] class extends Component
         <div class="sticky top-0 z-10 flex flex-wrap items-center gap-4 border-b border-(--bd) bg-(--bg) px-5 py-3 lg:px-8">
             <a href="{{ route('today') }}" wire:navigate class="press shrink-0 rounded-full px-3 py-1.5 text-[14px] text-(--mut) hover:text-(--tx)">← Quitter la revue</a>
 
-            <p class="order-last w-full text-[11px] tracking-[.1em] text-(--mut) uppercase lg:order-none lg:w-auto lg:flex-1 lg:text-center">
+            <p class="order-last w-full text-[11px] text-(--mut) kicker lg:order-none lg:w-auto lg:flex-1 lg:text-center">
                 Revue · {{ mb_strtolower($this->reviewLabel($this->currentReview)) }} ·
                 {{ $this->currentReview->period_end->translatedFormat('l j F') }}
             </p>
@@ -331,7 +331,7 @@ new #[Layout('layouts::reading')] #[Title('Revue')] class extends Component
         <div class="flex flex-1 justify-center px-5 pt-8 pb-10 lg:px-10">
             <div class="w-full max-w-[680px]">
                 @if ($this->step === 1)
-                    <h1 class="font-display mb-2 text-[42px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">
+                    <h1 class="font-display mb-2 text-[42px] leading-[1.1] font-extrabold tracking-[-.03em] text-(--tx)">
                         {{ $this->reviewLabel($this->currentReview) }}
                     </h1>
                     <p class="reading-body mb-8 text-(--mut)">
@@ -343,20 +343,20 @@ new #[Layout('layouts::reading')] #[Title('Revue')] class extends Component
                     <div class="mb-8 grid grid-cols-2 gap-3.5 sm:grid-cols-4">
                         @foreach ($this->figures as $figure)
                             <x-card padding="16" wire:key="figure-{{ $loop->index }}">
-                                <p class="font-display text-[32px] leading-none font-bold tabular-nums text-(--tx)">{{ $figure['value'] }}</p>
+                                <p class="font-display text-[32px] leading-none font-extrabold tabular-nums text-(--tx)">{{ $figure['value'] }}</p>
                                 <p class="mt-1.5 text-[13px] leading-[1.35] text-(--mut)">{{ $figure['label'] }}</p>
                             </x-card>
                         @endforeach
                     </div>
 
                     @if ($this->goalsTouched->isNotEmpty())
-                        <h2 class="font-display mb-3.5 text-[22px] font-semibold text-(--tx)">Où la semaine est passée</h2>
+                        <h2 class="font-display mb-3.5 text-[22px] font-bold text-(--tx)">Où la semaine est passée</h2>
 
                         @php $max = max(1, $this->goalsTouched->max('done')); @endphp
                         <div class="mb-6 flex flex-col gap-2.5">
                             @foreach ($this->goalsTouched as $row)
                                 <div class="flex items-center gap-3" wire:key="touched-{{ $row['goal']->id }}">
-                                    <span class="w-[160px] shrink-0 truncate text-[14px] text-(--tx)">{{ $row['goal']->title }}</span>
+                                    <span class="w-[160px] shrink-0 truncate text-[14px] font-semibold text-(--tx)">{{ $row['goal']->title }}</span>
                                     <span class="h-[14px] min-w-[6px] rounded-[3px]" style="width: {{ round($row['done'] / $max * 100) }}%; background: var(--goal-{{ $row['goal']->color_slot }})"></span>
                                     <span class="shrink-0 text-[13px] tabular-nums text-(--mut)">{{ $row['done'] }}</span>
                                 </div>
@@ -382,7 +382,7 @@ new #[Layout('layouts::reading')] #[Title('Revue')] class extends Component
 
                         <div class="mb-[30px] h-px bg-(--bd)"></div>
 
-                        <h2 class="font-display mb-1.5 text-[22px] font-semibold text-(--tx)">
+                        <h2 class="font-display mb-1.5 text-[22px] font-bold text-(--tx)">
                             {{ count($decisions) }} {{ Str::plural('décision', count($decisions)) }}
                         </h2>
                         <p class="mb-[18px] text-[15px] text-(--mut)">
@@ -403,7 +403,7 @@ new #[Layout('layouts::reading')] #[Title('Revue')] class extends Component
                 @else
                     {{-- Mes notes ne portent aucun marqueur vert : c'est mon texte,
                          pas celui de l'agent. --}}
-                    <h2 class="font-display mb-3 text-[22px] font-semibold text-(--tx)">Ce que j'en retiens</h2>
+                    <h2 class="font-display mb-3 text-[22px] font-bold text-(--tx)">Ce que j'en retiens</h2>
                     <p class="mb-4 text-[15px] leading-[1.6] text-(--mut)">
                         Une phrase suffit. Elle est relue au bilan, avec celles des autres semaines.
                     </p>

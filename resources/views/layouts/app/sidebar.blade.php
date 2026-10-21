@@ -18,7 +18,7 @@ $aside = Spaces::aside();
 <aside class="fixed inset-y-0 left-0 z-20 hidden w-[232px] flex-col px-4 py-[22px] lg:flex">
     <a href="{{ route('today') }}" wire:navigate class="mb-[22px] flex items-center gap-[11px] px-2.5">
         <x-app-logo-icon class="size-[22px]" />
-        <span class="font-display text-[19px] font-bold tracking-[-.01em] text-(--tx)">TARS</span>
+        <span class="font-display text-[19px] font-extrabold tracking-[-.01em] text-(--tx)">TARS</span>
     </a>
 
     {{-- La capture est le seul geste toujours disponible : elle a donc le seul
@@ -42,8 +42,8 @@ $aside = Spaces::aside();
                 wire:navigate
                 @if ($isCurrent) aria-current="page" @endif
                 @class([
-                    'press flex items-center rounded-full px-4 py-2.5 text-[14px]',
-                    'bg-(--surf2) font-semibold text-(--tx)' => $isCurrent,
+                    'press flex items-center rounded-full px-4 py-2.5 text-[14px] font-semibold',
+                    'bg-(--surf2) text-(--tx)' => $isCurrent,
                     'text-(--tx) hover:bg-(--surf)' => ! $isCurrent,
                 ])
             >
@@ -62,8 +62,8 @@ $aside = Spaces::aside();
                     wire:navigate
                     @if ($isCurrent) aria-current="page" @endif
                     @class([
-                        'press flex items-center rounded-full px-4 py-[9px] text-[13px]',
-                        'bg-(--surf2) font-semibold text-(--tx)' => $isCurrent,
+                        'press flex items-center rounded-full px-4 py-[9px] text-[13px] font-semibold',
+                        'bg-(--surf2) text-(--tx)' => $isCurrent,
                         'text-(--mut) hover:text-(--tx)' => ! $isCurrent,
                     ])
                 >
@@ -75,9 +75,9 @@ $aside = Spaces::aside();
             <a
                 href="{{ route('settings.index') }}"
                 wire:navigate
-                class="press rounded-full px-4 py-[9px] text-[13px] {{ request()->routeIs('settings.index') ? 'bg-(--surf2) font-semibold text-(--tx)' : 'text-(--mut) hover:text-(--tx)' }}"
+                class="press rounded-full px-4 py-[9px] text-[13px] font-semibold {{ request()->routeIs('settings.index') ? 'bg-(--surf2) text-(--tx)' : 'text-(--mut) hover:text-(--tx)' }}"
             >Réglages</a>
-            <x-theme-toggle class="press rounded-full px-4 py-[9px] text-left text-[13px] text-(--mut) hover:text-(--tx)" />
+            <x-theme-toggle class="press rounded-full px-4 py-[9px] text-left text-[13px] font-semibold text-(--mut) hover:text-(--tx)" />
         </nav>
 
         <x-desktop-user-menu />

@@ -352,7 +352,7 @@ new #[Title('Objectif')] class extends Component
         <div class="min-w-0 flex-1">
             <div class="flex items-center gap-3">
                 <span class="size-[12px] shrink-0 rounded-[3px]" style="background: {{ $hue }}" aria-hidden="true"></span>
-                <h1 class="font-display min-w-0 text-[34px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">{{ $goal->title }}</h1>
+                <h1 class="font-display min-w-0 text-[34px] leading-[1.1] font-extrabold tracking-[-.03em] text-(--tx)">{{ $goal->title }}</h1>
             </div>
 
             {{-- Une seule ligne de contexte, dans l'ordre du doc : d'où ça
@@ -419,8 +419,8 @@ new #[Title('Objectif')] class extends Component
             {{-- Les jalons --}}
             <x-card padding="0" class="overflow-hidden">
                 <div class="flex items-center justify-between border-b border-(--bd) px-[18px] py-3">
-                    <h2 class="font-display text-[17px] font-semibold text-(--tx)">Jalons</h2>
-                    <span class="font-display text-[13px] tabular-nums text-(--mut)">{{ $milestonesDone }} / {{ $milestonesTotal }}</span>
+                    <h2 class="font-display text-[17px] font-bold text-(--tx)">Jalons</h2>
+                    <span class="font-display text-[13px] font-bold tabular-nums text-(--mut)">{{ $milestonesDone }} / {{ $milestonesTotal }}</span>
                 </div>
 
                 @foreach ($goal->milestones as $milestone)
@@ -453,10 +453,10 @@ new #[Title('Objectif')] class extends Component
                             @if ($isDone)<span aria-hidden="true" class="animate-tick-in text-[11px] leading-none text-(--aiT)">✓</span>@endif
                         </button>
 
-                        <span class="min-w-0 flex-1 text-[15px] {{ $isDone ? 'text-(--tx) line-through' : ($isNext ? 'font-semibold text-(--tx)' : 'text-(--tx)') }}">{{ $milestone->title }}</span>
+                        <span class="min-w-0 flex-1 text-[15px] {{ $isDone ? 'text-(--tx) line-through' : ($isNext ? 'font-bold text-(--tx)' : 'text-(--tx)') }}">{{ $milestone->title }}</span>
 
                         @if ($isNext)
-                            <span class="shrink-0 text-[11px] tracking-[.1em] text-(--ac) uppercase">Le suivant</span>
+                            <span class="shrink-0 text-[11px] text-(--ac) kicker">Le suivant</span>
                         @elseif ($isDone)
                             <span class="shrink-0 text-[12px] text-(--mut)">{{ $this->shortDate($milestone->updated_at) }}</span>
                         @elseif ($milestone->target_date)
@@ -489,7 +489,7 @@ new #[Title('Objectif')] class extends Component
             {{-- Les tâches liées : la fiche les coche, elle ne les range pas. --}}
             <x-card padding="0" class="overflow-hidden">
                 <div class="flex items-center justify-between border-b border-(--bd) px-[18px] py-3">
-                    <h2 class="font-display text-[17px] font-semibold text-(--tx)">Tâches liées</h2>
+                    <h2 class="font-display text-[17px] font-bold text-(--tx)">Tâches liées</h2>
                     <span class="text-[13px] text-(--mut)">{{ $this->tasks->count() }}</span>
                 </div>
 
@@ -542,7 +542,7 @@ new #[Title('Objectif')] class extends Component
             @if ($this->reviewExcerpts !== [])
                 @foreach ($this->reviewExcerpts as $excerpt)
                     <x-agent-block padding="16" rail="3" wire:key="excerpt-{{ $loop->index }}">
-                        <p class="mb-1.5 text-[11px] tracking-[.1em] text-(--ai) uppercase">Revue du {{ $excerpt['date']->translatedFormat('j F') }}</p>
+                        <p class="mb-1.5 text-[11px] text-(--ai) kicker">Revue du {{ $excerpt['date']->translatedFormat('j F') }}</p>
                         <p class="text-[14px] leading-[1.55] text-(--tx)">{{ $excerpt['excerpt'] }}</p>
                     </x-agent-block>
                 @endforeach
@@ -552,7 +552,7 @@ new #[Title('Objectif')] class extends Component
                  histogramme entièrement plat ne dit rien — on le dit alors en
                  français. --}}
             <x-card padding="16">
-                <p class="mb-3 text-[11px] tracking-[.1em] text-(--mut) uppercase">Rythme · 12 dernières semaines</p>
+                <p class="mb-3 text-[11px] text-(--mut) kicker">Rythme · 12 dernières semaines</p>
 
                 @if (array_sum($this->weeklyActivity) === 0)
                     <p class="text-[14px] text-(--mut)">Aucune tâche terminée depuis trois mois.</p>
@@ -585,7 +585,7 @@ new #[Title('Objectif')] class extends Component
 
             {{-- Le journal : ce que la base sait, daté. --}}
             <x-card padding="0" class="overflow-hidden">
-                <p class="border-b border-(--bd) px-[18px] py-2.5 text-[11px] tracking-[.1em] text-(--mut) uppercase">Journal</p>
+                <p class="border-b border-(--bd) px-[18px] py-2.5 text-[11px] text-(--mut) kicker">Journal</p>
 
                 @foreach ($this->journal as $line)
                     <div class="flex gap-3 border-b border-(--bd) px-[18px] py-2.5 text-[13px] leading-[1.5] last:border-b-0" wire:key="journal-{{ $loop->index }}">
@@ -597,7 +597,7 @@ new #[Title('Objectif')] class extends Component
 
             @if ($this->relatedEntities->isNotEmpty())
                 <div>
-                    <p class="mb-2.5 text-[11px] tracking-[.1em] text-(--mut) uppercase">Entités rattachées</p>
+                    <p class="mb-2.5 text-[11px] text-(--mut) kicker">Entités rattachées</p>
                     <div class="flex flex-wrap gap-2">
                         @foreach ($this->relatedEntities as $entity)
                             <a

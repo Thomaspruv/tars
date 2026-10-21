@@ -1,7 +1,7 @@
 @props(['documents'])
 
 @if ($documents->isNotEmpty())
-    <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Dans la Mémoire</p>
+    <p class="mb-3.5 text-[11px] text-(--mut) kicker">Dans la Mémoire</p>
     <div class="mb-[30px] flex flex-col gap-2.5">
         @foreach ($documents as $document)
             <a

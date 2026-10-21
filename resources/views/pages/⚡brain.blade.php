@@ -555,7 +555,7 @@ new #[Layout('layouts::reading')] #[Title('Mémoire')] class extends Component
                     @endforelse
                 </div>
             @else
-                <p class="px-3 pb-2.5 font-mono text-[11px] tracking-[.1em] text-(--mut) uppercase">Arborescence</p>
+                <p class="px-3 pb-2.5 font-mono text-[11px] text-(--mut) kicker">Arborescence</p>
                 <x-brain-tree :tree="$this->tree" :selected-path="$path" :non-conformant-paths="$this->nonConformantPaths" />
             @endif
         </div>
@@ -628,7 +628,7 @@ new #[Layout('layouts::reading')] #[Title('Mémoire')] class extends Component
             </x-card>
         @elseif (! $this->selectedDocument)
             <div class="lg:hidden">
-                <p class="mb-3.5 font-mono text-[11px] tracking-[.1em] text-(--mut) uppercase">Arborescence</p>
+                <p class="mb-3.5 font-mono text-[11px] text-(--mut) kicker">Arborescence</p>
                 <x-brain-tree :tree="$this->tree" :selected-path="$path" :non-conformant-paths="$this->nonConformantPaths" />
             </div>
             <p class="mt-6 text-[15px] text-(--mut)">Choisis une note dans l'arborescence.</p>
@@ -716,7 +716,7 @@ new #[Layout('layouts::reading')] #[Title('Mémoire')] class extends Component
 
         <div class="mb-[26px]">
             <div class="mb-3.5 flex items-center gap-2">
-                <p class="text-[11px] tracking-[.12em] text-(--ai) uppercase">Conformité</p>
+                <p class="text-[11px] text-(--ai) kicker">Conformité</p>
                 <x-btn variant="secondary" size="xs" class="ml-auto" wire:click="runConformanceCheck" wire:loading.attr="disabled" wire:target="runConformanceCheck">
                     <span wire:loading wire:target="runConformanceCheck">En cours…</span>
                     <span wire:loading.remove wire:target="runConformanceCheck">Vérifier la conformité</span>
@@ -771,7 +771,7 @@ new #[Layout('layouts::reading')] #[Title('Mémoire')] class extends Component
         </div>
 
         @if ($this->pendingSuggestions->isNotEmpty())
-            <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--ai) uppercase">Le curateur propose</p>
+            <p class="mb-3.5 text-[11px] text-(--ai) kicker">Le curateur propose</p>
             <div class="mb-[26px] flex flex-col gap-3">
                 @foreach ($this->pendingSuggestions as $suggestion)
                     <x-agent-block
@@ -793,7 +793,7 @@ new #[Layout('layouts::reading')] #[Title('Mémoire')] class extends Component
         @endif
 
         @if ($this->recentAutoApplied->isNotEmpty())
-            <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Auto-appliqué récemment</p>
+            <p class="mb-3.5 text-[11px] text-(--mut) kicker">Auto-appliqué récemment</p>
             <div class="mb-[26px] flex flex-col gap-3">
                 @foreach ($this->recentAutoApplied as $suggestion)
                     <div class="flex items-start gap-2.5 text-[13px] text-(--mut)" wire:key="auto-{{ $suggestion->id }}">
@@ -808,7 +808,7 @@ new #[Layout('layouts::reading')] #[Title('Mémoire')] class extends Component
         @endif
 
         @if ($this->documentLinks->isNotEmpty())
-            <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Liens de cette note</p>
+            <p class="mb-3.5 text-[11px] text-(--mut) kicker">Liens de cette note</p>
             <div class="flex flex-wrap gap-2">
                 @foreach ($this->documentLinks as $link)
                     <a

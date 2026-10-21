@@ -32,7 +32,7 @@
 >
     <div class="mb-2.5 flex items-center gap-2.5">
         <span class="size-[10px] shrink-0 rounded-[3px]" style="background: var(--goal-{{ $goal->color_slot }})" aria-hidden="true"></span>
-        <span class="min-w-0 truncate text-[11px] tracking-[.1em] text-(--mut) uppercase">{{ $kicker }}</span>
+        <span class="min-w-0 truncate text-[11px] text-(--mut) kicker">{{ $kicker }}</span>
 
         {{-- La stagnation est dite en français, en blé, jamais en rouge et
              jamais en gros. Le reste du temps, la carte dit simplement quand
@@ -40,7 +40,7 @@
         @if ($isDone)
             <span class="ml-auto shrink-0 text-[12px] text-(--ai)">atteint</span>
         @elseif ($stagnant)
-            <span class="ml-auto shrink-0 rounded-full bg-(--warnbg) px-2.5 py-0.5 text-[12px] font-semibold text-(--warn)">
+            <span class="ml-auto shrink-0 rounded-full bg-(--warnbg) px-2.5 py-0.5 text-[12px] font-bold text-(--warn)">
                 {{ GoalRhythm::movedLabel($lastActivity) }}
             </span>
         @else
@@ -48,7 +48,7 @@
         @endif
     </div>
 
-    <h3 class="font-display mb-3.5 text-[21px] leading-[1.25] font-semibold {{ $isPaused ? 'text-(--mut)' : 'text-(--tx)' }}">
+    <h3 class="font-display mb-3.5 text-[21px] leading-[1.25] font-bold {{ $isPaused ? 'text-(--mut)' : 'text-(--tx)' }}">
         {{ $goal->title }}
     </h3>
 
@@ -57,7 +57,7 @@
     @if ($milestonesTotal > 0)
         <div class="mb-1.5 flex items-baseline justify-between text-[13px] font-semibold text-(--mut)">
             <span>Jalons</span>
-            <span class="font-display tabular-nums {{ $isDone ? 'text-(--ai)' : 'text-(--tx)' }}">{{ $milestonesDone }} / {{ $milestonesTotal }}</span>
+            <span class="font-display font-bold tabular-nums {{ $isDone ? 'text-(--ai)' : 'text-(--tx)' }}">{{ $milestonesDone }} / {{ $milestonesTotal }}</span>
         </div>
 
         <div class="mb-3.5 flex gap-[5px]">

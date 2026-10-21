@@ -159,7 +159,7 @@ new #[Title('Entités')] class extends Component
         @php $isUrgentGroup = $label === 'Échéance proche'; @endphp
 
         <div class="mb-2.5 flex items-center gap-2.5" wire:key="group-{{ Str::slug($label) }}">
-            <span class="text-[11px] tracking-[.12em] uppercase {{ $isUrgentGroup ? 'text-(--warn)' : 'text-(--mut)' }}">{{ $label }}</span>
+            <span class="text-[11px] kicker {{ $isUrgentGroup ? 'text-(--warn)' : 'text-(--mut)' }}">{{ $label }}</span>
             <span class="text-[12px] text-(--mut)">{{ $entities->count() }}</span>
         </div>
 

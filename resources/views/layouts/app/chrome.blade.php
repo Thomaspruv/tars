@@ -50,7 +50,7 @@ $moreGroups = [
                         wire:navigate
                         @if ($isCurrent) aria-current="page" @endif
                         @class([
-                            'press flex-1 py-2 text-center text-[11px]',
+                            'press flex-1 py-2 text-center text-[11px] font-bold',
                             'text-(--ac)' => $isCurrent,
                             'text-(--mut)' => ! $isCurrent,
                         ])
@@ -62,7 +62,7 @@ $moreGroups = [
                     </a>
                 @endforeach
 
-                <button type="button" x-on:click="more = true" class="press flex-1 py-2 text-center text-[11px] text-(--mut)">
+                <button type="button" x-on:click="more = true" class="press flex-1 py-2 text-center text-[11px] font-bold text-(--mut)">
                     <span class="mx-auto mb-2 block h-[3px] w-[20px] rounded-full bg-transparent"></span>
                     Plus
                 </button>
@@ -75,7 +75,7 @@ $moreGroups = [
                     <div class="flex flex-col gap-4">
                         @foreach ($moreGroups as $heading => $links)
                             <div class="flex flex-col gap-1">
-                                <p class="px-4 pb-1 text-[11px] tracking-[.12em] text-(--mut) uppercase">{{ $heading }}</p>
+                                <p class="px-4 pb-1 text-[11px] text-(--mut) kicker">{{ $heading }}</p>
                                 @foreach ($links as $link)
                                     <a
                                         href="{{ route($link['route']) }}"

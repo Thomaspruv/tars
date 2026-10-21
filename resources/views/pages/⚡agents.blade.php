@@ -418,7 +418,7 @@ new #[Title('Agents')] class extends Component
 
                     @php $knownModels = $this->knownModelsFor($name); @endphp
                     <div class="border-t border-(--bd) pt-3.5">
-                        <p class="mb-3 text-[11px] tracking-[.12em] text-(--mut) uppercase">Configuration</p>
+                        <p class="mb-3 text-[11px] text-(--mut) kicker">Configuration</p>
 
                         <div
                             class="grid grid-cols-2 gap-2"
@@ -612,7 +612,7 @@ new #[Title('Agents')] class extends Component
     {{-- Le tableau d'historique est en mode compact, comme l'écran Tâches. --}}
     <div class="overflow-x-auto pb-6">
         <div class="min-w-[860px]">
-            <div class="flex items-center gap-4 border-b border-(--bd2) px-2 py-2 text-[11px] tracking-[.1em] text-(--mut) uppercase">
+            <div class="flex items-center gap-4 border-b border-(--bd2) px-2 py-2 text-[11px] text-(--mut) kicker">
                 <span class="w-[20px]"></span>
                 <span class="w-[200px]">Agent</span>
                 <span class="w-[160px]">Quand</span>

@@ -244,8 +244,8 @@ new #[Title('Objectifs')] class extends Component
                         type="button"
                         wire:click="showView('{{ $key }}')"
                         @class([
-                            'press rounded-full px-3.5 py-1.5 text-[13px]',
-                            'bg-(--surf) font-semibold text-(--tx)' => $this->view === $key,
+                            'press rounded-full px-3.5 py-1.5 text-[13px] font-semibold',
+                            'bg-(--surf) text-(--tx)' => $this->view === $key,
                             'text-(--mut) hover:text-(--tx)' => $this->view !== $key,
                         ])
                         @if ($this->view === $key) aria-current="true" @endif

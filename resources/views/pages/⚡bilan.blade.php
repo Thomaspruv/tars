@@ -417,7 +417,7 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
     <div class="sticky top-0 z-10 flex flex-wrap items-center gap-4 border-b border-(--bd) bg-(--bg) px-5 py-3 lg:px-8">
         <a href="{{ route('today') }}" wire:navigate class="press shrink-0 rounded-full px-3 py-1.5 text-[14px] text-(--mut) hover:text-(--tx)">← Quitter le bilan</a>
 
-        <p class="order-last w-full text-[11px] tracking-[.1em] text-(--mut) uppercase lg:order-none lg:w-auto lg:flex-1 lg:text-center">
+        <p class="order-last w-full text-[11px] text-(--mut) kicker lg:order-none lg:w-auto lg:flex-1 lg:text-center">
             Bilan de vie · {{ $this->periodLabel }}
         </p>
 
@@ -459,7 +459,7 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
 
     <div class="flex min-w-0 flex-1 justify-center px-5 pt-6 pb-16 lg:px-10 lg:pt-10">
         <div class="w-full max-w-[680px]">
-            <p class="mb-3 text-[12px] tracking-[.12em] text-(--mut) uppercase">
+            <p class="mb-3 text-[12px] text-(--mut) kicker">
                 @if ($this->selectedRun)
                     {{ $this->selectedRun->questionnaire->name }} · {{ count($this->selectedRun->questionnaire->questions) }} questions
                 @else
@@ -467,7 +467,7 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
                 @endif
             </p>
 
-            <h1 class="font-display mb-2.5 text-[42px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">
+            <h1 class="font-display mb-2.5 text-[42px] leading-[1.1] font-extrabold tracking-[-.03em] text-(--tx)">
                 {{ ucfirst(($this->selectedRun?->due_date ?? today())->translatedFormat('F Y')) }}
             </h1>
 
@@ -483,7 +483,7 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
                     <div class="flex flex-col gap-2.5">
                         @foreach ($this->goalSeason as $row)
                             <div class="flex items-center gap-3.5" wire:key="season-{{ $row['goal']->id }}">
-                                <span class="flex w-[120px] shrink-0 items-center gap-2 text-[13px] font-semibold text-(--tx)">
+                                <span class="flex w-[120px] shrink-0 items-center gap-2 text-[13px] font-bold text-(--tx)">
                                     <span class="size-[8px] shrink-0 rounded-[2px]" style="background: var(--goal-{{ $row['goal']->color_slot }})" aria-hidden="true"></span>
                                     <span class="truncate">{{ $row['goal']->title }}</span>
                                 </span>
@@ -498,7 +498,7 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
                                     @endforeach
                                 </span>
 
-                                <span class="w-[42px] shrink-0 text-right text-[13px] font-semibold tabular-nums text-(--tx)">{{ $row['share'] }} %</span>
+                                <span class="w-[42px] shrink-0 text-right text-[13px] font-bold tabular-nums text-(--tx)">{{ $row['share'] }} %</span>
                             </div>
                         @endforeach
                     </div>
@@ -520,7 +520,7 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
 
             {{-- L'humeur du jour : dix pavés, un seul allumé, en abricot. --}}
             <div class="mb-4 flex items-baseline gap-3">
-                <h2 class="font-display text-[22px] font-semibold text-(--tx)">Humeur du jour</h2>
+                <h2 class="font-display text-[22px] font-bold text-(--tx)">Humeur du jour</h2>
                 <span class="text-[15px] text-(--mut)">de 1 à 10</span>
                 @if ($this->moodAverage7d !== null)
                     <span class="ml-auto text-[13px] text-(--mut)">
@@ -567,7 +567,7 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
                  pose. Les réponses, elles, sont les miennes. --}}
             @if ($this->selectedRun)
                 <div class="mb-[18px] flex flex-wrap items-baseline gap-3">
-                    <h2 class="font-display text-[22px] font-semibold text-(--tx)">Les questions du mois</h2>
+                    <h2 class="font-display text-[22px] font-bold text-(--tx)">Les questions du mois</h2>
                     @if ($this->selectedRun->status === \App\Enums\QuestionnaireRunStatus::Pending)
                         <x-btn variant="agent" class="ml-auto" :href="route('bilan.run.fill', $this->selectedRun)" wire:navigate>Remplir ce bilan</x-btn>
                     @endif
@@ -609,7 +609,7 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
             <div class="mb-[30px] h-px bg-(--bd)"></div>
 
             <div class="mb-1.5 flex flex-wrap items-baseline gap-3">
-                <h2 class="font-display text-[22px] font-semibold text-(--tx)">Journal</h2>
+                <h2 class="font-display text-[22px] font-bold text-(--tx)">Journal</h2>
                 <span class="text-[14px] text-(--mut)">mon texte, jamais touché par un agent</span>
             </div>
 

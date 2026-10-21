@@ -12,7 +12,7 @@
 @endphp
 
 @if ($signal && $display === 'count')
-    <span class="font-display rounded-full px-[9px] py-0.5 text-[12px] font-semibold {{ $signal['tone'] === 'mine' ? 'bg-(--acbg) text-(--ac)' : 'bg-(--aibg) text-(--ai)' }}">{{ $signal['count'] }}</span>
+    <span class="font-display rounded-full px-[9px] py-0.5 text-[12px] font-bold {{ $signal['tone'] === 'mine' ? 'bg-(--acbg) text-(--ac)' : 'bg-(--aibg) text-(--ai)' }}">{{ $signal['count'] }}</span>
     <span class="sr-only">{{ $signal['sr'] }}</span>
 @elseif ($signal && $display === 'dot')
     <span class="size-[8px] rounded-full {{ $signal['tone'] === 'mine' ? 'bg-(--ac)' : 'bg-(--ai)' }}" aria-hidden="true"></span>
