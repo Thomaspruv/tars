@@ -376,13 +376,13 @@ new #[Title('Équipe')] class extends Component
         $kicker .= ' · '.number_format($this->spendToday, 2).' $ aujourd\'hui';
     @endphp
 
+    <x-space-tabs space="hermes" class="mb-3.5 -ml-3.5" />
+
     <x-screen-header :kicker="$kicker" title="Équipe" class="mb-4">
         <x-slot:actions>
             <x-btn wire:click="recruit" variant="secondary" size="sm">Recruter</x-btn>
         </x-slot:actions>
     </x-screen-header>
-
-    <x-space-tabs space="hermes" class="mb-5" />
 
     @error('team')<p class="mb-3 rounded-[14px] bg-(--surf) px-4 py-3 text-[13px] text-(--warn)">{{ $message }}</p>@enderror
 

@@ -290,7 +290,10 @@ html[data-theme] ::-webkit-scrollbar-thumb {
    rather than pulling in @tailwindcss/typography for a handful of elements.
    Le Cerveau est un registre de *lecture* : corps à 16px/1.75 dans une colonne
    de 620px, titres en Outfit. C'est aussi l'une des deux seules zones de l'app
-   où le mono survit (les chemins de fichier) — voir aussi l'écran Agents. */
+   où le mono survit — mais pour les *chemins* seulement (fil d'Ariane de la
+   note, destination calculée d'une nouvelle note, branche git) : l'arborescence
+   est la navigation de l'écran et parle la langue de la barre latérale. Voir
+   aussi l'écran Agents. */
 .brain-content {
     font-size: 16px;
     line-height: 1.75;

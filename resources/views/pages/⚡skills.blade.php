@@ -144,6 +144,8 @@ new #[Title('Skills')] class extends Component
 <div x-data="{ adding: false }">
     @php $total = collect($this->grouped)->flatten()->count(); @endphp
 
+    <x-space-tabs space="hermes" class="mb-3.5 -ml-3.5" />
+
     <x-screen-header :kicker="$total.' '.Str::plural('skill', $total).' installés'" title="Skills" class="mb-4">
         <x-slot:actions>
             <div class="flex items-center gap-2">
@@ -152,8 +154,6 @@ new #[Title('Skills')] class extends Component
             </div>
         </x-slot:actions>
     </x-screen-header>
-
-    <x-space-tabs space="hermes" class="mb-5" />
 
     {{-- Chercher d'abord : un skill qu'on n'a pas est plus utile qu'un rappel
          de ceux qu'on a déjà. La recherche tape le registre public de

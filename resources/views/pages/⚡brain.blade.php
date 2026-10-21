@@ -23,12 +23,11 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use League\CommonMark\CommonMarkConverter;
 use Livewire\Attributes\Computed;
-use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
-new #[Layout('layouts::reading')] #[Title('Mémoire')] class extends Component
+new #[Title('Mémoire')] class extends Component
 {
     #[Url]
     public ?string $path = null;
@@ -49,6 +48,21 @@ new #[Layout('layouts::reading')] #[Title('Mémoire')] class extends Component
     public ?string $saveMessage = null;
 
     public ?string $conformanceMessage = null;
+
+    /**
+     * Le sur-titre de l'écran : le contrat tenu, en un chiffre. La barre de
+     * progression et l'état de la synchro restent juste en dessous.
+     */
+    #[Computed]
+    public function healthKicker(): string
+    {
+        if (! $this->configured) {
+            return 'vault non configuré';
+        }
+
+        return $this->health->conformanceRate.' % conforme · '
+            .$this->health->conformant.'/'.$this->health->underContract.' notes';
+    }
 
     #[Computed]
     public function configured(): bool
@@ -517,110 +531,107 @@ new #[Layout('layouts::reading')] #[Title('Mémoire')] class extends Component
 };
 ?>
 
-{{-- Trois colonnes : arborescence, note rendue, contexte du curateur. Cet
-     écran remplace la sidebar de l'app par la sienne — on vient y lire, pas y
-     naviguer. --}}
-<div class="flex min-h-screen">
-    <div class="hidden w-[232px] shrink-0 flex-col border-r border-(--bd) px-4 py-[22px] lg:flex">
-        <a href="{{ route('today') }}" wire:navigate class="mb-[18px] flex items-center gap-[11px] px-2.5">
-            <x-app-logo-icon class="size-[22px]" />
-            <span class="font-display text-[19px] font-bold tracking-[-.01em] text-(--tx)">TARS</span>
-        </a>
+{{-- Mémoire est une porte de la barre latérale : son écran reste donc dans le
+     chrome de l'app, comme Planning ou Objectifs. Il garde ses trois colonnes
+     — arborescence, note, contexte du curateur — mais à l'intérieur, sans
+     dupliquer la marque ni obliger à revenir en arrière pour en sortir. --}}
+<div>
+    <x-space-tabs space="memoire" class="mb-3.5 -ml-3.5" />
 
-        <a href="{{ route('today') }}" wire:navigate class="mb-3 px-3 text-[12px] text-(--mut) hover:text-(--tx)">← Aujourd'hui</a>
+    <x-screen-header :kicker="$this->healthKicker" title="Mémoire" class="mb-4">
+        <x-slot:actions>
+            @if ($this->configured)
+                <x-btn variant="secondary" wire:click="openCreateModal">Nouvelle note</x-btn>
+            @endif
+        </x-slot:actions>
+    </x-screen-header>
 
-        {{-- Cet écran n'a pas la barre latérale : les onglets de Mémoire
-             passent donc dans sa colonne, au même endroit que sur les deux
-             autres écrans de lecture. --}}
-        <x-space-tabs space="memoire" variant="column" class="mb-4 -mx-0.5" />
-
-        <input
-            type="text"
-            wire:model.live.debounce.400ms="search"
-            placeholder="Rechercher…"
-            class="mb-3 w-full rounded-full bg-(--surf2) px-3.5 py-2 text-[13px] text-(--tx) placeholder:text-(--mut) focus:outline-none"
-        />
-
-        <div class="min-h-0 flex-1 overflow-y-auto">
-            @if (trim($search) !== '')
-                <div class="flex flex-col gap-px">
-                    @forelse ($this->searchResults as $result)
-                        <button
-                            type="button"
-                            wire:click="selectDocument('{{ $result->path }}')"
-                            class="press block w-full truncate rounded-[8px] px-3 py-[7px] text-left text-[13px] {{ $path === $result->path ? 'bg-(--surf2) text-(--tx)' : 'text-(--mut) hover:bg-(--surf) hover:text-(--tx)' }}"
-                        >{{ $result->title }}</button>
-                    @empty
-                        <p class="px-3 py-2 text-[12px] text-(--mut)">Aucun résultat.</p>
-                    @endforelse
+    @if ($this->configured)
+        {{-- La santé de la mémoire, en tête : le contrat tenu, l'état de la
+             synchro, et l'alerte s'il y a eu un conflit. --}}
+        <div class="mb-[22px] flex flex-wrap items-center gap-x-6 gap-y-2.5">
+            <div class="min-w-[180px]">
+                <div class="h-[5px] w-full overflow-hidden rounded-full bg-(--surf2)" role="img" aria-label="{{ $this->health->conformanceRate }} % des notes respectent le contrat">
+                    <div class="h-full rounded-full bg-(--ai)" style="width: {{ $this->health->conformanceRate }}%"></div>
                 </div>
-            @else
-                <p class="px-3 pb-2.5 font-mono text-[11px] text-(--mut) kicker">Arborescence</p>
-                <x-brain-tree :tree="$this->tree" :selected-path="$path" :non-conformant-paths="$this->nonConformantPaths" />
+            </div>
+
+            <p class="text-[13px] text-(--mut)">
+                Dernier push
+                <span class="font-semibold text-(--tx)">{{ $this->lastPushedAt?->diffForHumans() ?? '—' }}</span>
+            </p>
+
+            @if ($this->health->misplaced > 0)
+                <p class="text-[13px] text-(--mut)">
+                    <span class="font-semibold text-(--warn)">{{ $this->health->misplaced }}</span>
+                    hors dossier cible
+                </p>
+            @endif
+
+            @if ($this->health->sasNotes > 0)
+                <p class="text-[13px] text-(--mut)">
+                    Sas <span class="font-semibold text-(--tx)">{{ $this->health->sasNotes }}</span>
+                </p>
             @endif
         </div>
 
-        @if ($this->configured)
-            @php
-                $gitTone = match ($this->gitStatus) {
-                    \App\Enums\GitSyncStatus::Synced => ['text-(--ai)', 'bg-(--ai)', 'Git à jour'],
-                    \App\Enums\GitSyncStatus::Behind => ['text-(--warn)', 'bg-(--warn)', 'Git en retard'],
-                    \App\Enums\GitSyncStatus::Conflict => ['text-(--dgr)', 'bg-(--dgr)', 'Conflit git'],
-                    default => ['text-(--mut)', 'bg-(--mut)', 'État git inconnu'],
-                };
-            @endphp
-            <div class="mt-auto border-t border-(--bd) px-3 pt-3.5">
-                <p class="mb-1.5 flex items-center gap-2.5 text-[12px] {{ $gitTone[0] }}">
-                    <span class="size-[7px] rounded-full {{ $gitTone[1] }}" aria-hidden="true"></span>{{ $gitTone[2] }}
-                </p>
-                <p class="font-mono text-[11px] leading-[1.6] text-(--mut)">{{ $this->gitBranch }}</p>
+        @if ($this->conflictAlert['at'])
+            <div class="mb-[22px] max-w-[620px] rounded-[16px] border border-(--dgr) bg-(--surf) p-4">
+                <p class="mb-1 text-[13px] font-semibold text-(--dgr)">Conflit git — {{ $this->conflictAlert['at']->diffForHumans() }}</p>
+                <p class="text-[13px] leading-[1.6] text-(--mut)">{{ $this->conflictAlert['message'] }}</p>
+                <a href="{{ route('settings.index') }}#cerveau" wire:navigate class="mt-2 inline-block text-[13px] text-(--ac) hover:text-(--achov)">Forcer la synchro dans les Réglages →</a>
             </div>
         @endif
-    </div>
+    @endif
+    <div class="grid grid-cols-1 items-start gap-x-7 gap-y-6 lg:grid-cols-[232px_minmax(0,1fr)] xl:grid-cols-[232px_minmax(0,1fr)_316px]">
+        {{-- L'arborescence est une colonne de l'écran, plus une barre latérale
+             concurrente de celle de l'app. --}}
+        <div class="hidden min-w-0 flex-col lg:flex">
+            <input
+                type="text"
+                wire:model.live.debounce.400ms="search"
+                placeholder="Rechercher…"
+                class="mb-3 w-full rounded-full bg-(--surf2) px-3.5 py-2 text-[13px] text-(--tx) placeholder:text-(--mut) focus:outline-none"
+            />
 
-    <div class="min-w-0 flex-1 px-5 pt-4 pb-10 lg:px-9 lg:pt-[26px]">
-        @if ($this->configured)
-            {{-- La santé de la mémoire, en tête : le contrat tenu, l'état de la
-                 synchro, et l'alerte s'il y a eu un conflit. --}}
-            <div class="mb-[22px] flex flex-wrap items-center gap-x-6 gap-y-2.5">
-                <div class="min-w-[180px]">
-                    <p class="mb-1.5 flex items-baseline gap-2 text-[13px] text-(--mut)">
-                        <span class="font-semibold text-(--tx)">{{ $this->health->conformanceRate }} % conforme</span>
-                        <span>{{ $this->health->conformant }}/{{ $this->health->underContract }} notes</span>
-                    </p>
-                    <div class="h-[5px] w-full overflow-hidden rounded-full bg-(--surf2)" role="img" aria-label="{{ $this->health->conformanceRate }} % des notes respectent le contrat">
-                        <div class="h-full rounded-full bg-(--ai)" style="width: {{ $this->health->conformanceRate }}%"></div>
+            <div class="min-h-0 flex-1 overflow-y-auto">
+                @if (trim($search) !== '')
+                    <div class="flex flex-col gap-px">
+                        @forelse ($this->searchResults as $result)
+                            <button
+                                type="button"
+                                wire:click="selectDocument('{{ $result->path }}')"
+                                class="press block w-full truncate rounded-[8px] px-3 py-[7px] text-left text-[13px] {{ $path === $result->path ? 'bg-(--surf2) text-(--tx)' : 'text-(--mut) hover:bg-(--surf) hover:text-(--tx)' }}"
+                            >{{ $result->title }}</button>
+                        @empty
+                            <p class="px-3 py-2 text-[12px] text-(--mut)">Aucun résultat.</p>
+                        @endforelse
                     </div>
-                </div>
-
-                <p class="text-[13px] text-(--mut)">
-                    Dernier push
-                    <span class="font-semibold text-(--tx)">{{ $this->lastPushedAt?->diffForHumans() ?? '—' }}</span>
-                </p>
-
-                @if ($this->health->misplaced > 0)
-                    <p class="text-[13px] text-(--mut)">
-                        <span class="font-semibold text-(--warn)">{{ $this->health->misplaced }}</span>
-                        hors dossier cible
-                    </p>
-                @endif
-
-                @if ($this->health->sasNotes > 0)
-                    <p class="text-[13px] text-(--mut)">
-                        Sas <span class="font-semibold text-(--tx)">{{ $this->health->sasNotes }}</span>
-                    </p>
+                @else
+                    <p class="px-3 pb-2.5 text-[11px] text-(--mut) kicker">Arborescence</p>
+                    <x-brain-tree :tree="$this->tree" :selected-path="$path" :non-conformant-paths="$this->nonConformantPaths" />
                 @endif
             </div>
 
-            @if ($this->conflictAlert['at'])
-                <div class="mb-[22px] max-w-[620px] rounded-[16px] border border-(--dgr) bg-(--surf) p-4">
-                    <p class="mb-1 text-[13px] font-semibold text-(--dgr)">Conflit git — {{ $this->conflictAlert['at']->diffForHumans() }}</p>
-                    <p class="text-[13px] leading-[1.6] text-(--mut)">{{ $this->conflictAlert['message'] }}</p>
-                    <a href="{{ route('settings.index') }}#cerveau" wire:navigate class="mt-2 inline-block text-[13px] text-(--ac) hover:text-(--achov)">Forcer la synchro dans les Réglages →</a>
+            @if ($this->configured)
+                @php
+                    $gitTone = match ($this->gitStatus) {
+                        \App\Enums\GitSyncStatus::Synced => ['text-(--ai)', 'bg-(--ai)', 'Git à jour'],
+                        \App\Enums\GitSyncStatus::Behind => ['text-(--warn)', 'bg-(--warn)', 'Git en retard'],
+                        \App\Enums\GitSyncStatus::Conflict => ['text-(--dgr)', 'bg-(--dgr)', 'Conflit git'],
+                        default => ['text-(--mut)', 'bg-(--mut)', 'État git inconnu'],
+                    };
+                @endphp
+                <div class="mt-auto border-t border-(--bd) px-3 pt-3.5">
+                    <p class="mb-1.5 flex items-center gap-2.5 text-[12px] {{ $gitTone[0] }}">
+                        <span class="size-[7px] rounded-full {{ $gitTone[1] }}" aria-hidden="true"></span>{{ $gitTone[2] }}
+                    </p>
+                    <p class="font-mono text-[11px] leading-[1.6] text-(--mut)">{{ $this->gitBranch }}</p>
                 </div>
             @endif
-        @endif
+        </div>
 
+        <div class="min-w-0">
         @if (! $this->configured)
             <x-card padding="22" class="max-w-[620px]">
                 <p class="mb-2 text-[15px] text-(--mut)">Le vault n'est pas configuré.</p>
@@ -628,7 +639,7 @@ new #[Layout('layouts::reading')] #[Title('Mémoire')] class extends Component
             </x-card>
         @elseif (! $this->selectedDocument)
             <div class="lg:hidden">
-                <p class="mb-3.5 font-mono text-[11px] text-(--mut) kicker">Arborescence</p>
+                <p class="mb-3.5 text-[11px] text-(--mut) kicker">Arborescence</p>
                 <x-brain-tree :tree="$this->tree" :selected-path="$path" :non-conformant-paths="$this->nonConformantPaths" />
             </div>
             <p class="mt-6 text-[15px] text-(--mut)">Choisis une note dans l'arborescence.</p>
@@ -709,7 +720,7 @@ new #[Layout('layouts::reading')] #[Title('Mémoire')] class extends Component
 
     {{-- Colonne du curateur : ce qu'il propose, ce qu'il a fait tout seul, et
          ce que la note touche. Tout y porte le vert. --}}
-    <div class="hidden w-[316px] shrink-0 py-[26px] pr-[26px] xl:block">
+    <div class="hidden min-w-0 xl:block">
         @error('acceptSuggestion')
             <p class="mb-3.5 text-[13px] text-(--dgr)">{{ $message }}</p>
         @enderror
@@ -820,6 +831,8 @@ new #[Layout('layouts::reading')] #[Title('Mémoire')] class extends Component
                 @endforeach
             </div>
         @endif
+    </div>
+
     </div>
 
     <flux:modal wire:model.self="showCreateModal" class="md:w-[420px]">

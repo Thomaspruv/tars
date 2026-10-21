@@ -364,6 +364,10 @@ new #[Title('Agents')] class extends Component
         $activeAgents = $availableAgents->filter(fn ($agent) => ! empty($enabled[$agent->value]))->count();
     @endphp
 
+    {{-- Les agents système sont l'onglet « réglage » de l'espace Hermès : ils
+         tournent tout seuls, on vient ici choisir leur modèle, pas les lancer. --}}
+    <x-space-tabs space="hermes" class="mb-3.5 -ml-3.5" />
+
     <x-screen-header
         :kicker="count($this->agentNames()).' agents · '.$activeAgents.' '.Str::plural('actif', $activeAgents)"
         title="Agents système"
@@ -386,10 +390,6 @@ new #[Title('Agents')] class extends Component
             </div>
         </x-slot:actions>
     </x-screen-header>
-
-    {{-- Les agents système sont l'onglet « réglage » de l'espace Agents : ils
-         tournent tout seuls, on vient ici choisir leur modèle, pas les lancer. --}}
-    <x-space-tabs space="hermes" class="mb-5" />
 
     <div class="mb-[26px] grid items-start gap-3.5" style="grid-template-columns: repeat(auto-fill, minmax(380px, 1fr))">
         @foreach ($this->agentNames() as $agentName)
