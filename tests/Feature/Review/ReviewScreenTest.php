@@ -5,6 +5,7 @@ use App\Models\Decision;
 use App\Models\Entity;
 use App\Models\Goal;
 use App\Models\Review;
+use App\Models\Task;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -25,7 +26,12 @@ test('shows the latest review by default', function () {
     $component = Livewire::test('pages::review');
 
     expect($component->get('currentReview')->id)->toBe($latest->id);
-    $component->assertSee('Revue récente');
+
+    // La revue se lit en trois étapes : les chiffres, puis ce qu'Hermès en
+    // dit, puis ce que j'en retiens. Le texte de l'agent est donc à l'étape 2.
+    $component->assertSee('Semaine '.$latest->period_end->isoWeek())
+        ->call('goToStep', 2)
+        ->assertSee('Revue récente');
 });
 
 test('answers a decision and creates a decision row', function () {
@@ -147,7 +153,7 @@ test('marks a review as done', function () {
     expect($review->fresh()->completed_at)->not->toBeNull();
 });
 
-test('switches to another review from the history sidebar', function () {
+test('switches to another review from the top bar', function () {
     $this->actingAs(User::factory()->create());
 
     $older = Review::factory()->create(['period_start' => now()->subDays(21), 'period_end' => now()->subDays(14), 'generated_content' => '# Vieille revue']);
@@ -155,5 +161,56 @@ test('switches to another review from the history sidebar', function () {
 
     Livewire::test('pages::review')
         ->call('selectReview', $older->id)
+        ->call('goToStep', 2)
         ->assertSee('Vieille revue');
+});
+
+/**
+ * Écran 11 du doc : trois étapes, les chiffres d'abord. Ils sont lus dans mes
+ * données, pas dans le texte de l'agent.
+ */
+test('the first step counts the period in real numbers', function () {
+    $this->actingAs(User::factory()->create());
+
+    $review = Review::factory()->create([
+        'period_start' => now()->subDays(7)->startOfDay(),
+        'period_end' => now()->startOfDay(),
+    ]);
+
+    $goal = Goal::factory()->create(['title' => 'Lancer l\'abonnement']);
+    Task::factory()->count(3)->for($goal)->create([
+        'status' => 'done',
+        'completed_at' => now()->subDays(2),
+    ]);
+
+    Livewire::test('pages::review')
+        ->call('selectReview', $review->id)
+        ->assertSee('tâches cochées')
+        ->assertSee('Où la semaine est passée')
+        ->assertSee('Lancer l\'abonnement');
+});
+
+test('changing review starts again at the first step', function () {
+    $this->actingAs(User::factory()->create());
+
+    $first = Review::factory()->create(['period_end' => now()->subWeek()]);
+    $second = Review::factory()->create(['period_end' => now()]);
+
+    Livewire::test('pages::review')
+        ->call('selectReview', $first->id)
+        ->call('goToStep', 3)
+        ->assertSet('step', 3)
+        ->call('selectReview', $second->id)
+        ->assertSet('step', 1);
+});
+
+test('the step never leaves the three that exist', function () {
+    $this->actingAs(User::factory()->create());
+    Review::factory()->create();
+
+    Livewire::test('pages::review')
+        ->call('goToStep', 9)
+        ->assertSet('step', 3)
+        ->call('goToStep', -4)
+        ->assertSet('step', 1);
 });
