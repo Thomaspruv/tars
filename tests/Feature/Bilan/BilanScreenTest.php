@@ -29,11 +29,12 @@ test('guests are redirected to the login page', function () {
 test('it renders the season, the journal and the mood on one reading page', function () {
     $this->actingAs(User::factory()->create());
 
-    // La colonne de gauche a laissé place à une barre d'étape : l'historique
-    // des bilans et les questionnaires sont dans ses deux menus.
+    // La colonne de gauche a laissé place à deux menus de l'en-tête, et
+    // l'écran est revenu dans le chrome de l'app — il n'a donc plus de sortie
+    // à lui, la barre latérale en tient lieu.
     $this->get(route('bilan.index'))
         ->assertSee('Journal')
-        ->assertSee('Quitter le bilan')
+        ->assertDontSee('Quitter le bilan')
         ->assertSee('Questionnaires')
         ->assertSee('12 semaines')
         ->assertSee('Humeur du jour');

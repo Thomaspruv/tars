@@ -15,12 +15,11 @@ use App\Support\FuzzyMatcher;
 use Illuminate\Database\Eloquent\Collection;
 use League\CommonMark\CommonMarkConverter;
 use Livewire\Attributes\Computed;
-use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
-new #[Layout('layouts::reading')] #[Title('Revue')] class extends Component
+new #[Title('Revue')] class extends Component
 {
     /**
      * Trois étapes, et dans cet ordre : les chiffres d'abord (ils ne se
@@ -210,6 +209,25 @@ new #[Layout('layouts::reading')] #[Title('Revue')] class extends Component
         return (new CommonMarkConverter)->convertToHtml((string) $this->currentReview->generated_content)->getContent();
     }
 
+    /**
+     * Le sur-titre : la période lue, et où l'on en est. La Revue est un écran
+     * de lecture, mais elle reste une porte de l'app — elle porte donc le même
+     * en-tête que les autres.
+     */
+    #[Computed]
+    public function periodKicker(): string
+    {
+        $review = $this->currentReview;
+
+        if (! $review) {
+            return 'aucune revue';
+        }
+
+        return 'du '.$review->period_start->translatedFormat('j')
+            .' au '.$review->period_end->translatedFormat('j F')
+            .' · étape '.$this->step.' sur 3';
+    }
+
     public function goToStep(int $step): void
     {
         $this->step = max(1, min(3, $step));
@@ -274,35 +292,30 @@ new #[Layout('layouts::reading')] #[Title('Revue')] class extends Component
 };
 ?>
 
-{{-- Le seul écran, avec le Bilan, qui n'a pas la sidebar de l'app : elle est
-     remplacée par une barre d'étape, et le contenu passe en colonne de lecture
-     de 680. Tout l'écran est une parole d'agent — il n'a donc pas besoin de
+{{-- La Revue est un écran de *lecture* — colonne de 680, corps à 17px — mais
+     elle reste une porte de l'app : elle garde donc la barre latérale, ses
+     onglets et son en-tête, comme Planning ou Objectifs. Elle a d'abord été
+     faite en plein écran, comme le dessine le doc de refonte ; à l'usage, un
+     écran dont on ne sort qu'en revenant en arrière dérange plus qu'il
+     n'aide. Tout l'écran est une parole d'agent — il n'a donc pas besoin de
      filet vert, c'est le document entier qui l'est. --}}
-<div class="flex min-h-screen flex-col">
+<div>
+    <x-space-tabs space="recul" class="mb-3.5 -ml-3.5" />
+
     @if (! $this->currentReview)
-        <div class="flex flex-1 justify-center px-5 pt-10 pb-16 lg:px-10">
-            <div class="w-full max-w-[680px]">
-                <h1 class="font-display mb-3 text-[42px] leading-[1.1] font-extrabold tracking-[-.03em] text-(--tx)">Aucune revue</h1>
-                <p class="reading-body text-(--mut)">
-                    L'agent qui les écrit s'active sur l'écran Agents. Une fois configuré, il passe le dimanche
-                    et la revue apparaît ici.
-                </p>
-                <x-btn variant="secondary" size="md" class="mt-6" :href="route('agents.index')" wire:navigate>Aller aux Agents</x-btn>
-            </div>
+        <x-screen-header title="Aucune revue" class="mb-[22px]" />
+
+        <div class="max-w-[680px]">
+            <p class="reading-body text-(--mut)">
+                L'agent qui les écrit s'active sur l'écran Agents. Une fois configuré, il passe le dimanche
+                et la revue apparaît ici.
+            </p>
+            <x-btn variant="secondary" size="md" class="mt-6" :href="route('agents.index')" wire:navigate>Aller aux Agents</x-btn>
         </div>
     @else
-        {{-- La barre du haut remplace la sidebar : la sortie à gauche, ce qu'on
-             lit au milieu, où l'on en est à droite. --}}
-        <div class="sticky top-0 z-10 flex flex-wrap items-center gap-4 border-b border-(--bd) bg-(--bg) px-5 py-3 lg:px-8">
-            <a href="{{ route('today') }}" wire:navigate class="press shrink-0 rounded-full px-3 py-1.5 text-[14px] text-(--mut) hover:text-(--tx)">← Quitter la revue</a>
-
-            <p class="order-last w-full text-[11px] text-(--mut) kicker lg:order-none lg:w-auto lg:flex-1 lg:text-center">
-                Revue · {{ mb_strtolower($this->reviewLabel($this->currentReview)) }} ·
-                {{ $this->currentReview->period_end->translatedFormat('l j F') }}
-            </p>
-
-            <div class="ml-auto flex shrink-0 items-center gap-3">
-                <span class="text-[13px] font-semibold text-(--mut)">Étape {{ $this->step }} / 3</span>
+        <x-screen-header :kicker="$this->periodKicker" :title="$this->reviewLabel($this->currentReview)" class="mb-[22px]">
+            <x-slot:actions>
+                {{-- Où l'on en est : trois segments, et de quoi changer de revue. --}}
                 <div class="flex gap-1" aria-hidden="true">
                     @foreach ($this->steps as $number => $label)
                         <span class="h-[4px] w-[24px] rounded-full {{ $number <= $this->step ? 'bg-(--tx)' : 'bg-(--bd2)' }}"></span>
@@ -311,7 +324,7 @@ new #[Layout('layouts::reading')] #[Title('Revue')] class extends Component
 
                 @if ($this->reviewHistory->count() > 1)
                     <flux:dropdown position="bottom" align="end">
-                        <button type="button" class="press rounded-full bg-(--surf2) px-3 py-1.5 text-[13px] text-(--tx) hover:bg-(--bd2)">
+                        <button type="button" class="press rounded-full bg-(--surf2) px-3 py-1.5 text-[13px] font-bold text-(--tx) hover:bg-(--bd2)">
                             Autre revue
                         </button>
 
@@ -325,20 +338,13 @@ new #[Layout('layouts::reading')] #[Title('Revue')] class extends Component
                         </flux:menu>
                     </flux:dropdown>
                 @endif
-            </div>
-        </div>
+            </x-slot:actions>
+        </x-screen-header>
 
-        <div class="flex flex-1 justify-center px-5 pt-8 pb-10 lg:px-10">
-            <div class="w-full max-w-[680px]">
+        <div class="max-w-[680px]">
+            <div>
                 @if ($this->step === 1)
-                    <h1 class="font-display mb-2 text-[42px] leading-[1.1] font-extrabold tracking-[-.03em] text-(--tx)">
-                        {{ $this->reviewLabel($this->currentReview) }}
-                    </h1>
-                    <p class="reading-body mb-8 text-(--mut)">
-                        Du {{ $this->currentReview->period_start->translatedFormat('j') }}
-                        au {{ $this->currentReview->period_end->translatedFormat('j F') }} · les chiffres d'abord,
-                        ils ne se discutent pas.
-                    </p>
+                    <p class="reading-body mb-6 text-(--mut)">Les chiffres d'abord : ils ne se discutent pas.</p>
 
                     <div class="mb-8 grid grid-cols-2 gap-3.5 sm:grid-cols-4">
                         @foreach ($this->figures as $figure)
@@ -441,7 +447,7 @@ new #[Layout('layouts::reading')] #[Title('Revue')] class extends Component
         {{-- La barre du bas nomme l'étape d'avant et celle d'après : une revue
              se lit dans l'ordre, et on doit pouvoir revenir sans se demander
              où l'on va. --}}
-        <div class="flex items-center justify-center gap-3 border-t border-(--bd) px-5 py-4">
+        <div class="mt-8 flex max-w-[680px] flex-wrap items-center gap-3 border-t border-(--bd) pt-5">
             @if ($this->step > 1)
                 <x-btn variant="ghost" size="md" wire:click="goToStep({{ $this->step - 1 }})">← {{ $this->steps[$this->step - 1] }}</x-btn>
             @endif

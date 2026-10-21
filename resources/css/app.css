@@ -385,7 +385,11 @@ html[data-theme] ::-webkit-scrollbar-thumb {
 }
 
 /* Registre « lecture » — Revue et Bilan de vie. Ces deux écrans ne sont pas de
-   l'interface mais du texte : colonne de 680px, corps à 17px/1.8. */
+   l'interface mais du texte : colonne de 680px, corps à 17px/1.8. C'est un
+   registre de *texte*, pas de chrome : les deux écrans gardent la barre
+   latérale et leurs onglets comme les autres portes. Ils ont été faits en
+   plein écran un temps, comme le dessine le doc de refonte — un écran dont on
+   ne sort qu'en revenant en arrière dérange plus qu'il n'aide. */
 .reading-body {
     font-size: 17px;
     line-height: 1.8;

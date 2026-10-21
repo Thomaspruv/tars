@@ -15,12 +15,11 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Livewire\Attributes\Computed;
-use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
-new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Component
+new #[Title('Bilan de vie')] class extends Component
 {
     #[Url(as: 'run')]
     public ?int $runId = null;
@@ -405,26 +404,24 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
 };
 ?>
 
-{{-- Même gabarit de lecture que la Revue. Différence de fond : le journal est
-     *mon* texte, il ne porte donc aucun marqueur vert — seules les questions
-     posées par l'agent en portent. La courbe d'humeur est en abricot, pas en
-     vert : c'est ma donnée, pas la sienne. --}}
+{{-- Même registre de lecture que la Revue — colonne de 680, corps à 17px —
+     et, comme elle, le Bilan reste une porte de l'app : barre latérale,
+     onglets, en-tête. Différence de fond avec la Revue : le journal est *mon*
+     texte, il ne porte donc aucun marqueur vert — seules les questions posées
+     par l'agent en portent. La courbe d'humeur est en abricot, pas en vert :
+     c'est ma donnée, pas la sienne. --}}
 <div>
-<div class="flex min-h-screen flex-col">
-    {{-- Comme la Revue : la barre du haut remplace la sidebar de l'app. Ce
-         qu'on quitte à gauche, la saison qu'on lit au milieu, de quoi changer
-         de bilan à droite. --}}
-    <div class="sticky top-0 z-10 flex flex-wrap items-center gap-4 border-b border-(--bd) bg-(--bg) px-5 py-3 lg:px-8">
-        <a href="{{ route('today') }}" wire:navigate class="press shrink-0 rounded-full px-3 py-1.5 text-[14px] text-(--mut) hover:text-(--tx)">← Quitter le bilan</a>
+    <x-space-tabs space="recul" class="mb-3.5 -ml-3.5" />
 
-        <p class="order-last w-full text-[11px] text-(--mut) kicker lg:order-none lg:w-auto lg:flex-1 lg:text-center">
-            Bilan de vie · {{ $this->periodLabel }}
-        </p>
-
-        <div class="ml-auto flex shrink-0 items-center gap-2">
+    <x-screen-header
+        :kicker="$this->periodLabel"
+        :title="ucfirst(($this->selectedRun?->due_date ?? today())->translatedFormat('F Y'))"
+        class="mb-[22px]"
+    >
+        <x-slot:actions>
             @if ($this->runHistory->isNotEmpty())
                 <flux:dropdown position="bottom" align="end">
-                    <button type="button" class="press rounded-full bg-(--surf2) px-3 py-1.5 text-[13px] text-(--tx) hover:bg-(--bd2)">Autre bilan</button>
+                    <button type="button" class="press rounded-full bg-(--surf2) px-3 py-1.5 text-[13px] font-bold text-(--tx) hover:bg-(--bd2)">Autre bilan</button>
 
                     <flux:menu>
                         @foreach ($this->runHistory as $run)
@@ -438,7 +435,7 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
             @endif
 
             <flux:dropdown position="bottom" align="end">
-                <button type="button" class="press rounded-full bg-(--surf2) px-3 py-1.5 text-[13px] text-(--tx) hover:bg-(--bd2)">Questionnaires</button>
+                <button type="button" class="press rounded-full bg-(--surf2) px-3 py-1.5 text-[13px] font-bold text-(--tx) hover:bg-(--bd2)">Questionnaires</button>
 
                 <flux:menu>
                     @foreach ($this->questionnaires as $questionnaire)
@@ -454,23 +451,11 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
                     <flux:menu.item as="button" wire:click="createQuestionnaire" icon="plus">Nouveau questionnaire</flux:menu.item>
                 </flux:menu>
             </flux:dropdown>
-        </div>
-    </div>
+        </x-slot:actions>
+    </x-screen-header>
 
-    <div class="flex min-w-0 flex-1 justify-center px-5 pt-6 pb-16 lg:px-10 lg:pt-10">
-        <div class="w-full max-w-[680px]">
-            <p class="mb-3 text-[12px] text-(--mut) kicker">
-                @if ($this->selectedRun)
-                    {{ $this->selectedRun->questionnaire->name }} · {{ count($this->selectedRun->questionnaire->questions) }} questions
-                @else
-                    Journal &amp; humeur
-                @endif
-            </p>
-
-            <h1 class="font-display mb-2.5 text-[42px] leading-[1.1] font-extrabold tracking-[-.03em] text-(--tx)">
-                {{ ucfirst(($this->selectedRun?->due_date ?? today())->translatedFormat('F Y')) }}
-            </h1>
-
+    <div class="max-w-[680px]">
+        <div>
             <p class="mb-[30px] text-[15px] leading-[1.6] text-(--mut)">{{ $this->seasonStats }}</p>
 
             {{-- La saison, objectif par objectif : une case = une semaine avec
@@ -654,10 +639,9 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
 
     {{-- Un bilan ne se termine pas par un bouton « enregistrer » : il se
          termine par la saison suivante. --}}
-    <div class="flex items-center justify-center border-t border-(--bd) px-5 py-4">
+    <div class="mt-8 flex max-w-[680px] border-t border-(--bd) pt-5">
         <x-btn variant="primary" size="md" :href="route('goals.index')" wire:navigate>Poser les objectifs de la saison qui vient →</x-btn>
     </div>
-</div>
 
     <flux:modal wire:model.self="showEntryModal" class="md:w-[480px]">
         <div class="space-y-5">
