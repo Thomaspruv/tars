@@ -3,6 +3,7 @@
 use App\Models\Entity;
 use App\Models\Event;
 use App\Models\Goal;
+use App\Models\Milestone;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -43,94 +44,79 @@ test('goToToday resets the displayed month', function () {
         ->assertSet('month', '2026-08');
 });
 
-test('does not show tasks on the calendar', function () {
-    Task::factory()->create(['title' => 'Tâche fantôme', 'scheduled_date' => Carbon::create(2026, 8, 15)]);
+/**
+ * Écran 10 du doc : le mois compte la charge. Il montre donc les tâches —
+ * « 2 tâches · 1 événement » — là où il n'affichait que des barres
+ * d'événements et laissait croire aux journées vides.
+ */
+test('the month counts the load of each day, tasks included', function () {
+    Task::factory()->count(2)->create(['scheduled_date' => Carbon::create(2026, 8, 15)]);
+    Event::factory()->create(['title' => 'Démo client', 'starts_at' => Carbon::create(2026, 8, 15, 10, 0)]);
 
-    Livewire::test('pages::calendar')->assertDontSee('Tâche fantôme');
+    Livewire::test('pages::calendar')
+        ->assertSee('2 tâches · 1 événement')
+        ->assertSee('10:00 Démo client');
 });
 
-test('a multi-day event spans every column it covers, not just its start day', function () {
-    $event = Event::factory()->create([
-        'starts_at' => Carbon::create(2026, 8, 5, 9, 0), // Wednesday
-        'ends_at' => Carbon::create(2026, 8, 7, 18, 0), // Friday
-    ]);
+test('a day shows two lines at most, and the deadline wins over the rest', function () {
+    Event::factory()->create(['title' => 'Démo client', 'starts_at' => Carbon::create(2026, 8, 12, 10, 0)]);
+    Task::factory()->create(['title' => 'Taxe foncière', 'due_date' => Carbon::create(2026, 8, 12)]);
 
-    $weeks = Livewire::test('pages::calendar')->instance()->weeks();
+    $days = Livewire::test('pages::calendar')->instance()->days();
 
-    $week = collect($weeks)->first(fn (array $w): bool => collect($w['days'])->contains(fn (Carbon $d): bool => $d->toDateString() === '2026-08-05'));
-
-    $placement = collect($week['laneRows'][0])->first(fn ($slot): bool => is_array($slot) && $slot['event']->id === $event->id);
-
-    expect($placement)->not->toBeNull()
-        ->and($placement['colSpan'])->toBe(3);
+    // Une échéance est une date qui ne se déplace pas : elle passe devant un
+    // rendez-vous, qui passe devant une tâche simplement planifiée.
+    expect($days['2026-08-12']['notable']['kind'])->toBe('deadline')
+        ->and($days['2026-08-12']['notable']['label'])->toBe('Taxe foncière')
+        ->and($days['2026-08-12']['deadlines'])->toBe(1);
 });
 
-test('a multi-day event spanning a week boundary is clipped to each week', function () {
-    // Aug 1 2026 is a Saturday; the grid's Monday-start week containing it
-    // runs Jul 27 -> Aug 2, so this event (Fri -> Wed the week after) crosses
-    // two weeks and must be clipped separately in each.
-    $event = Event::factory()->create([
-        'starts_at' => Carbon::create(2026, 7, 31, 9, 0), // Friday, week 1
-        'ends_at' => Carbon::create(2026, 8, 5, 18, 0), // Wednesday, week 2
-    ]);
-
-    $weeks = collect(Livewire::test('pages::calendar')->instance()->weeks());
-
-    $firstWeek = $weeks->first(fn (array $w): bool => collect($w['days'])->contains(fn (Carbon $d): bool => $d->toDateString() === '2026-07-31'));
-    $secondWeek = $weeks->first(fn (array $w): bool => collect($w['days'])->contains(fn (Carbon $d): bool => $d->toDateString() === '2026-08-05'));
-
-    $firstPlacement = collect($firstWeek['laneRows'][0])->first(fn ($slot): bool => is_array($slot) && $slot['event']->id === $event->id);
-    $secondPlacement = collect($secondWeek['laneRows'][0])->first(fn ($slot): bool => is_array($slot) && $slot['event']->id === $event->id);
-
-    expect($firstPlacement['colSpan'])->toBe(3) // Fri, Sat, Sun — clipped at the week's end
-        ->and($secondPlacement['colSpan'])->toBe(3); // Mon, Tue, Wed — clipped at the week's start
-});
-
-test('only the segment holding the true start/end is marked as such, for rounded corners and the time label', function () {
-    // Straddles a week boundary with exactly one day on each side, so both
-    // segments render at colSpan 1 — a prior bug showed the start time on
-    // both, implying the event "started" again on the continuation day.
-    $event = Event::factory()->create([
-        'starts_at' => Carbon::create(2026, 8, 16, 9, 0), // Sunday, week 2
-        'ends_at' => Carbon::create(2026, 8, 17, 20, 0), // Monday, week 3
-    ]);
-
-    $weeks = collect(Livewire::test('pages::calendar')->instance()->weeks());
-
-    $firstWeek = $weeks->first(fn (array $w): bool => collect($w['days'])->contains(fn (Carbon $d): bool => $d->toDateString() === '2026-08-16'));
-    $secondWeek = $weeks->first(fn (array $w): bool => collect($w['days'])->contains(fn (Carbon $d): bool => $d->toDateString() === '2026-08-17'));
-
-    $firstPlacement = collect($firstWeek['laneRows'][0])->first(fn ($slot): bool => is_array($slot) && $slot['event']->id === $event->id);
-    $secondPlacement = collect($secondWeek['laneRows'][0])->first(fn ($slot): bool => is_array($slot) && $slot['event']->id === $event->id);
-
-    expect($firstPlacement['isStart'])->toBeTrue()
-        ->and($firstPlacement['isEnd'])->toBeFalse()
-        ->and($secondPlacement['isStart'])->toBeFalse()
-        ->and($secondPlacement['isEnd'])->toBeTrue();
-});
-
-test('caps visible events per week and reports the rest as an overflow count', function () {
-    Event::factory()->count(5)->create(['starts_at' => Carbon::create(2026, 8, 10, 9, 0), 'ends_at' => null]);
-
-    $weeks = collect(Livewire::test('pages::calendar')->instance()->weeks());
-    $week = $weeks->first(fn (array $w): bool => collect($w['days'])->contains(fn (Carbon $d): bool => $d->toDateString() === '2026-08-10'));
-
-    expect($week['laneRows'])->toHaveCount(3)
-        ->and($week['overflow']['2026-08-10'])->toBe(2);
-});
-
-test('hovering an event shows its date range and goal in a tooltip', function () {
-    $goal = Goal::factory()->create(['title' => 'Refonte site', 'status' => 'active']);
-    Event::factory()->create([
-        'title' => 'Point hebdo',
-        'starts_at' => Carbon::create(2026, 8, 5, 14, 0),
-        'ends_at' => Carbon::create(2026, 8, 5, 15, 0),
-        'goal_id' => $goal->id,
+test('a pending milestone falls on the month as a deadline', function () {
+    $goal = Goal::factory()->create();
+    Milestone::factory()->for($goal)->create([
+        'title' => 'trois devis',
+        'target_date' => Carbon::create(2026, 8, 30),
+        'status' => 'pending',
     ]);
 
     Livewire::test('pages::calendar')
-        ->assertSee('05 août à 14:00')
-        ->assertSee('Refonte site');
+        ->assertSee('Jalon : trois devis')
+        ->assertSee('1 échéance');
+});
+
+test('a heavy day is tinted, a quiet one is not', function () {
+    Task::factory()->count(6)->create(['scheduled_date' => Carbon::create(2026, 8, 18)]);
+    Task::factory()->create(['scheduled_date' => Carbon::create(2026, 8, 19)]);
+
+    $component = Livewire::test('pages::calendar');
+
+    expect($component->instance()->isHeavy('2026-08-18'))->toBeTrue()
+        ->and($component->instance()->isHeavy('2026-08-19'))->toBeFalse()
+        ->and($component->html())->toContain('Journée chargée');
+});
+
+test('a multi-day event weighs on every day it covers, not just its first', function () {
+    Event::factory()->create([
+        'starts_at' => Carbon::create(2026, 8, 5, 9, 0),
+        'ends_at' => Carbon::create(2026, 8, 7, 18, 0),
+    ]);
+
+    $days = Livewire::test('pages::calendar')->instance()->days();
+
+    expect($days['2026-08-05']['events'])->toBe(1)
+        ->and($days['2026-08-06']['events'])->toBe(1)
+        ->and($days['2026-08-07']['events'])->toBe(1)
+        ->and($days['2026-08-08']['events'])->toBe(0);
+});
+
+test('the grid runs to the Sunday of the last week, so no cell is missing', function () {
+    $weeks = Livewire::test('pages::calendar')->instance()->weeks();
+
+    $all = collect($weeks)->flatten(1);
+
+    expect($all->first()->toDateString())->toBe('2026-07-27')
+        ->and($all->last()->toDateString())->toBe('2026-09-06')
+        ->and($all)->toHaveCount(42);
 });
 
 test('opening the edit modal populates the form from the event', function () {
