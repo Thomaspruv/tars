@@ -1,9 +1,14 @@
 <?php
 
+use App\Enums\GoalStatus;
 use App\Enums\QuestionnaireRunStatus;
+use App\Enums\TaskStatus;
+use App\Models\Goal;
 use App\Models\JournalEntry;
 use App\Models\Questionnaire;
 use App\Models\QuestionnaireRun;
+use App\Models\Review;
+use App\Models\Task;
 use App\Support\Journal\JournalWriter;
 use App\Support\Recurrence\RecurrenceCalculator;
 use Carbon\CarbonInterface;
@@ -174,6 +179,116 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
         unset($this->selectedRun);
     }
 
+    /**
+     * La saison du bilan : les douze semaines qui finissent avec lui. Le doc
+     * de refonte parlait de « domaines de vie » côte à côte ; ils n'existent
+     * pas en base (le modèle `LifeArea` a été retiré en juillet 2026), donc la
+     * ligne est un objectif, avec sa teinte. La question reste la même :
+     * est-ce que j'y mets ce que je voulais y mettre ?
+     */
+    #[Computed]
+    public function periodEnd(): CarbonInterface
+    {
+        return ($this->selectedRun?->due_date ?? today())->copy()->endOfWeek();
+    }
+
+    #[Computed]
+    public function periodStart(): CarbonInterface
+    {
+        return $this->periodEnd->copy()->subWeeks(11)->startOfWeek();
+    }
+
+    #[Computed]
+    public function periodLabel(): string
+    {
+        $start = $this->periodStart;
+        $end = $this->periodEnd;
+
+        return $start->year === $end->year
+            ? $start->translatedFormat('F').' – '.$end->translatedFormat('F Y')
+            : $start->translatedFormat('F Y').' – '.$end->translatedFormat('F Y');
+    }
+
+    /**
+     * Une ligne par objectif qui a bougé sur la saison : douze cases (une case
+     * = une semaine avec au moins une tâche cochée) et sa part du total.
+     *
+     * @return \Illuminate\Support\Collection<int, array{goal: Goal, weeks: list<bool>, share: int, done: int}>
+     */
+    #[Computed]
+    public function goalSeason(): \Illuminate\Support\Collection
+    {
+        $completed = Task::withArchived()
+            ->where('status', TaskStatus::Done)
+            ->whereNotNull('goal_id')
+            ->whereBetween('completed_at', [$this->periodStart, $this->periodEnd])
+            ->get(['goal_id', 'completed_at']);
+
+        if ($completed->isEmpty()) {
+            return collect();
+        }
+
+        $total = $completed->count();
+        $byGoal = $completed->groupBy('goal_id');
+
+        return Goal::whereIn('id', $byGoal->keys())
+            ->get()
+            ->map(function (Goal $goal) use ($byGoal, $total): array {
+                $tasks = $byGoal[$goal->id];
+
+                $weeks = [];
+
+                for ($index = 0; $index < 12; $index++) {
+                    $weekStart = $this->periodStart->copy()->addWeeks($index);
+                    $weekEnd = $weekStart->copy()->endOfWeek();
+
+                    $weeks[] = $tasks->contains(fn ($task): bool => $task->completed_at->between($weekStart, $weekEnd));
+                }
+
+                return [
+                    'goal' => $goal,
+                    'weeks' => $weeks,
+                    'done' => $tasks->count(),
+                    'share' => (int) round($tasks->count() / $total * 100),
+                ];
+            })
+            ->sortByDesc('done')
+            ->values();
+    }
+
+    /**
+     * Les chiffres de la saison, en une ligne — douze semaines, ce qui a été
+     * coché, les revues tenues, les objectifs atteints.
+     */
+    #[Computed]
+    public function seasonStats(): string
+    {
+        $done = Task::withArchived()
+            ->where('status', TaskStatus::Done)
+            ->whereBetween('completed_at', [$this->periodStart, $this->periodEnd])
+            ->count();
+
+        $reviews = Review::whereNotNull('completed_at')
+            ->whereBetween('period_end', [$this->periodStart, $this->periodEnd])
+            ->count();
+
+        $reached = Goal::where('status', GoalStatus::Done)
+            ->whereBetween('updated_at', [$this->periodStart, $this->periodEnd])
+            ->count();
+
+        $parts = [
+            '12 semaines',
+            $done.' '.Str::plural('tâche', $done).' '.Str::plural('cochée', $done),
+            $reviews.' '.Str::plural('revue', $reviews).' sur 12',
+        ];
+
+        if ($reached > 0) {
+            $parts[] = $reached.' '.Str::plural('objectif', $reached).' '.Str::plural('atteint', $reached);
+        }
+
+        return implode(' · ', $parts);
+    }
+
     #[Computed]
     public function timeline(): Collection
     {
@@ -295,63 +410,50 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
      posées par l'agent en portent. La courbe d'humeur est en abricot, pas en
      vert : c'est ma donnée, pas la sienne. --}}
 <div>
-<div class="flex min-h-screen">
-    <div class="hidden w-[236px] shrink-0 flex-col border-r border-(--bd) px-5 py-[26px] lg:flex">
-        <a href="{{ route('today') }}" wire:navigate class="mb-3.5 text-[13px] text-(--mut) hover:text-(--tx)">← Aujourd'hui</a>
+<div class="flex min-h-screen flex-col">
+    {{-- Comme la Revue : la barre du haut remplace la sidebar de l'app. Ce
+         qu'on quitte à gauche, la saison qu'on lit au milieu, de quoi changer
+         de bilan à droite. --}}
+    <div class="sticky top-0 z-10 flex flex-wrap items-center gap-4 border-b border-(--bd) bg-(--bg) px-5 py-3 lg:px-8">
+        <a href="{{ route('today') }}" wire:navigate class="press shrink-0 rounded-full px-3 py-1.5 text-[14px] text-(--mut) hover:text-(--tx)">← Quitter le bilan</a>
 
-        {{-- Ces écrans n'ont pas la barre latérale : les onglets de l'espace
-             passent donc dans leur colonne. --}}
-        <x-space-tabs variant="column" class="mb-[22px] -mx-3" />
+        <p class="order-last w-full text-[11px] tracking-[.1em] text-(--mut) uppercase lg:order-none lg:w-auto lg:flex-1 lg:text-center">
+            Bilan de vie · {{ $this->periodLabel }}
+        </p>
 
-        <p class="mb-3.5 text-[11px] tracking-[.12em] text-(--mut) uppercase">Bilans</p>
+        <div class="ml-auto flex shrink-0 items-center gap-2">
+            @if ($this->runHistory->isNotEmpty())
+                <flux:dropdown position="bottom" align="end">
+                    <button type="button" class="press rounded-full bg-(--surf2) px-3 py-1.5 text-[13px] text-(--tx) hover:bg-(--bd2)">Autre bilan</button>
 
-        <div class="mb-5 flex flex-col gap-0.5">
-            @forelse ($this->runHistory as $run)
-                @php $isCurrent = $this->selectedRun?->id === $run->id; @endphp
-                <button
-                    type="button"
-                    wire:click="selectRun({{ $run->id }})"
-                    wire:key="run-nav-{{ $run->id }}"
-                    class="press rounded-[12px] px-3.5 py-2.5 text-left {{ $isCurrent ? 'bg-(--surf2)' : 'hover:bg-(--surf)' }}"
-                >
-                    <span class="block text-[14px] {{ $isCurrent ? 'font-semibold text-(--tx)' : 'text-(--tx)' }}">
-                        {{ ucfirst($run->due_date->translatedFormat('F Y')) }}
-                    </span>
-                    <span class="block text-[12px] {{ $run->status === \App\Enums\QuestionnaireRunStatus::Pending ? 'text-(--warn)' : 'text-(--mut)' }}">
-                        {{ $run->status === \App\Enums\QuestionnaireRunStatus::Pending ? 'à remplir' : $run->questionnaire->name }}
-                    </span>
-                </button>
-            @empty
-                <p class="text-[13px] text-(--mut)">Aucun bilan pour l'instant.</p>
-            @endforelse
-        </div>
+                    <flux:menu>
+                        @foreach ($this->runHistory as $run)
+                            <flux:menu.item as="button" wire:click="selectRun({{ $run->id }})">
+                                {{ ucfirst($run->due_date->translatedFormat('F Y')) }}
+                                @if ($run->status === \App\Enums\QuestionnaireRunStatus::Pending) · à remplir @endif
+                            </flux:menu.item>
+                        @endforeach
+                    </flux:menu>
+                </flux:dropdown>
+            @endif
 
-        <p class="mb-3 text-[11px] tracking-[.12em] text-(--mut) uppercase">Questionnaires</p>
-        <div class="flex flex-col gap-2.5">
-            @foreach ($this->questionnaires as $questionnaire)
-                <div class="flex items-center gap-2.5" wire:key="questionnaire-{{ $questionnaire->id }}">
-                    <a
-                        href="{{ route('bilan.questionnaire.edit', $questionnaire) }}"
-                        wire:navigate
-                        class="min-w-0 flex-1 truncate text-[13px] {{ $questionnaire->is_active ? 'text-(--tx)' : 'text-(--mut)' }} hover:underline"
-                    >{{ $questionnaire->name }}</a>
-                    <x-toggle
-                        size="sm"
-                        wire:click="toggleQuestionnaire({{ $questionnaire->id }})"
-                        :checked="$questionnaire->is_active"
-                    />
-                </div>
-            @endforeach
+            <flux:dropdown position="bottom" align="end">
+                <button type="button" class="press rounded-full bg-(--surf2) px-3 py-1.5 text-[13px] text-(--tx) hover:bg-(--bd2)">Questionnaires</button>
 
-            <button type="button" wire:click="createQuestionnaire" class="mt-1 text-left text-[13px] text-(--mut) hover:text-(--tx)">
-                + Nouveau questionnaire
-            </button>
-        </div>
+                <flux:menu>
+                    @foreach ($this->questionnaires as $questionnaire)
+                        <flux:menu.item
+                            :href="route('bilan.questionnaire.edit', $questionnaire)"
+                            wire:navigate
+                            icon="{{ $questionnaire->is_active ? 'check-circle' : 'minus-circle' }}"
+                        >{{ $questionnaire->name }}</flux:menu.item>
+                    @endforeach
 
-        <div class="mt-auto border-t border-(--bd) pt-4">
-            <p class="text-[13px] leading-[1.6] text-(--mut)">
-                Journal rempli {{ $this->regularity30d['filled'] }} jours sur {{ $this->regularity30d['total'] }}.
-            </p>
+                    <flux:menu.separator />
+
+                    <flux:menu.item as="button" wire:click="createQuestionnaire" icon="plus">Nouveau questionnaire</flux:menu.item>
+                </flux:menu>
+            </flux:dropdown>
         </div>
     </div>
 
@@ -365,9 +467,56 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
                 @endif
             </p>
 
-            <h1 class="font-display mb-[30px] text-[42px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">
+            <h1 class="font-display mb-2.5 text-[42px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">
                 {{ ucfirst(($this->selectedRun?->due_date ?? today())->translatedFormat('F Y')) }}
             </h1>
+
+            <p class="mb-[30px] text-[15px] leading-[1.6] text-(--mut)">{{ $this->seasonStats }}</p>
+
+            {{-- La saison, objectif par objectif : une case = une semaine avec
+                 au moins une tâche cochée. C'est le seul endroit de l'app où
+                 toutes les teintes sont ensemble, et c'est voulu — c'est la
+                 seule question du bilan : est-ce que j'y mets ce que je
+                 voulais y mettre ? --}}
+            @if ($this->goalSeason->isNotEmpty())
+                <x-card padding="18" class="mb-8">
+                    <div class="flex flex-col gap-2.5">
+                        @foreach ($this->goalSeason as $row)
+                            <div class="flex items-center gap-3.5" wire:key="season-{{ $row['goal']->id }}">
+                                <span class="flex w-[120px] shrink-0 items-center gap-2 text-[13px] font-semibold text-(--tx)">
+                                    <span class="size-[8px] shrink-0 rounded-[2px]" style="background: var(--goal-{{ $row['goal']->color_slot }})" aria-hidden="true"></span>
+                                    <span class="truncate">{{ $row['goal']->title }}</span>
+                                </span>
+
+                                <span class="flex flex-1 gap-[3px]">
+                                    @foreach ($row['weeks'] as $active)
+                                        <span
+                                            class="h-[14px] flex-1 rounded-[3px] {{ $active ? '' : 'bg-(--bd2)' }}"
+                                            @if ($active) style="background: var(--goal-{{ $row['goal']->color_slot }})" @endif
+                                            aria-hidden="true"
+                                        ></span>
+                                    @endforeach
+                                </span>
+
+                                <span class="w-[42px] shrink-0 text-right text-[13px] font-semibold tabular-nums text-(--tx)">{{ $row['share'] }} %</span>
+                            </div>
+                        @endforeach
+                    </div>
+
+                    <div class="mt-3 flex flex-wrap items-baseline justify-between gap-2 text-[12px] text-(--mut)">
+                        <span>{{ $this->periodStart->translatedFormat('F') }}</span>
+                        <span>une case = une semaine avec au moins une tâche cochée</span>
+                        <span>{{ $this->periodEnd->translatedFormat('F') }}</span>
+                    </div>
+                </x-card>
+            @else
+                <x-card padding="18" class="mb-8">
+                    <p class="text-[15px] leading-[1.6] text-(--mut)">
+                        Aucune tâche rattachée à un objectif n'a été cochée sur ces douze semaines : il n'y a
+                        rien à répartir.
+                    </p>
+                </x-card>
+            @endif
 
             {{-- L'humeur du jour : dix pavés, un seul allumé, en abricot. --}}
             <div class="mb-4 flex items-baseline gap-3">
@@ -501,6 +650,12 @@ new #[Layout('layouts::reading')] #[Title('Bilan de vie')] class extends Compone
                 {{ $this->todayEntry ? "Compléter l'entrée du jour" : "Écrire l'entrée du jour" }}
             </x-btn>
         </div>
+    </div>
+
+    {{-- Un bilan ne se termine pas par un bouton « enregistrer » : il se
+         termine par la saison suivante. --}}
+    <div class="flex items-center justify-center border-t border-(--bd) px-5 py-4">
+        <x-btn variant="primary" size="md" :href="route('goals.index')" wire:navigate>Poser les objectifs de la saison qui vient →</x-btn>
     </div>
 </div>
 

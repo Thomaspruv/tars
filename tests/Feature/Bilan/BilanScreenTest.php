@@ -1,8 +1,10 @@
 <?php
 
+use App\Models\Goal;
 use App\Models\JournalEntry;
 use App\Models\Questionnaire;
 use App\Models\QuestionnaireRun;
+use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Facades\File;
 use Livewire\Livewire;
@@ -24,12 +26,16 @@ test('guests are redirected to the login page', function () {
     $this->get(route('bilan.index'))->assertRedirect(route('login'));
 });
 
-test('it renders the journal and the bilan rail on one reading page', function () {
+test('it renders the season, the journal and the mood on one reading page', function () {
     $this->actingAs(User::factory()->create());
 
+    // La colonne de gauche a laissé place à une barre d'étape : l'historique
+    // des bilans et les questionnaires sont dans ses deux menus.
     $this->get(route('bilan.index'))
         ->assertSee('Journal')
-        ->assertSee('Bilans')
+        ->assertSee('Quitter le bilan')
+        ->assertSee('Questionnaires')
+        ->assertSee('12 semaines')
         ->assertSee('Humeur du jour');
 });
 
@@ -126,4 +132,36 @@ test('picking a new mood after a clear cancels the clear flag', function () {
 
     expect($component->get('entryMood'))->toBe(8)
         ->and($component->get('entryMoodCleared'))->toBeFalse();
+});
+
+/**
+ * Écran 12 du doc : une ligne par « domaine », côte à côte sur douze semaines.
+ * Les domaines de vie n'existent pas en base (le modèle a été retiré en
+ * juillet 2026), donc la ligne est un objectif, avec sa teinte — la question
+ * du bilan reste la même.
+ */
+test('the season shows one twelve-week line per goal that moved', function () {
+    $this->actingAs(User::factory()->create());
+
+    $spreak = Goal::factory()->create(['title' => 'Abonnement annuel']);
+    $sante = Goal::factory()->create(['title' => 'Courir 10 km']);
+
+    Task::factory()->count(3)->for($spreak)->create(['status' => 'done', 'completed_at' => now()->subWeeks(2)]);
+    Task::factory()->for($sante)->create(['status' => 'done', 'completed_at' => now()->subWeeks(5)]);
+
+    $component = Livewire::test('pages::bilan');
+    $season = $component->instance()->goalSeason();
+
+    expect($season->pluck('goal.title')->all())->toBe(['Abonnement annuel', 'Courir 10 km'])
+        ->and($season->first()['share'])->toBe(75)
+        ->and(collect($season->first()['weeks'])->filter()->count())->toBe(1);
+
+    $component->assertSee('une case = une semaine avec au moins une tâche cochée')
+        ->assertSee('4 tâches cochées');
+});
+
+test('a season with nothing attached to a goal says so instead of drawing empty rows', function () {
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages::bilan')->assertSee('rien à répartir');
 });
