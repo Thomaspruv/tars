@@ -15,7 +15,7 @@ $aside = Spaces::aside();
 
 ?>
 
-<aside class="fixed inset-y-0 left-0 z-20 hidden w-[232px] flex-col px-4 py-[22px] lg:flex">
+<aside class="sticky top-0 z-20 hidden h-screen w-[232px] shrink-0 flex-col px-4 py-[22px] lg:flex">
     <a href="{{ route('today') }}" wire:navigate class="mb-[22px] flex items-center gap-[11px] px-2.5">
         <x-app-logo-icon class="size-[22px]" />
         <span class="font-display text-[19px] font-extrabold tracking-[-.01em] text-(--tx)">TARS</span>

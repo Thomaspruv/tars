@@ -547,34 +547,6 @@ new #[Title('Mémoire')] class extends Component
     </x-screen-header>
 
     @if ($this->configured)
-        {{-- La santé de la mémoire, en tête : le contrat tenu, l'état de la
-             synchro, et l'alerte s'il y a eu un conflit. --}}
-        <div class="mb-[22px] flex flex-wrap items-center gap-x-6 gap-y-2.5">
-            <div class="min-w-[180px]">
-                <div class="h-[5px] w-full overflow-hidden rounded-full bg-(--surf2)" role="img" aria-label="{{ $this->health->conformanceRate }} % des notes respectent le contrat">
-                    <div class="h-full rounded-full bg-(--ai)" style="width: {{ $this->health->conformanceRate }}%"></div>
-                </div>
-            </div>
-
-            <p class="text-[13px] text-(--mut)">
-                Dernier push
-                <span class="font-semibold text-(--tx)">{{ $this->lastPushedAt?->diffForHumans() ?? '—' }}</span>
-            </p>
-
-            @if ($this->health->misplaced > 0)
-                <p class="text-[13px] text-(--mut)">
-                    <span class="font-semibold text-(--warn)">{{ $this->health->misplaced }}</span>
-                    hors dossier cible
-                </p>
-            @endif
-
-            @if ($this->health->sasNotes > 0)
-                <p class="text-[13px] text-(--mut)">
-                    Sas <span class="font-semibold text-(--tx)">{{ $this->health->sasNotes }}</span>
-                </p>
-            @endif
-        </div>
-
         @if ($this->conflictAlert['at'])
             <div class="mb-[22px] max-w-[620px] rounded-[16px] border border-(--dgr) bg-(--surf) p-4">
                 <p class="mb-1 text-[13px] font-semibold text-(--dgr)">Conflit git — {{ $this->conflictAlert['at']->diffForHumans() }}</p>
@@ -585,30 +557,32 @@ new #[Title('Mémoire')] class extends Component
     @endif
     <div class="grid grid-cols-1 items-start gap-x-7 gap-y-6 lg:grid-cols-[232px_minmax(0,1fr)] xl:grid-cols-[232px_minmax(0,1fr)_316px]">
         {{-- L'arborescence est une colonne de l'écran, plus une barre latérale
-             concurrente de celle de l'app. --}}
-        <div class="hidden min-w-0 flex-col lg:flex">
-            <input
-                type="text"
-                wire:model.live.debounce.400ms="search"
-                placeholder="Rechercher…"
-                class="mb-3 w-full rounded-full bg-(--surf2) px-3.5 py-2 text-[13px] text-(--tx) placeholder:text-(--mut) focus:outline-none"
-            />
+             concurrente de celle de l'app — et elle est posée sur une carte,
+             comme toutes les listes de Tars. --}}
+        <x-card padding="0" class="hidden overflow-hidden lg:block">
+            <div class="border-b border-(--bd) p-2.5">
+                <input
+                    type="text"
+                    wire:model.live.debounce.400ms="search"
+                    placeholder="Rechercher…"
+                    class="w-full rounded-full bg-(--surf2) px-3.5 py-2 text-[13px] text-(--tx) placeholder:text-(--mut) focus:outline-none"
+                />
+            </div>
 
-            <div class="min-h-0 flex-1 overflow-y-auto">
+            <div class="max-h-[560px] overflow-y-auto p-2">
                 @if (trim($search) !== '')
                     <div class="flex flex-col gap-px">
                         @forelse ($this->searchResults as $result)
                             <button
                                 type="button"
                                 wire:click="selectDocument('{{ $result->path }}')"
-                                class="press block w-full truncate rounded-[8px] px-3 py-[7px] text-left text-[13px] {{ $path === $result->path ? 'bg-(--surf2) text-(--tx)' : 'text-(--mut) hover:bg-(--surf) hover:text-(--tx)' }}"
+                                class="press block w-full truncate rounded-[8px] px-3 py-[7px] text-left text-[13px] {{ $path === $result->path ? 'bg-(--surf2) font-semibold text-(--tx)' : 'text-(--tx) hover:bg-(--surf2)' }}"
                             >{{ $result->title }}</button>
                         @empty
                             <p class="px-3 py-2 text-[12px] text-(--mut)">Aucun résultat.</p>
                         @endforelse
                     </div>
                 @else
-                    <p class="px-3 pb-2.5 text-[11px] text-(--mut) kicker">Arborescence</p>
                     <x-brain-tree :tree="$this->tree" :selected-path="$path" :non-conformant-paths="$this->nonConformantPaths" />
                 @endif
             </div>
@@ -622,14 +596,36 @@ new #[Title('Mémoire')] class extends Component
                         default => ['text-(--mut)', 'bg-(--mut)', 'État git inconnu'],
                     };
                 @endphp
-                <div class="mt-auto border-t border-(--bd) px-3 pt-3.5">
-                    <p class="mb-1.5 flex items-center gap-2.5 text-[12px] {{ $gitTone[0] }}">
-                        <span class="size-[7px] rounded-full {{ $gitTone[1] }}" aria-hidden="true"></span>{{ $gitTone[2] }}
+
+                {{-- Le pied de la carte : le contrat tenu, puis l'état de la
+                     synchro. Avant, la jauge flottait seule en haut de l'écran,
+                     sans contenant ni libellé. --}}
+                <div class="flex flex-col gap-2 border-t border-(--bd) px-4 py-3">
+                    <div class="h-[5px] w-full overflow-hidden rounded-full bg-(--surf2)" role="img" aria-label="{{ $this->health->conformanceRate }} % des notes respectent le contrat">
+                        <div class="h-full rounded-full bg-(--ai)" style="width: {{ $this->health->conformanceRate }}%"></div>
+                    </div>
+
+                    <p class="flex items-center gap-2 text-[12px] {{ $gitTone[0] }}">
+                        <span class="size-[7px] shrink-0 rounded-full {{ $gitTone[1] }}" aria-hidden="true"></span>{{ $gitTone[2] }}
+                        <span class="ml-auto font-mono text-[11px] text-(--mut)">{{ $this->gitBranch }}</span>
                     </p>
-                    <p class="font-mono text-[11px] leading-[1.6] text-(--mut)">{{ $this->gitBranch }}</p>
+
+                    <p class="text-[12px] text-(--mut)">
+                        Dernier push <span class="font-semibold text-(--tx)">{{ $this->lastPushedAt?->diffForHumans() ?? '—' }}</span>
+                    </p>
+
+                    @if ($this->health->misplaced > 0)
+                        <p class="text-[12px] text-(--mut)">
+                            <span class="font-semibold text-(--warn)">{{ $this->health->misplaced }}</span> hors dossier cible
+                        </p>
+                    @endif
+
+                    @if ($this->health->sasNotes > 0)
+                        <p class="text-[12px] text-(--mut)">Sas <span class="font-semibold text-(--tx)">{{ $this->health->sasNotes }}</span></p>
+                    @endif
                 </div>
             @endif
-        </div>
+        </x-card>
 
         <div class="min-w-0">
         @if (! $this->configured)
@@ -638,11 +634,18 @@ new #[Title('Mémoire')] class extends Component
                 <a href="{{ route('settings.index') }}" wire:navigate class="text-[15px] text-(--ac) hover:text-(--achov)">Le configurer dans les Réglages →</a>
             </x-card>
         @elseif (! $this->selectedDocument)
-            <div class="lg:hidden">
-                <p class="mb-3.5 text-[11px] text-(--mut) kicker">Arborescence</p>
-                <x-brain-tree :tree="$this->tree" :selected-path="$path" :non-conformant-paths="$this->nonConformantPaths" />
+            <div class="mb-4 lg:hidden">
+                <p class="mb-2.5 text-[11px] text-(--mut) kicker">Arborescence</p>
+                <x-card padding="14"><x-brain-tree :tree="$this->tree" :selected-path="$path" :non-conformant-paths="$this->nonConformantPaths" /></x-card>
             </div>
-            <p class="mt-6 text-[15px] text-(--mut)">Choisis une note dans l'arborescence.</p>
+
+            <x-card tone="dashed" padding="22" class="max-w-[620px]">
+                <p class="text-[14px] leading-[1.6] text-(--mut)">
+                    Choisis une note dans l'arborescence, ou pose-en une nouvelle — c'est TARS qui calcule
+                    où elle sera rangée.
+                </p>
+                <x-btn variant="secondary" class="mt-3.5 self-start" wire:click="openCreateModal">Nouvelle note</x-btn>
+            </x-card>
         @else
             <div class="mb-[22px] flex flex-wrap items-center gap-3.5">
                 <span class="font-mono text-[12px] text-(--mut)">{{ str_replace('/', ' / ', $this->selectedDocument->path) }}</span>
@@ -771,13 +774,15 @@ new #[Title('Mémoire')] class extends Component
                     </div>
                 </x-agent-block>
             @empty
-                <p class="text-[13px] text-(--mut)">
-                    @if ($this->health->conformanceRate >= 100)
-                        Tout le cerveau respecte le contrat.
-                    @else
-                        Aucune proposition en attente.
-                    @endif
-                </p>
+                <x-card padding="16">
+                    <p class="text-[13px] leading-[1.6] text-(--mut)">
+                        @if ($this->health->conformanceRate >= 100)
+                            Toute la mémoire respecte le contrat.
+                        @else
+                            Aucune proposition en attente.
+                        @endif
+                    </p>
+                </x-card>
             @endforelse
         </div>
 
