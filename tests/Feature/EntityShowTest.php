@@ -27,10 +27,15 @@ test('it shows the entity with open tasks and linked goals', function () {
 
     $response = $this->get(route('entities.show', $entity));
 
+    // L'historique de la fiche mêle à venir et passé : une tâche cochée y
+    // reste, barrée, parce que c'est elle qui mesure la relation. C'est le
+    // sens de l'écran 9 du doc de refonte — avant, la fiche ne montrait que
+    // l'ouvert et on ne savait pas depuis quand on n'avait rien fait.
     $response->assertSee('SARL Alpha')
         ->assertSee('Preparer TVA')
         ->assertSee('500k CA')
-        ->assertDontSee('Ancienne tache');
+        ->assertSee('Ancienne tache')
+        ->assertSee('Passé');
 });
 
 test('a recurring subtask is excluded from the recurring-deadlines list', function () {
@@ -173,4 +178,59 @@ test('it shows outgoing and incoming entity relations', function () {
 
     $this->get(route('entities.show', $person))->assertSee('Acme Corp');
     $this->get(route('entities.show', $company))->assertSee('Jean Dupont')->assertSee('entrant');
+});
+
+/**
+ * Écran 9 du doc : l'entité ne porte qu'une mesure, le temps depuis le dernier
+ * échange. Ce qui est *prévu* ne compte pas — prévoir un appel n'est pas avoir
+ * parlé.
+ */
+test('the sheet says how long an entity has been silent', function () {
+    $this->actingAs(User::factory()->create());
+
+    $entity = Entity::factory()->create(['name' => 'Syndic Ravel']);
+    Task::factory()->done()->create([
+        'entity_id' => $entity->id,
+        'title' => 'Récupérer le devis',
+        'completed_at' => now()->subDays(21),
+    ]);
+    Task::factory()->create([
+        'entity_id' => $entity->id,
+        'title' => 'Relancer le syndic',
+        'due_date' => today()->addDays(3),
+    ]);
+
+    $this->get(route('entities.show', $entity))
+        ->assertSee('Muet depuis 21 jours')
+        ->assertSee('À venir')
+        ->assertSee('Relancer le syndic');
+});
+
+test('a lively entity says nothing about silence at all', function () {
+    $this->actingAs(User::factory()->create());
+
+    $entity = Entity::factory()->create();
+    Task::factory()->done()->create(['entity_id' => $entity->id, 'completed_at' => now()->subDays(2)]);
+
+    $this->get(route('entities.show', $entity))->assertDontSee('Muet depuis');
+});
+
+test('the history can be narrowed to one kind of thing, and never to mail', function () {
+    $this->actingAs(User::factory()->create());
+
+    $entity = Entity::factory()->create();
+    Task::factory()->create(['entity_id' => $entity->id, 'title' => 'Appeler le syndic']);
+    $entity->notes()->create(['content' => 'Vote du ravalement à 68 %', 'source' => 'user']);
+
+    Livewire::test('pages::entities.show', ['entity' => $entity])
+        ->assertSee('Appeler le syndic')
+        ->assertSee('Vote du ravalement')
+        // Aucun mail n'entre en base aujourd'hui : le filtre du doc n'existe pas.
+        ->assertDontSee('Mails')
+        ->call('showHistoryFilter', 'notes')
+        ->assertSee('Vote du ravalement')
+        ->assertDontSee('Appeler le syndic')
+        ->call('showHistoryFilter', 'taches')
+        ->assertSee('Appeler le syndic')
+        ->assertDontSee('Vote du ravalement');
 });
