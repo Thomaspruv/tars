@@ -74,6 +74,37 @@ class Goal extends Model
     }
 
     /**
+     * L'horizon de l'objectif : « ce trimestre », « cette année ».
+     *
+     * Le doc de refonte posait l'horizon comme un attribut à part, à côté d'un
+     * domaine de vie. Ni l'un ni l'autre n'existent en base, et une colonne de
+     * plus à saisir pour une information déjà contenue dans l'échéance n'aurait
+     * rien dit de nouveau : l'horizon se déduit donc de `target_date`.
+     *
+     * @return Attribute<string, never>
+     */
+    protected function horizonLabel(): Attribute
+    {
+        return Attribute::make(get: function (): string {
+            if ($this->target_date === null) {
+                return 'sans échéance';
+            }
+
+            if ($this->target_date->isPast()) {
+                return 'échéance dépassée';
+            }
+
+            $months = today()->diffInMonths($this->target_date);
+
+            return match (true) {
+                $months < 4 => 'ce trimestre',
+                $months < 13 => 'cette année',
+                default => 'au-delà d\'un an',
+            };
+        })->shouldCache();
+    }
+
+    /**
      * @return BelongsTo<Entity, $this>
      */
     public function entity(): BelongsTo

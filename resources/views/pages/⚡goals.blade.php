@@ -1,15 +1,35 @@
 <?php
 
 use App\Enums\GoalStatus;
+use App\Enums\MilestoneStatus;
 use App\Models\Entity;
 use App\Models\Goal;
+use App\Models\Task;
+use App\Support\Goals\GoalRhythm;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 new #[Title('Objectifs')] class extends Component
 {
+    /**
+     * Les trois états d'un objectif, dits comme on les pense. Le doc de
+     * refonte proposait un horizon (trimestre / année) : il n'existe pas en
+     * base, et l'inventer ici aurait voulu dire une colonne de plus pour une
+     * information que personne n'a encore saisie.
+     */
+    public const array VIEWS = [
+        'en-cours' => ['label' => 'En cours', 'status' => GoalStatus::Active],
+        'en-pause' => ['label' => 'En pause', 'status' => GoalStatus::Paused],
+        'atteints' => ['label' => 'Atteints', 'status' => GoalStatus::Done],
+    ];
+
+    #[Url]
+    public string $view = 'en-cours';
+
     public bool $showCreateModal = false;
 
     public string $title = '';
@@ -20,67 +40,164 @@ new #[Title('Objectifs')] class extends Component
 
     public ?string $targetDate = null;
 
+    public function mount(): void
+    {
+        if (! array_key_exists($this->view, self::VIEWS)) {
+            $this->view = 'en-cours';
+        }
+    }
+
     /**
-     * Les objectifs sont groupés par état, pas par domaine : « où j'en suis »
-     * se lit d'abord dans ce qui avance, ce qui dort et ce qui est fini.
-     *
-     * @return array<string, Collection>
+     * @return Collection<int, Goal>
      */
     #[Computed]
-    public function groupedGoals(): array
+    public function goals(): Collection
     {
-        $groups = [
-            'En cours' => $this->goals->where('status', GoalStatus::Active),
-            'En pause' => $this->goals->where('status', GoalStatus::Paused),
-            'Atteints' => $this->goals->where('status', GoalStatus::Done),
-        ];
+        return Goal::where('status', self::VIEWS[$this->view]['status']->value)
+            ->orderBy('position')
+            ->with(['milestones' => fn ($query) => $query->orderBy('position'), 'entity'])
+            ->get();
+    }
 
-        return array_filter($groups, fn (Collection $goals): bool => $goals->isNotEmpty());
+    /**
+     * Quand chaque objectif a bougé pour la dernière fois — l'ordre de la
+     * grille en dépend : ce qui dort passe devant, sans rouge.
+     *
+     * @return array<int, CarbonInterface>
+     */
+    #[Computed]
+    public function lastActivity(): array
+    {
+        return GoalRhythm::lastActivityFor($this->goals);
+    }
+
+    /**
+     * @return Collection<int, Goal>
+     */
+    #[Computed]
+    public function orderedGoals(): Collection
+    {
+        if ($this->view !== 'en-cours') {
+            return $this->goals;
+        }
+
+        return $this->goals->sortBy(fn (Goal $goal): int => ($this->lastActivity[$goal->id] ?? null)?->getTimestamp() ?? 0)->values();
+    }
+
+    /**
+     * Les tâches ouvertes de la semaine, par objectif — une requête pour toute
+     * la grille.
+     *
+     * @return array<int, int>
+     */
+    #[Computed]
+    public function weekTaskCounts(): array
+    {
+        return Task::open()
+            ->topLevel()
+            ->whereIn('goal_id', $this->goals->pluck('id'))
+            ->where(fn ($query) => $query
+                ->whereBetween('scheduled_date', [today(), today()->endOfWeek()])
+                ->orWhereBetween('due_date', [today(), today()->endOfWeek()]))
+            ->selectRaw('goal_id, count(*) as total')
+            ->groupBy('goal_id')
+            ->pluck('total', 'goal_id')
+            ->all();
     }
 
     #[Computed]
     public function headerCounts(): string
     {
-        $parts = [];
+        $label = mb_strtolower(self::VIEWS[$this->view]['label']);
+        $moved = collect($this->lastActivity)
+            ->filter(fn (CarbonInterface $at): bool => $at->greaterThanOrEqualTo(now()->startOfWeek()))
+            ->count();
 
-        foreach ($this->groupedGoals as $label => $goals) {
-            $parts[] = $goals->count().' '.mb_strtolower($label);
+        if ($this->goals->isEmpty()) {
+            return 'aucun objectif '.$label;
         }
 
-        return $parts === [] ? 'aucun objectif' : implode(' · ', $parts);
+        $parts = [$this->goals->count().' '.$label];
+
+        if ($moved > 0) {
+            $parts[] = $moved.' '.($moved === 1 ? 'a bougé' : 'ont bougé').' cette semaine';
+        }
+
+        return implode(' · ', $parts);
     }
 
+    /**
+     * La seule information que l'app ajoute d'elle-même sur cet écran : le
+     * premier objectif qui a décroché, et ce qui est déjà prévu pour le
+     * relancer. Une phrase, un bouton, et rien d'autre — voir le rail
+     * « TARS propose » d'Aujourd'hui, même grammaire.
+     *
+     * @return array{goal: Goal, text: string}|null
+     */
     #[Computed]
-    public function goals(): Collection
+    public function idleNote(): ?array
     {
-        return Goal::orderBy('position')->with([
-            'milestones',
-            'tasks' => fn ($query) => $query->where('status', 'done')
-                ->where('completed_at', '>=', now()->subWeeks(6))
-                ->select('id', 'goal_id', 'completed_at'),
-        ])->get();
+        if ($this->view !== 'en-cours') {
+            return null;
+        }
+
+        $goal = $this->orderedGoals->first(
+            fn (Goal $goal): bool => GoalRhythm::isStagnant($this->lastActivity[$goal->id])
+        );
+
+        if (! $goal) {
+            return null;
+        }
+
+        $weeks = (int) intdiv((int) $this->lastActivity[$goal->id]->startOfDay()->diffInDays(today(), absolute: true), 7);
+        $planned = $this->weekTaskCounts[$goal->id] ?? 0;
+        $next = $goal->milestones->firstWhere('status', MilestoneStatus::Pending);
+
+        $text = '« '.$goal->title.' » n\'a pas bougé depuis '.$weeks.' semaines.';
+        $plannedSentence = $planned === 1 ? '1 tâche est prévue cette semaine' : $planned.' tâches sont prévues cette semaine';
+
+        if ($planned > 0 && $next) {
+            $text .= ' '.$plannedSentence.' : si tu '.($planned === 1 ? 'la coches' : 'les coches')
+                .', le jalon « '.$next->title.' » tombe.';
+        } elseif ($planned > 0) {
+            $text .= ' '.$plannedSentence.'.';
+        } else {
+            $text .= ' Rien n\'est prévu cette semaine non plus.';
+        }
+
+        return ['goal' => $goal, 'text' => $text];
     }
 
+    /**
+     * @return Collection<int, Entity>
+     */
     #[Computed]
     public function allEntities(): Collection
     {
         return Entity::orderBy('name')->get();
     }
 
-    public function weeklyActivityFor(Goal $goal): array
+    /**
+     * Les trois vues, pour le gabarit : `self::` ne résout pas dans la partie
+     * Blade d'un composant monofichier.
+     *
+     * @return array<string, array{label: string, status: GoalStatus}>
+     */
+    #[Computed]
+    public function views(): array
     {
-        return collect(range(5, 0))->map(function (int $weeksAgo) use ($goal): int {
-            $weekStart = now()->subWeeks($weeksAgo)->startOfWeek();
-            $weekEnd = $weekStart->copy()->endOfWeek();
-
-            return $goal->tasks->filter(fn ($task) => $task->completed_at->between($weekStart, $weekEnd))->count();
-        })->all();
+        return self::VIEWS;
     }
 
-    public function isStagnant(Goal $goal): bool
+    public function showView(string $view): void
     {
-        return $goal->status === GoalStatus::Active
-            && $goal->tasks->where('completed_at', '>=', now()->subWeeks(3))->isEmpty();
+        if (! array_key_exists($view, self::VIEWS)) {
+            return;
+        }
+
+        $this->view = $view;
+
+        unset($this->goals, $this->orderedGoals, $this->lastActivity, $this->weekTaskCounts, $this->headerCounts, $this->idleNote);
     }
 
     public function openCreateModal(): void
@@ -106,44 +223,84 @@ new #[Title('Objectifs')] class extends Component
         ]);
 
         $this->showCreateModal = false;
-        unset($this->goals);
+        $this->view = 'en-cours';
+
+        unset($this->goals, $this->orderedGoals, $this->lastActivity, $this->weekTaskCounts, $this->headerCounts, $this->idleNote);
     }
 };
 ?>
 
+{{-- Un objectif, une carte, une jauge de jalons. Le rythme (quand ça a bougé
+     pour la dernière fois) est la seule information secondaire : l'objectif qui
+     dort depuis trois semaines passe devant, sans rouge. --}}
 <div>
-    <x-space-tabs class="mb-3.5 -ml-3.5" />
+    <x-space-tabs space="objectifs" class="mb-3.5 -ml-3.5" />
 
     <x-screen-header :kicker="$this->headerCounts" title="Objectifs" class="mb-[22px]">
         <x-slot:actions>
+            <div class="flex items-center gap-1 rounded-full bg-(--surf2) p-1">
+                @foreach ($this->views as $key => $definition)
+                    <button
+                        type="button"
+                        wire:click="showView('{{ $key }}')"
+                        @class([
+                            'press rounded-full px-3.5 py-1.5 text-[13px]',
+                            'bg-(--surf) font-semibold text-(--tx)' => $this->view === $key,
+                            'text-(--mut) hover:text-(--tx)' => $this->view !== $key,
+                        ])
+                        @if ($this->view === $key) aria-current="true" @endif
+                    >{{ $definition['label'] }}</button>
+                @endforeach
+            </div>
+
             <x-btn variant="secondary" wire:click="openCreateModal">Nouvel objectif</x-btn>
         </x-slot:actions>
     </x-screen-header>
 
-    @forelse ($this->groupedGoals as $label => $goals)
-        <div class="mb-3 flex items-center gap-2.5" wire:key="group-{{ Str::slug($label) }}">
-            <h2 class="font-display text-[17px] font-semibold {{ $label === 'En pause' ? 'text-(--mut)' : 'text-(--tx)' }}">{{ $label }}</h2>
-            <span class="text-[13px] text-(--mut)">{{ $goals->count() }} {{ Str::plural('objectif', $goals->count()) }}</span>
-        </div>
+    @if ($this->idleNote)
+        <x-agent-block padding="16" class="mb-[22px] max-w-[1200px]">
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-2.5">
+                <p class="min-w-[280px] flex-1 text-[14px] leading-[1.5] text-(--tx)">{{ $this->idleNote['text'] }}</p>
+                <x-btn variant="agent" size="xs" :href="route('goals.show', $this->idleNote['goal'])" wire:navigate>Voir l'objectif</x-btn>
+            </div>
+        </x-agent-block>
+    @endif
 
-        <div class="mb-6 grid items-start gap-3.5" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr))">
-            @foreach ($goals as $goal)
+    @if ($this->orderedGoals->isNotEmpty())
+        <div class="grid max-w-[1200px] grid-cols-1 items-start gap-3.5 xl:grid-cols-2">
+            @foreach ($this->orderedGoals as $goal)
                 <x-card-goal
                     :goal="$goal"
-                    :weekly-activity="$this->weeklyActivityFor($goal)"
-                    :stagnant="$this->isStagnant($goal)"
+                    :last-activity="$this->lastActivity[$goal->id]"
+                    :week-tasks="$this->weekTaskCounts[$goal->id] ?? 0"
                     wire:key="goal-{{ $goal->id }}"
                 />
             @endforeach
+
+            {{-- La case vide dit ce que l'écran pense : cinq objectifs, c'est
+                 déjà beaucoup. Elle n'apparaît que là où l'on en pose. --}}
+            @if ($this->view === 'en-cours')
+                <button
+                    type="button"
+                    wire:click="openCreateModal"
+                    class="press flex min-h-[132px] items-center justify-center rounded-[18px] border-2 border-dashed border-(--bd2) px-[22px] py-5 text-center text-[14px] leading-[1.5] text-(--mut) hover:border-(--bd3) hover:text-(--tx)"
+                >+ Un objectif de plus, ou pas. Cinq, c'est déjà beaucoup.</button>
+            @endif
         </div>
-    @empty
+    @else
         <x-card tone="dashed" padding="18" class="max-w-[520px]">
             <p class="text-[14px] leading-[1.6] text-(--mut)">
-                Aucun objectif ouvert. Poser un objectif est la façon la plus simple de faire remonter une jauge de saison.
+                @if ($this->view === 'en-cours')
+                    Aucun objectif ouvert. Poser un objectif est la façon la plus simple de faire remonter une jauge de saison.
+                @else
+                    Aucun objectif {{ mb_strtolower($this->views[$this->view]['label']) }}.
+                @endif
             </p>
-            <x-btn variant="secondary" class="mt-3.5 self-start" wire:click="openCreateModal">Poser un objectif</x-btn>
+            @if ($this->view === 'en-cours')
+                <x-btn variant="secondary" class="mt-3.5 self-start" wire:click="openCreateModal">Poser un objectif</x-btn>
+            @endif
         </x-card>
-    @endforelse
+    @endif
 
     <flux:modal wire:model.self="showCreateModal" class="md:w-[420px]">
         <div class="space-y-5">
@@ -172,7 +329,7 @@ new #[Title('Objectifs')] class extends Component
 
             <div>
                 <label class="text-[12px] text-(--mut)">Description (optionnel)</label>
-                <textarea wire:model="description" rows="3" class="mt-1.5 w-full rounded-full bg-(--surf2) px-4 py-2.5 text-[14px] text-(--tx) focus:outline-none"></textarea>
+                <textarea wire:model="description" rows="3" class="mt-1.5 w-full rounded-[18px] bg-(--surf2) px-4 py-3 text-[14px] text-(--tx) focus:outline-none"></textarea>
             </div>
 
             <div class="flex justify-end gap-2">

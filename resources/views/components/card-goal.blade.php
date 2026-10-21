@@ -1,6 +1,12 @@
-@props(['goal', 'weeklyActivity' => null, 'stagnant' => false])
+@props([
+    'goal',
+    'lastActivity' => null,
+    'weekTasks' => 0,
+])
 
 @php
+    use App\Support\Goals\GoalRhythm;
+
     $milestones = $goal->milestones;
     $milestonesTotal = $milestones->count();
     $milestonesDone = $milestones->where('status', \App\Enums\MilestoneStatus::Done)->count();
@@ -9,7 +15,14 @@
     $isDone = $goal->status === \App\Enums\GoalStatus::Done;
     $isPaused = $goal->status === \App\Enums\GoalStatus::Paused;
 
-    $maxActivity = $weeklyActivity ? max([1, ...$weeklyActivity]) : 1;
+    $lastActivity ??= GoalRhythm::lastActivityAt($goal);
+    $stagnant = ! $isDone && GoalRhythm::isStagnant($lastActivity);
+
+    // Le sur-titre dit d'où vient l'objectif et jusqu'où il va : l'entité
+    // rattachée, puis l'horizon déduit de l'échéance. C'est ce que le doc
+    // écrivait « Santé · trimestre » — le domaine de vie n'existe pas en base,
+    // on ne l'invente pas, mais l'horizon se déduit.
+    $kicker = collect([$goal->entity?->name, $goal->horizon_label])->filter()->implode(' · ');
 @endphp
 
 <a
@@ -18,20 +31,20 @@
     {{ $attributes->merge(['class' => 'block rounded-[18px] bg-(--surf) px-[22px] py-5 transition-[background-color,scale] duration-(--dur-swap) ease-(--ease) hover:bg-(--surf2) active:scale-[.99]']) }}
 >
     <div class="mb-2.5 flex items-center gap-2.5">
-        <span class="text-[11px] tracking-[.1em] uppercase {{ $isPaused ? 'text-(--mut)' : 'text-(--ai)' }}">
-            {{ $isDone ? 'Atteint' : ($isPaused ? 'En pause' : 'En cours') }}
-        </span>
+        <span class="size-[10px] shrink-0 rounded-[3px]" style="background: var(--goal-{{ $goal->color_slot }})" aria-hidden="true"></span>
+        <span class="min-w-0 truncate text-[11px] tracking-[.1em] text-(--mut) uppercase">{{ $kicker }}</span>
 
         {{-- La stagnation est dite en français, en blé, jamais en rouge et
-             jamais en gros. --}}
-        @if ($stagnant)
-            <span class="ml-auto text-[12px] text-(--warn)">rien depuis trois semaines</span>
-        @elseif ($goal->target_date)
-            <time class="ml-auto text-[12px] text-(--mut)" datetime="{{ $goal->target_date->toDateString() }}">
-                cible : {{ $goal->target_date->translatedFormat('j F') }}
-            </time>
+             jamais en gros. Le reste du temps, la carte dit simplement quand
+             l'objectif a bougé pour la dernière fois. --}}
+        @if ($isDone)
+            <span class="ml-auto shrink-0 text-[12px] text-(--ai)">atteint</span>
+        @elseif ($stagnant)
+            <span class="ml-auto shrink-0 rounded-full bg-(--warnbg) px-2.5 py-0.5 text-[12px] font-semibold text-(--warn)">
+                {{ GoalRhythm::movedLabel($lastActivity) }}
+            </span>
         @else
-            <time class="ml-auto text-[12px] text-(--mut)">ouvert le {{ $goal->created_at->translatedFormat('j F') }}</time>
+            <span class="ml-auto shrink-0 text-[12px] text-(--mut)">{{ GoalRhythm::movedLabel($lastActivity) }}</span>
         @endif
     </div>
 
@@ -42,43 +55,48 @@
     {{-- Les jalons sont une rangée de segments — la même grammaire que la
          journée sur Aujourd'hui, à une autre échelle. --}}
     @if ($milestonesTotal > 0)
-        <div class="mb-2.5 flex gap-[5px]">
+        <div class="mb-1.5 flex items-baseline justify-between text-[13px] font-semibold text-(--mut)">
+            <span>Jalons</span>
+            <span class="font-display tabular-nums {{ $isDone ? 'text-(--ai)' : 'text-(--tx)' }}">{{ $milestonesDone }} / {{ $milestonesTotal }}</span>
+        </div>
+
+        <div class="mb-3.5 flex gap-[5px]">
             @foreach ($milestones as $milestone)
                 <div
-                    class="h-[10px] flex-1 rounded-full transition-colors duration-(--dur-swap) ease-(--ease) {{ $milestone->status === \App\Enums\MilestoneStatus::Done ? 'bg-(--ai)' : 'bg-(--bd2)' }}"
+                    @class([
+                        'h-[8px] flex-1 rounded-full transition-colors duration-(--dur-swap) ease-(--ease)',
+                        'bg-(--bd2)' => $milestone->status !== \App\Enums\MilestoneStatus::Done,
+                    ])
+                    @if ($milestone->status === \App\Enums\MilestoneStatus::Done)
+                        style="background: var(--goal-{{ $goal->color_slot }})"
+                    @endif
                     aria-hidden="true"
                 ></div>
             @endforeach
-        </div>
-
-        <div class="flex items-baseline gap-2 {{ $weeklyActivity ? 'mb-4' : '' }}">
-            <span class="font-display text-[18px] font-bold {{ $isDone ? 'text-(--ai)' : 'text-(--tx)' }}">{{ $milestonesDone }}</span>
-            <span class="text-[13px] text-(--mut)">
-                {{ Str::plural('jalon', $milestonesDone) }} sur {{ $milestonesTotal }}@if ($nextMilestone) · prochain : {{ $nextMilestone->title }}@endif
-            </span>
         </div>
     @else
-        <p class="mb-4 text-[13px] text-(--mut)">aucun jalon posé</p>
+        <p class="mb-3.5 text-[13px] text-(--mut)">Aucun jalon posé.</p>
     @endif
 
-    {{-- Le rythme : tâches terminées par semaine. Gris tant que ça tient,
-         blé sur la dernière barre quand ça ralentit. --}}
-    @if ($weeklyActivity && array_sum($weeklyActivity) > 0)
-        <div class="mb-2 flex h-[34px] items-end gap-1">
-            @foreach ($weeklyActivity as $count)
-                <div
-                    class="flex-1 rounded-t-[3px] {{ $loop->last && $stagnant ? 'bg-(--warn)' : 'bg-(--bd2)' }}"
-                    style="height: {{ max(12, (int) round(($count / $maxActivity) * 100)) }}%"
-                    aria-hidden="true"
-                ></div>
-            @endforeach
-        </div>
-
-        <div class="flex items-center gap-2.5">
-            <span class="text-[12px] text-(--mut)">{{ count($weeklyActivity) }} dernières semaines</span>
-            @if ($stagnant)
-                <span class="ml-auto text-[12px] text-(--warn)">le rythme ralentit</span>
+    {{-- Le pied de carte : ce qui vient, et ce qui est déjà posé dans la
+         semaine. Deux faits, pas de jauge de plus. --}}
+    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-[13px] text-(--mut)">
+        <span class="min-w-0 truncate">
+            @if ($nextMilestone)
+                Prochain : {{ $nextMilestone->title }}
+            @elseif ($goal->target_date)
+                Cible : {{ $goal->target_date->translatedFormat('j F') }}
+            @else
+                Ouvert le {{ $goal->created_at->translatedFormat('j F') }}
             @endif
-        </div>
-    @endif
+        </span>
+
+        <span class="shrink-0">
+            @if ($weekTasks > 0)
+                {{ $weekTasks }} {{ Str::plural('tâche', $weekTasks) }} cette semaine
+            @else
+                Rien cette semaine
+            @endif
+        </span>
+    </div>
 </a>
