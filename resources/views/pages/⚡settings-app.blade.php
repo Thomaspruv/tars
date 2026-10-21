@@ -11,6 +11,8 @@ use App\Support\Archiving\ArchiveSettings;
 use App\Support\Brain\BrainSettings;
 use App\Support\Brain\GitRepository;
 use App\Support\GoogleCalendar\GoogleCalendarClient;
+use App\Jobs\SendAlertJob;
+use App\Support\Alerts\AlertSettings;
 use App\Support\Mcp\McpSettings;
 use App\Support\Momentum\MomentumSettings;
 use App\Support\Review\ReviewSettings;
@@ -48,6 +50,12 @@ new #[Title('Réglages')] class extends Component
     public bool $mcpEnabled = false;
 
     public ?string $mcpNewToken = null;
+
+    public string $alertWebhookUrl = '';
+
+    public bool $alertWebhookSaved = false;
+
+    public bool $alertWebhookTested = false;
 
     public string $mcpFilterTool = '';
 
@@ -94,6 +102,7 @@ new #[Title('Réglages')] class extends Component
         $this->brainAutoIndex = $settings->autoIndexEnabled();
 
         $this->mcpEnabled = app(McpSettings::class)->isEnabled();
+        $this->alertWebhookUrl = (string) app(AlertSettings::class)->webhookUrl();
 
         $reviewSettings = app(ReviewSettings::class);
         $this->reviewWeeklyTime = $reviewSettings->weeklyTime();
@@ -421,6 +430,33 @@ new #[Title('Réglages')] class extends Component
         app(McpSettings::class)->setEnabled($value);
     }
 
+    /**
+     * Où Tars pousse ce qui ne peut pas attendre que Thomas ouvre l'écran.
+     */
+    public function saveAlertWebhook(): void
+    {
+        $validated = $this->validate([
+            'alertWebhookUrl' => ['nullable', 'string', 'max:2000', 'url'],
+        ]);
+
+        app(AlertSettings::class)->setWebhookUrl($validated['alertWebhookUrl'] ?: null);
+
+        $this->alertWebhookSaved = true;
+    }
+
+    public function testAlertWebhook(): void
+    {
+        if (! app(AlertSettings::class)->isConfigured()) {
+            $this->addError('alertWebhookUrl', "Renseigne d'abord une URL, et enregistre-la.");
+
+            return;
+        }
+
+        SendAlertJob::dispatch(message: 'Test depuis Tars : le webhook d\'alerte fonctionne.');
+
+        $this->alertWebhookTested = true;
+    }
+
     public function generateMcpToken(): void
     {
         $this->mcpNewToken = app(McpSettings::class)->generateToken();
@@ -501,22 +537,38 @@ new #[Title('Réglages')] class extends Component
 
 @php
     // Sommaire à gauche, panneau à droite : les Réglages sont le seul écran
-    // assez long pour justifier une table des matières.
-    $sections = [
-        'palette' => 'Objectifs & palette',
-        'rituels' => 'Rituels & jauges',
-        'cerveau' => 'Cerveau',
-        'mcp' => 'Connexions — MCP',
-        'google' => 'Connexions — Google',
-        'agents' => 'Agents',
-        'ia' => 'Fournisseurs IA',
-        'revue' => 'Revue',
-        'archivage' => 'Archivage',
+    // assez long pour justifier une table des matières. Les entrées sont
+    // groupées comme sur l'écran 13 du doc — ce qui est à moi, ce qui est
+    // branché, ce qui tourne tout seul.
+    //
+    // Deux entrées du doc n'existent pas et ne sont donc pas écrites ici :
+    // « Domaines de vie » (le modèle `LifeArea` a été retiré en juillet 2026 ;
+    // ce que l'app a, ce sont des objectifs et leurs teintes) et « Ce qu'Hermès
+    // peut faire » (la matrice fait seul / propose / jamais n'a aucune
+    // permission en base — l'écran ne peut pas promettre un réglage qui ne
+    // retiendrait rien).
+    $groups = [
+        'Moi' => [
+            'palette' => 'Objectifs & teintes',
+            'rituels' => 'Rituels & jauges',
+            'revue' => 'Revue & bilan',
+        ],
+        'Branché' => [
+            'google' => 'Google',
+            'mcp' => 'Serveur MCP',
+            'notifications' => 'Notifications',
+            'ia' => 'Fournisseurs IA',
+            'agents' => 'Agents système',
+        ],
+        'Mémoire' => [
+            'cerveau' => 'Vault',
+            'archivage' => 'Archivage',
+        ],
     ];
 @endphp
 
 <div>
-    <x-screen-header kicker="domaines, connexions, agents, revue, cerveau" title="Réglages" class="mb-6" />
+    <x-screen-header kicker="objectifs, connexions, notifications, revue, mémoire" title="Réglages" class="mb-6" />
 
     @if (session('status') === 'google-calendar-connected')
         <div class="mb-6 flex items-center gap-2.5 rounded-[14px] bg-(--aibg) px-4 py-3 text-[14px] font-semibold text-(--ai)">
@@ -529,9 +581,20 @@ new #[Title('Réglages')] class extends Component
     @endif
 
     <div class="grid grid-cols-1 items-start gap-8 xl:grid-cols-[200px_minmax(0,1fr)] xl:gap-12">
-        <nav class="sticky top-6 hidden flex-col gap-0.5 xl:flex">
-            @foreach ($sections as $anchor => $label)
-                <a href="#{{ $anchor }}" class="press rounded-full px-3.5 py-2 text-[13px] text-(--mut) hover:bg-(--surf) hover:text-(--tx)">{{ $label }}</a>
+        <nav class="sticky top-6 hidden flex-col gap-4 xl:flex">
+            <div class="flex flex-col gap-0.5">
+                <p class="px-3.5 pb-1 text-[11px] tracking-[.1em] text-(--mut) uppercase">Compte</p>
+                <a href="{{ route('profile.edit') }}" wire:navigate class="press rounded-full px-3.5 py-2 text-[13px] text-(--mut) hover:bg-(--surf) hover:text-(--tx)">Profil & sécurité</a>
+                <a href="{{ route('missions.index') }}" wire:navigate class="press rounded-full px-3.5 py-2 text-[13px] text-(--mut) hover:bg-(--surf) hover:text-(--tx)">Hermès</a>
+            </div>
+
+            @foreach ($groups as $heading => $sections)
+                <div class="flex flex-col gap-0.5">
+                    <p class="px-3.5 pb-1 text-[11px] tracking-[.1em] text-(--mut) uppercase">{{ $heading }}</p>
+                    @foreach ($sections as $anchor => $label)
+                        <a href="#{{ $anchor }}" class="press rounded-full px-3.5 py-2 text-[13px] text-(--mut) hover:bg-(--surf) hover:text-(--tx)">{{ $label }}</a>
+                    @endforeach
+                </div>
             @endforeach
         </nav>
 
@@ -541,7 +604,7 @@ new #[Title('Réglages')] class extends Component
         <div class="min-w-0">
 
     <section id="palette" class="mb-12">
-        <h2 class="font-display mb-2 text-[22px] font-semibold text-(--tx)">Objectifs &amp; palette</h2>
+        <h2 class="font-display mb-2 text-[22px] font-semibold text-(--tx)">Objectifs &amp; teintes</h2>
         <p class="mb-6 max-w-[620px] text-[15px] leading-[1.65] text-(--mut)">
             Chaque objectif porte une des sept teintes de saison, la même partout : calendrier, tâches, bande
             d'état, fiches. Au-delà de sept objectifs, la série recommence.
@@ -607,7 +670,7 @@ new #[Title('Réglages')] class extends Component
     </section>
 
     <section id="cerveau" class="mb-12">
-        <h2 class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Cerveau</h2>
+        <h2 class="font-display mb-5 text-[22px] font-semibold text-(--tx)">Mémoire — le vault</h2>
 
         <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
             <form wire:submit="saveBrainSettings" class="space-y-4 rounded-[18px] bg-(--surf) p-5" wire:loading.class="opacity-50" wire:target="saveBrainSettings">
@@ -714,8 +777,50 @@ new #[Title('Réglages')] class extends Component
         </div>
     </section>
 
+    {{-- Par où un agent me joint quand ça ne peut pas attendre. C'est la
+         « Notifications » du doc de refonte : il n'y en a qu'une, parce qu'il
+         n'y a qu'un chemin sortant (`alert_thomas`). --}}
+    <section id="notifications" class="mb-12">
+        <h2 class="font-display mb-2 text-[22px] font-semibold text-(--tx)">Notifications</h2>
+        <p class="mb-6 max-w-[620px] text-[15px] leading-[1.65] text-(--mut)">
+            Un webhook plutôt qu'un canal en dur : branche-le sur ce que tu lis vraiment.
+        </p>
+
+        <div class="max-w-[620px]">
+            <x-connection-card
+                title="Alertes"
+                subtitle="Par où un agent me prévient quand ça ne peut pas attendre"
+                :status="$alertWebhookUrl !== '' ? 'Configuré' : 'Aucun'"
+                :tone="$alertWebhookUrl !== '' ? 'agent' : 'sunk'"
+            >
+                <x-slot:mark>
+                    <flux:icon name="bell-alert" class="size-[19px] text-(--ai)" />
+                </x-slot:mark>
+
+                <p class="mb-3 text-[13px] leading-[1.6] text-(--mut)">
+                    Tars poste un JSON sur cette URL quand un agent appelle <span class="font-mono">alert_thomas</span>.
+                    Branche-la sur ce que tu veux — Hermes, n8n, ntfy — pour que l'alerte arrive là où tu es.
+                </p>
+
+                <label class="block">
+                    <span class="mb-1.5 block text-[13px] font-semibold text-(--mut)">URL du webhook</span>
+                    <x-input variant="technical" wire:model="alertWebhookUrl" placeholder="https://…" class="w-full" />
+                </label>
+                @error('alertWebhookUrl')<p class="mt-1.5 text-[12px] text-(--warn)">{{ $message }}</p>@enderror
+
+                <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <x-btn wire:click="saveAlertWebhook" variant="secondary" size="sm">Enregistrer</x-btn>
+                    <x-btn wire:click="testAlertWebhook" variant="ghost" size="sm">Envoyer un test</x-btn>
+
+                    @if ($alertWebhookSaved)<span class="text-[12px] text-(--ai)">enregistré</span>@endif
+                    @if ($alertWebhookTested)<span class="text-[12px] text-(--ai)">test envoyé</span>@endif
+                </div>
+            </x-connection-card>
+        </div>
+    </section>
+
     <section id="mcp" class="mb-12">
-        <h2 class="font-display mb-2 text-[22px] font-semibold text-(--tx)">Connexions — MCP / Hermes</h2>
+        <h2 class="font-display mb-2 text-[22px] font-semibold text-(--tx)">Serveur MCP — la porte d'Hermès</h2>
         <p class="mb-6 max-w-[620px] text-[15px] leading-[1.65] text-(--mut)">
             Le serveur MCP est la porte par laquelle Hermes lit et écrit dans Tars. Un seul jeton à la fois :
             en régénérer un révoque l'ancien sur-le-champ.
