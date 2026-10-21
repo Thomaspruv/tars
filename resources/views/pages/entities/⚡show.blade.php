@@ -350,14 +350,14 @@ new #[Title('Entité')] class extends Component
         <span class="min-w-0 truncate text-(--tx)">{{ $entity->name }}</span>
     </nav>
 
-    <div class="mb-[26px] flex max-w-[1200px] flex-wrap items-center gap-4">
+    <div class="mb-[26px] flex flex-wrap items-center gap-4">
         <span
             class="font-display inline-flex size-[52px] shrink-0 items-center justify-center rounded-full bg-(--acbg) text-[18px] font-bold text-(--ac)"
             aria-hidden="true"
         >{{ $initials }}</span>
 
         <div class="min-w-0 flex-1">
-            <h1 class="font-display text-[34px] leading-[1.1] font-extrabold tracking-[-.03em] text-(--tx)">{{ $entity->name }}</h1>
+            <h1 class="font-display text-[28px] leading-[1.2] font-extrabold tracking-[-.02em] text-(--tx)">{{ $entity->name }}</h1>
             <p class="mt-1 text-[13px] text-(--mut)">
                 {{ $entity->type->label() }} · {{ ucfirst($entity->context->value) }} ·
                 suivie depuis {{ $entity->created_at->translatedFormat('F Y') }}
@@ -378,10 +378,10 @@ new #[Title('Entité')] class extends Component
         </div>
     </div>
 
-    <div class="grid max-w-[1200px] grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+    <div class="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <x-card padding="0" class="min-w-0 overflow-hidden">
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-(--bd) px-[18px] py-3">
-                <h2 class="font-display text-[17px] font-bold text-(--tx)">Historique</h2>
+                <h2 class="font-display text-[16px] font-bold text-(--tx)">Historique</h2>
 
                 <div class="flex items-center gap-1 rounded-full bg-(--surf2) p-1">
                     @foreach ($this->historyFilters as $key => $label)

@@ -505,7 +505,7 @@ new #[Title('Bilan de vie')] class extends Component
 
             {{-- L'humeur du jour : dix pavés, un seul allumé, en abricot. --}}
             <div class="mb-4 flex items-baseline gap-3">
-                <h2 class="font-display text-[22px] font-bold text-(--tx)">Humeur du jour</h2>
+                <h2 class="font-display text-[20px] font-bold tracking-[-.01em] text-(--tx)">Humeur du jour</h2>
                 <span class="text-[15px] text-(--mut)">de 1 à 10</span>
                 @if ($this->moodAverage7d !== null)
                     <span class="ml-auto text-[13px] text-(--mut)">
@@ -552,7 +552,7 @@ new #[Title('Bilan de vie')] class extends Component
                  pose. Les réponses, elles, sont les miennes. --}}
             @if ($this->selectedRun)
                 <div class="mb-[18px] flex flex-wrap items-baseline gap-3">
-                    <h2 class="font-display text-[22px] font-bold text-(--tx)">Les questions du mois</h2>
+                    <h2 class="font-display text-[20px] font-bold tracking-[-.01em] text-(--tx)">Les questions du mois</h2>
                     @if ($this->selectedRun->status === \App\Enums\QuestionnaireRunStatus::Pending)
                         <x-btn variant="agent" class="ml-auto" :href="route('bilan.run.fill', $this->selectedRun)" wire:navigate>Remplir ce bilan</x-btn>
                     @endif
@@ -594,7 +594,7 @@ new #[Title('Bilan de vie')] class extends Component
             <div class="mb-[30px] h-px bg-(--bd)"></div>
 
             <div class="mb-1.5 flex flex-wrap items-baseline gap-3">
-                <h2 class="font-display text-[22px] font-bold text-(--tx)">Journal</h2>
+                <h2 class="font-display text-[20px] font-bold tracking-[-.01em] text-(--tx)">Journal</h2>
                 <span class="text-[14px] text-(--mut)">mon texte, jamais touché par un agent</span>
             </div>
 

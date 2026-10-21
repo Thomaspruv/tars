@@ -348,11 +348,11 @@ new #[Title('Objectif')] class extends Component
         <span class="min-w-0 truncate text-(--tx)">{{ $goal->title }}</span>
     </nav>
 
-    <div class="mb-[26px] flex max-w-[1200px] flex-wrap items-start gap-4">
+    <div class="mb-[26px] flex flex-wrap items-start gap-4">
         <div class="min-w-0 flex-1">
             <div class="flex items-center gap-3">
                 <span class="size-[12px] shrink-0 rounded-[3px]" style="background: {{ $hue }}" aria-hidden="true"></span>
-                <h1 class="font-display min-w-0 text-[34px] leading-[1.1] font-extrabold tracking-[-.03em] text-(--tx)">{{ $goal->title }}</h1>
+                <h1 class="font-display min-w-0 text-[28px] leading-[1.2] font-extrabold tracking-[-.02em] text-(--tx)">{{ $goal->title }}</h1>
             </div>
 
             {{-- Une seule ligne de contexte, dans l'ordre du doc : d'où ça
@@ -410,16 +410,21 @@ new #[Title('Objectif')] class extends Component
         </div>
     </div>
 
-    <div class="grid max-w-[1200px] grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div class="flex min-w-0 flex-col gap-4">
+    <div class="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div
+            class="grid min-w-0 content-start gap-4"
+            {{-- Jalons et tâches liées se mettent côte à côte dès que la place
+                 existe, au lieu de s'empiler sur 1600px de large. --}}
+            style="grid-template-columns: repeat(auto-fill, minmax(min(100%, 700px), 1fr))"
+        >
             @if ($goal->description)
-                <p class="max-w-[620px] text-[16px] leading-[1.65] text-(--mut)">{{ $goal->description }}</p>
+                <p class="max-w-[620px] text-[16px] leading-[1.65] text-(--mut) [grid-column:1/-1]">{{ $goal->description }}</p>
             @endif
 
             {{-- Les jalons --}}
             <x-card padding="0" class="overflow-hidden">
                 <div class="flex items-center justify-between border-b border-(--bd) px-[18px] py-3">
-                    <h2 class="font-display text-[17px] font-bold text-(--tx)">Jalons</h2>
+                    <h2 class="font-display text-[16px] font-bold text-(--tx)">Jalons</h2>
                     <span class="font-display text-[13px] font-bold tabular-nums text-(--mut)">{{ $milestonesDone }} / {{ $milestonesTotal }}</span>
                 </div>
 
@@ -489,7 +494,7 @@ new #[Title('Objectif')] class extends Component
             {{-- Les tâches liées : la fiche les coche, elle ne les range pas. --}}
             <x-card padding="0" class="overflow-hidden">
                 <div class="flex items-center justify-between border-b border-(--bd) px-[18px] py-3">
-                    <h2 class="font-display text-[17px] font-bold text-(--tx)">Tâches liées</h2>
+                    <h2 class="font-display text-[16px] font-bold text-(--tx)">Tâches liées</h2>
                     <span class="text-[13px] text-(--mut)">{{ $this->tasks->count() }}</span>
                 </div>
 

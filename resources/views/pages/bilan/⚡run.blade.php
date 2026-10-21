@@ -97,7 +97,7 @@ new #[Title('Remplir le bilan')] class extends Component
         <a href="{{ route('bilan.index') }}" wire:navigate class="text-[13px] text-(--mut) hover:text-(--tx)">← Bilan de vie</a>
     </div>
 
-    <h1 class="font-display mb-6 text-[34px] leading-[1.1] font-bold tracking-[-.03em] text-(--tx)">{{ $run->questionnaire->name }}</h1>
+    <h1 class="font-display mb-6 text-[28px] leading-[1.2] font-extrabold tracking-[-.02em] text-(--tx)">{{ $run->questionnaire->name }}</h1>
 
     <div class="mt-6 space-y-4">
         @foreach ($run->questionnaire->questions as $index => $question)

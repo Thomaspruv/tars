@@ -1,11 +1,10 @@
 <x-layouts::app.chrome :title="$title ?? null">
-    {{-- La coque entière se centre : barre latérale *et* contenu, pas l'un sans
-         l'autre. 1432px, c'est l'artboard des maquettes (240 de barre latérale
-         + 1200 de contenu). Sur un écran de 2560, centrer le seul contenu
-         laissait la barre latérale orpheline à l'extrême gauche et l'app
-         paraissait dézoomée ; sur un portable de 1512 le plafond ne mord
-         presque pas. --}}
-    <div class="mx-auto flex w-full max-w-[1432px]">
+    {{-- La coque prend toute la largeur de l'écran : sur un 2560, on veut la
+         place, pas une colonne centrée avec deux marges vides. La barre
+         latérale est `sticky` plutôt que `fixed` — elle reste dans le flux,
+         donc le contenu occupe exactement ce qui reste, sans marge calculée à
+         la main. --}}
+    <div class="flex w-full">
         <x-layouts::app.sidebar />
 
         <main class="min-h-screen min-w-0 flex-1 pb-32 lg:pb-10">

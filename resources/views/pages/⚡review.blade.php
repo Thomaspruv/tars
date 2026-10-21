@@ -349,14 +349,14 @@ new #[Title('Revue')] class extends Component
                     <div class="mb-8 grid grid-cols-2 gap-3.5 sm:grid-cols-4">
                         @foreach ($this->figures as $figure)
                             <x-card padding="16" wire:key="figure-{{ $loop->index }}">
-                                <p class="font-display text-[32px] leading-none font-extrabold tabular-nums text-(--tx)">{{ $figure['value'] }}</p>
+                                <p class="font-display text-[28px] leading-none font-extrabold tabular-nums text-(--tx)">{{ $figure['value'] }}</p>
                                 <p class="mt-1.5 text-[13px] leading-[1.35] text-(--mut)">{{ $figure['label'] }}</p>
                             </x-card>
                         @endforeach
                     </div>
 
                     @if ($this->goalsTouched->isNotEmpty())
-                        <h2 class="font-display mb-3.5 text-[22px] font-bold text-(--tx)">Où la semaine est passée</h2>
+                        <h2 class="font-display mb-3.5 text-[20px] font-bold tracking-[-.01em] text-(--tx)">Où la semaine est passée</h2>
 
                         @php $max = max(1, $this->goalsTouched->max('done')); @endphp
                         <div class="mb-6 flex flex-col gap-2.5">
@@ -388,7 +388,7 @@ new #[Title('Revue')] class extends Component
 
                         <div class="mb-[30px] h-px bg-(--bd)"></div>
 
-                        <h2 class="font-display mb-1.5 text-[22px] font-bold text-(--tx)">
+                        <h2 class="font-display mb-1.5 text-[20px] font-bold tracking-[-.01em] text-(--tx)">
                             {{ count($decisions) }} {{ Str::plural('décision', count($decisions)) }}
                         </h2>
                         <p class="mb-[18px] text-[15px] text-(--mut)">
@@ -409,7 +409,7 @@ new #[Title('Revue')] class extends Component
                 @else
                     {{-- Mes notes ne portent aucun marqueur vert : c'est mon texte,
                          pas celui de l'agent. --}}
-                    <h2 class="font-display mb-3 text-[22px] font-bold text-(--tx)">Ce que j'en retiens</h2>
+                    <h2 class="font-display mb-3 text-[20px] font-bold tracking-[-.01em] text-(--tx)">Ce que j'en retiens</h2>
                     <p class="mb-4 text-[15px] leading-[1.6] text-(--mut)">
                         Une phrase suffit. Elle est relue au bilan, avec celles des autres semaines.
                     </p>

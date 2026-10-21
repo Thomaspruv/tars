@@ -702,7 +702,7 @@ new #[Title('Mémoire')] class extends Component
                 </div>
             @else
                 <div class="max-w-[620px]">
-                    <h1 class="font-display mb-2.5 text-[32px] leading-[1.15] font-bold tracking-[-.03em] text-(--tx)">{{ $this->selectedDocument->title }}</h1>
+                    <h1 class="font-display mb-2.5 text-[28px] leading-[1.2] font-extrabold tracking-[-.02em] text-(--tx)">{{ $this->selectedDocument->title }}</h1>
                     <p class="mb-[26px] text-[13px] text-(--mut)">
                         @if ($this->selectedDocument->mtime)
                             Modifié {{ $this->selectedDocument->mtime->diffForHumans() }} ·

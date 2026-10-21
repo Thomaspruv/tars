@@ -3,7 +3,7 @@
 <div class="flex items-center gap-3 px-5 pt-4 lg:hidden">
     <a href="{{ route('today') }}" wire:navigate class="flex items-center gap-2.5">
         <x-app-logo-icon class="size-[20px]" />
-        <span class="font-display text-[17px] font-bold tracking-[-.01em] text-(--tx)">TARS</span>
+        <span class="font-display text-[16px] font-extrabold tracking-[-.01em] text-(--tx)">TARS</span>
     </a>
 
     <x-theme-toggle class="ml-auto text-[13px] text-(--mut)" />

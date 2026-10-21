@@ -258,7 +258,7 @@ new #[Title('Objectifs')] class extends Component
     </x-screen-header>
 
     @if ($this->idleNote)
-        <x-agent-block padding="16" class="mb-[22px] max-w-[1200px]">
+        <x-agent-block padding="16" class="mb-[22px]">
             <div class="flex flex-wrap items-center gap-x-4 gap-y-2.5">
                 <p class="min-w-[280px] flex-1 text-[14px] leading-[1.5] text-(--tx)">{{ $this->idleNote['text'] }}</p>
                 <x-btn variant="agent" size="xs" :href="route('goals.show', $this->idleNote['goal'])" wire:navigate>Voir l'objectif</x-btn>
@@ -267,7 +267,15 @@ new #[Title('Objectifs')] class extends Component
     @endif
 
     @if ($this->orderedGoals->isNotEmpty())
-        <div class="grid max-w-[1200px] grid-cols-1 items-start gap-3.5 xl:grid-cols-2">
+        <div
+            class="grid items-start gap-3.5"
+            {{-- `auto-fill` plutôt que des points de rupture : une carte garde
+                 la largeur de la maquette (~560) et la grille en met autant que
+                 l'écran en permet — deux sur 1200, quatre sur 2300. Les
+                 variantes arbitraires de Tailwind s'ordonnaient après `xl:` et
+                 ne prenaient jamais la main. --}}
+            style="grid-template-columns: repeat(auto-fill, minmax(560px, 1fr))"
+        >
             @foreach ($this->orderedGoals as $goal)
                 <x-card-goal
                     :goal="$goal"

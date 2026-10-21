@@ -9,8 +9,11 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-    --font-sans: 'Karla', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-    --font-display: 'Outfit', 'Karla', ui-sans-serif, system-ui, sans-serif;
+    /* Une seule famille, comme la maquette : Manrope porte les titres et le
+       corps. `--font-display` reste un token distinct — des centaines de
+       classes `font-display` s'y appuient — mais pointe sur la même police. */
+    --font-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: 'Manrope', ui-sans-serif, system-ui, sans-serif;
     --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
 
     --color-zinc-50: #fafafa;
@@ -289,7 +292,7 @@ html[data-theme] ::-webkit-scrollbar-thumb {
    so headings/lists/code are styled directly against the design system tokens
    rather than pulling in @tailwindcss/typography for a handful of elements.
    Le Cerveau est un registre de *lecture* : corps à 16px/1.75 dans une colonne
-   de 620px, titres en Outfit. C'est aussi l'une des deux seules zones de l'app
+   de 620px. C'est aussi l'une des deux seules zones de l'app
    où le mono survit — mais pour les *chemins* seulement (fil d'Ariane de la
    note, destination calculée d'une nouvelle note, branche git) : l'arborescence
    est la navigation de l'écran et parle la langue de la barre latérale. Voir

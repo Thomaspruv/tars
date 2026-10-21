@@ -48,7 +48,7 @@
         @endif
     </div>
 
-    <h3 class="font-display mb-3.5 text-[21px] leading-[1.25] font-bold {{ $isPaused ? 'text-(--mut)' : 'text-(--tx)' }}">
+    <h3 class="font-display mb-3.5 text-[20px] leading-[1.25] font-bold tracking-[-.01em] {{ $isPaused ? 'text-(--mut)' : 'text-(--tx)' }}">
         {{ $goal->title }}
     </h3>
 

@@ -6,12 +6,12 @@
 ])
 
 @php
-    // Deux tailles seulement : les écrans de travail titrent à 34px, les
-    // écrans de lecture (Revue, Bilan) à 42px. Le sur-titre porte le chiffre
+    // Deux tailles seulement, celles des maquettes : les écrans de travail
+    // titrent à 28px, les écrans de lecture (Revue, Bilan) à 36px. Le sur-titre porte le chiffre
     // du jour — c'est lui qui dit ce qu'on regarde, pas un sous-titre.
     $titleClasses = $treatment === 'reading'
-        ? 'font-display text-[42px] font-extrabold leading-[1.1] tracking-[-.03em] text-(--tx)'
-        : 'font-display text-[34px] font-extrabold leading-none tracking-[-.03em] text-(--tx)';
+        ? 'font-display text-[36px] font-extrabold leading-[1.15] tracking-[-.03em] text-(--tx)'
+        : 'font-display text-[28px] font-extrabold leading-[1.2] tracking-[-.02em] text-(--tx)';
 @endphp
 
 <div {{ $attributes->merge(['class' => 'flex flex-wrap items-end gap-4']) }}>
