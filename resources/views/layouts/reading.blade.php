@@ -1,4 +1,4 @@
-{{-- Registre « lecture » — Revue, Bilan de vie, Cerveau.
+{{-- Registre « lecture » — Revue, Bilan de vie, Mémoire.
      Ces trois écrans remplacent la sidebar de l'app par leur propre colonne de
      contexte (historique des revues, liste des bilans, arborescence du vault)
      et posent le contenu dans une colonne de lecture. Ils sont donc rendus

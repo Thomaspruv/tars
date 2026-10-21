@@ -128,7 +128,7 @@ test('the agent speaks in a single place: everything it saw lands in the rail', 
 
     $this->get(route('today'))
         ->assertSee('TARS propose')
-        ->assertSee("Voir l'Inbox");
+        ->assertSee('Aller trier');
 
     Review::factory()->create(['completed_at' => null]);
 
@@ -136,7 +136,7 @@ test('the agent speaks in a single place: everything it saw lands in the rail', 
     // autre selon l'ordre de priorité.
     $this->get(route('today'))
         ->assertSee("Je l'ouvre ?")
-        ->assertSee("Voir l'Inbox");
+        ->assertSee('Aller trier');
 });
 
 test('isolates the first open task as "la suivante" and leaves the others below', function () {

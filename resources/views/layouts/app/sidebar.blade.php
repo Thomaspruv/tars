@@ -2,12 +2,16 @@
 
 use App\Support\Navigation\Spaces;
 
-// Cinq espaces, pas quatorze destinations : l'app a quatorze écrans mais cinq
-// gestes — tenir ma journée, faire, suivre où je vais, retrouver la matière,
-// regarder en arrière. Le détail de chaque espace est un onglet du composant
-// `space-tabs`, à son URL d'origine. Pas d'icônes, pas de groupes nommés : à
-// cinq entrées en français, le texte seul suffit.
-$spaces = Spaces::all();
+// Six portes, pas seize destinations : l'app a seize écrans mais six gestes —
+// tenir ma journée, trier ce qui est arrivé, placer dans le temps, suivre où je
+// vais, retrouver la matière, regarder en arrière. Le détail de chaque porte
+// est un onglet du composant `space-tabs`, à son URL d'origine. Pas d'icônes,
+// pas de groupes nommés : à six entrées en français, le texte seul suffit.
+//
+// Hermès ne compte pas parmi les six : il descend en bas, avec les Réglages.
+// On y va pour missionner et regarder tourner, pas pour tenir sa journée.
+$doors = Spaces::doors();
+$aside = Spaces::aside();
 
 ?>
 
@@ -31,7 +35,7 @@ $spaces = Spaces::all();
     </button>
 
     <nav class="flex flex-col gap-[3px]">
-        @foreach ($spaces as $space)
+        @foreach ($doors as $space)
             @php $isCurrent = request()->routeIs(...Spaces::routesOf($space)); @endphp
             <a
                 href="{{ route($space['tabs'][0]['route']) }}"
@@ -51,10 +55,27 @@ $spaces = Spaces::all();
 
     <div class="mt-auto">
         <nav class="mb-3 flex flex-col gap-[3px]">
+            @foreach ($aside as $space)
+                @php $isCurrent = request()->routeIs(...Spaces::routesOf($space)); @endphp
+                <a
+                    href="{{ route($space['tabs'][0]['route']) }}"
+                    wire:navigate
+                    @if ($isCurrent) aria-current="page" @endif
+                    @class([
+                        'press flex items-center rounded-full px-4 py-[9px] text-[13px]',
+                        'bg-(--surf2) font-semibold text-(--tx)' => $isCurrent,
+                        'text-(--mut) hover:text-(--tx)' => ! $isCurrent,
+                    ])
+                >
+                    <span class="flex-1">{{ $space['label'] }}</span>
+                    <x-nav-signal :key="$space['signal']['key'] ?? null" :as="$space['signal']['as'] ?? null" />
+                </a>
+            @endforeach
+
             <a
                 href="{{ route('settings.index') }}"
                 wire:navigate
-                class="press rounded-full px-4 py-[9px] text-[13px] {{ request()->routeIs('settings.index', 'agents.index') ? 'bg-(--surf2) font-semibold text-(--tx)' : 'text-(--mut) hover:text-(--tx)' }}"
+                class="press rounded-full px-4 py-[9px] text-[13px] {{ request()->routeIs('settings.index') ? 'bg-(--surf2) font-semibold text-(--tx)' : 'text-(--mut) hover:text-(--tx)' }}"
             >Réglages</a>
             <x-theme-toggle class="press rounded-full px-4 py-[9px] text-left text-[13px] text-(--mut) hover:text-(--tx)" />
         </nav>

@@ -21,7 +21,7 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Inbox')] class extends Component
+new #[Title('À trier')] class extends Component
 {
     public ?string $triageMessage = null;
 
@@ -353,9 +353,9 @@ new #[Title('Inbox')] class extends Component
 ?>
 
 <div>
-    <x-space-tabs class="mb-3.5 -ml-3.5" />
+    <x-space-tabs space="trier" class="mb-3.5 -ml-3.5" />
 
-    <x-screen-header :kicker="$this->kicker" title="Inbox" class="mb-3">
+    <x-screen-header :kicker="$this->kicker" title="À trier" class="mb-3">
         <x-slot:actions>
             @if ($this->acceptableSuggestions->isNotEmpty())
                 <x-btn
@@ -468,7 +468,7 @@ new #[Title('Inbox')] class extends Component
         </x-card>
     @empty
         <x-card padding="22" class="mb-3">
-            <p class="text-[16px] text-(--ai)">Inbox à zéro — rien ne traîne.</p>
+            <p class="text-[16px] text-(--ai)">Rien à trier — rien ne traîne.</p>
         </x-card>
     @endforelse
 

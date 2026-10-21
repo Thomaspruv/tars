@@ -140,18 +140,18 @@ test('does not show auto-applied suggestions older than 7 days', function () {
         ->assertDontSee('Vieille action.');
 });
 
-test('shows a dot on the Cerveau space and the exact count on its Notes tab', function () {
+test('shows a dot on the Mémoire space and the exact count on its Notes tab', function () {
     $this->actingAs(User::factory()->create());
 
     $document = BrainDocument::factory()->create(['path' => 'Notes/plombier.md']);
     BrainSuggestion::factory()->count(2)->create(['brain_document_id' => $document->id]);
 
-    // Le Cerveau lui-même n'a plus la sidebar de l'app (il la remplace par son
+    // Mémoire elle-même n'a plus la sidebar de l'app (elle la remplace par son
     // arborescence), donc le signal se lit depuis n'importe quel autre écran.
     // L'espace se contente d'un point — ce que le curateur a produit n'est pas
     // un chiffre qui m'attend ; le 2 vit sur l'onglet Notes, dans l'espace.
     expect($this->get(route('today'))->getContent())
-        ->toMatch('/Cerveau<\/span>\s*<span[^>]*size-\[8px\][^>]*><\/span>/')
+        ->toMatch('/Mémoire<\/span>\s*<span[^>]*size-\[8px\][^>]*><\/span>/')
         ->and($this->get(route('entities.index'))->getContent())
         ->toContain('bg-(--aibg) text-(--ai)">2');
 });

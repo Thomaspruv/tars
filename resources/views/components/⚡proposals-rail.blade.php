@@ -98,9 +98,9 @@ new class extends Component
         if ($suggestions->isEmpty()) {
             return new Proposal(
                 source: 'inbox:untriaged',
-                meta: 'Inbox',
+                meta: 'À trier',
                 text: $pendingCount.' '.Str::plural('item', $pendingCount).' en attente, pas encore '.Str::plural('trié', $pendingCount).'.',
-                primaryLabel: 'Voir l\'Inbox',
+                primaryLabel: 'Aller trier',
                 primaryAction: route('inbox.index'),
             );
         }
@@ -112,9 +112,9 @@ new class extends Component
 
         return new Proposal(
             source: 'inbox:prequalified',
-            meta: 'Inbox',
+            meta: 'À trier',
             text: 'J\'ai pré-qualifié les '.$suggestions->count().' : '.$breakdown.'.',
-            primaryLabel: 'Voir l\'Inbox',
+            primaryLabel: 'Aller trier',
             primaryAction: route('inbox.index'),
         );
     }
@@ -163,7 +163,7 @@ new class extends Component
         return new Proposal(
             source: 'goal:'.$goal->id,
             meta: $goal->title,
-            text: 'Rien depuis '.self::IDLE_WEEKS.' semaines et aucun jalon. Je te propose 3 jalons à partir du Cerveau.',
+            text: 'Rien depuis '.self::IDLE_WEEKS.' semaines et aucun jalon. Je te propose 3 jalons à partir de la Mémoire.',
             primaryLabel: 'Voir les jalons',
             primaryAction: route('goals.show', $goal),
             secondaryLabel: 'Mettre en pause',

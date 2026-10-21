@@ -28,7 +28,7 @@ use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
-new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
+new #[Layout('layouts::reading')] #[Title('Mémoire')] class extends Component
 {
     #[Url]
     public ?string $path = null;
@@ -529,10 +529,10 @@ new #[Layout('layouts::reading')] #[Title('Cerveau')] class extends Component
 
         <a href="{{ route('today') }}" wire:navigate class="mb-3 px-3 text-[12px] text-(--mut) hover:text-(--tx)">← Aujourd'hui</a>
 
-        {{-- Cet écran n'a pas la barre latérale : les onglets de l'espace
-             Cerveau passent donc dans sa colonne, au même endroit que sur les
-             deux autres écrans de lecture. --}}
-        <x-space-tabs variant="column" class="mb-4 -mx-0.5" />
+        {{-- Cet écran n'a pas la barre latérale : les onglets de Mémoire
+             passent donc dans sa colonne, au même endroit que sur les deux
+             autres écrans de lecture. --}}
+        <x-space-tabs space="memoire" variant="column" class="mb-4 -mx-0.5" />
 
         <input
             type="text"

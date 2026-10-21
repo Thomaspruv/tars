@@ -4,16 +4,20 @@ use App\Support\Navigation\Spaces;
 
 $theme = request()->cookie('la-theme') === 'light' ? 'light' : 'dark';
 
-// La barre du bas mobile porte quatre des cinq espaces — la Revue est un
-// rituel hebdomadaire, elle n'a rien à faire sous le pouce. Elle vit derrière
-// « Plus », avec les écrans transverses.
-$revue = Spaces::find('revue');
-$mobileSpaces = array_values(array_filter(Spaces::all(), fn (array $space): bool => $space['key'] !== 'revue'));
+// La barre du bas mobile porte cinq des sept portes, dans l'ordre du doc :
+// Jour, À trier, Planning, Mémoire, Hermès. Objectifs et Recul passent derrière
+// « Plus » — on les consulte, on ne les manipule pas sur téléphone : un bilan
+// trimestriel ne se lit pas debout dans le métro, et poser un objectif encore
+// moins. Les labels courts servent ici, l'écran fait 390.
+$behind = ['objectifs', 'recul'];
+$mobileSpaces = array_values(array_filter(Spaces::all(), fn (array $space): bool => ! in_array($space['key'], $behind, true)));
 
-$moreLinks = [
-    ['route' => $revue['tabs'][0]['route'], 'label' => $revue['label']],
-    ['route' => 'agents.index', 'label' => 'Agents'],
-    ['route' => 'settings.index', 'label' => 'Réglages'],
+// La feuille « Plus » reprend les trois groupes de l'écran M6 : ce qu'on
+// consulte, ce qu'on relit, et moi.
+$moreGroups = [
+    'Objectifs' => [['route' => 'goals.index', 'label' => 'Objectifs'], ['route' => 'decisions.index', 'label' => 'Décisions']],
+    'Recul' => [['route' => 'review.index', 'label' => 'Revue'], ['route' => 'bilan.index', 'label' => 'Bilan de vie']],
+    'Toi' => [['route' => 'profile.edit', 'label' => 'Mon compte'], ['route' => 'settings.index', 'label' => 'Réglages']],
 ];
 ?>
 <!DOCTYPE html>
@@ -52,7 +56,7 @@ $moreLinks = [
                         ])
                     >
                         <span class="mx-auto mb-2 block h-[3px] w-[20px] rounded-full transition-colors duration-(--dur-swap) ease-(--ease) {{ $isCurrent ? 'bg-(--ac)' : 'bg-transparent' }}"></span>
-                        {{ $space['label'] }}
+                        {{ $space['short'] }}
                         @php $signal = \App\Support\Navigation\NavSignals::get($space['signal']['key'] ?? null); @endphp
                         @if ($signal)<span class="sr-only">, {{ $signal['count'] }} {{ $signal['sr'] }}</span>@endif
                     </a>
@@ -68,15 +72,21 @@ $moreLinks = [
                 <div class="animate-veil-in absolute inset-0 bg-black/55" x-on:click="more = false"></div>
                 <div class="animate-sheet-up absolute inset-x-0 bottom-0 rounded-t-[28px] bg-(--surf) px-5 pt-5 pb-8">
                     <div class="mx-auto mb-5 h-1 w-10 rounded-full bg-(--bd2)"></div>
-                    <div class="flex flex-col gap-1">
-                        @foreach ($moreLinks as $link)
-                            <a
-                                href="{{ route($link['route']) }}"
-                                wire:navigate
-                                x-on:click="more = false"
-                                class="press rounded-full px-4 py-3 text-[15px] {{ request()->routeIs($link['route']) ? 'bg-(--surf2) font-semibold' : 'text-(--tx)' }}"
-                            >{{ $link['label'] }}</a>
+                    <div class="flex flex-col gap-4">
+                        @foreach ($moreGroups as $heading => $links)
+                            <div class="flex flex-col gap-1">
+                                <p class="px-4 pb-1 text-[11px] tracking-[.12em] text-(--mut) uppercase">{{ $heading }}</p>
+                                @foreach ($links as $link)
+                                    <a
+                                        href="{{ route($link['route']) }}"
+                                        wire:navigate
+                                        x-on:click="more = false"
+                                        class="press rounded-full px-4 py-3 text-[15px] {{ request()->routeIs($link['route']) ? 'bg-(--surf2) font-semibold' : 'text-(--tx)' }}"
+                                    >{{ $link['label'] }}</a>
+                                @endforeach
+                            </div>
                         @endforeach
+
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
                             <button type="submit" class="press w-full rounded-full px-4 py-3 text-left text-[15px] text-(--mut)">Se déconnecter</button>

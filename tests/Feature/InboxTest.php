@@ -28,7 +28,7 @@ test('it lists unprocessed inbox items and shows an empty state when there are n
     $processed->delete();
     $pending->delete();
 
-    $this->get(route('inbox.index'))->assertSee('Inbox à zéro');
+    $this->get(route('inbox.index'))->assertSee('Rien à trier');
 });
 
 test('it converts an inbox item to a task', function () {

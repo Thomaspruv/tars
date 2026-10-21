@@ -51,7 +51,7 @@ test('the rail aggregates the four sources, in reading order', function () {
     $proposals = Livewire::test('proposals-rail')->get('proposals');
 
     expect($proposals)->toHaveCount(4);
-    expect($proposals->pluck('primaryLabel')->all())->toBe(['Lire', "Voir l'Inbox", 'Peser', 'Voir les jalons']);
+    expect($proposals->pluck('primaryLabel')->all())->toBe(['Lire', 'Aller trier', 'Peser', 'Voir les jalons']);
     expect($proposals[0]->text)->toContain('La semaine a tenu.');
     expect($proposals[0]->text)->toContain("Je l'ouvre ?");
     expect($proposals[3]->text)->toContain('Rien depuis 3 semaines et aucun jalon');
