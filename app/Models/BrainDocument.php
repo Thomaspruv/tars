@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Brain\NoteSearch;
 use App\Support\Brain\Schema\FrontmatterSchema;
 use App\Support\Brain\Schema\NoteType;
 use Database\Factories\BrainDocumentFactory;
@@ -24,6 +25,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $project_slug
  * @property Carbon|null $updated_on
  * @property string|null $content
+ * @property string|null $search_text
  * @property string $hash
  * @property Carbon|null $mtime
  * @property Carbon|null $created_at
@@ -31,7 +33,7 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable([
     'path', 'title', 'frontmatter', 'schema_version', 'is_conformant', 'note_type',
-    'status', 'project_slug', 'updated_on', 'content', 'hash', 'mtime',
+    'status', 'project_slug', 'updated_on', 'content', 'search_text', 'hash', 'mtime',
 ])]
 class BrainDocument extends Model
 {
@@ -113,11 +115,15 @@ class BrainDocument extends Model
      * @param  Builder<BrainDocument>  $query
      * @return Builder<BrainDocument>
      */
+    /**
+     * Les notes contenant *tous* les mots de la requête. Le classement par
+     * pertinence est l'affaire de NoteSearch — ici on ne fait que filtrer.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeSearch(Builder $query, string $term): Builder
     {
-        return $query->where(function (Builder $query) use ($term): void {
-            $query->where('title', 'like', "%{$term}%")
-                ->orWhere('content', 'like', "%{$term}%");
-        });
+        return NoteSearch::constrain($query, $term);
     }
 }

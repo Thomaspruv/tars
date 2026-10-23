@@ -76,7 +76,10 @@ class VaultIndexer
 
         $existing = BrainDocument::where('path', $relativePath)->first();
 
-        if ($existing && $existing->hash === $hash) {
+        // Le texte de recherche manquant fait relire une note dont le hash n'a
+        // pas bougé : c'est ce qui remplit la colonne sur un vault déjà indexé,
+        // sans demander un `brain:index --fresh` à la main.
+        if ($existing && $existing->hash === $hash && $existing->search_text !== null) {
             return 'unchanged';
         }
 
@@ -94,6 +97,7 @@ class VaultIndexer
                 'status' => $parsed->schema->status,
                 'updated_on' => is_string($updatedOn) ? $updatedOn : null,
                 'content' => $parsed->content,
+                'search_text' => NoteSearch::haystack($parsed->title, $parsed->content),
                 'hash' => $parsed->hash,
                 'mtime' => File::lastModified($absolutePath),
             ]
