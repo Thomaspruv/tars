@@ -21,6 +21,13 @@ class GetMemoryMapTool extends LoggedTool
      */
     private const int MAX_INDEX_LINES = 200;
 
+    /**
+     * Les documents de tête du vault, dans l'ordre où une IA doit les lire.
+     * `AGENTS.md` est la convention des agents de code, et le vault en a un :
+     * c'est lui qui porte le rituel de démarrage.
+     */
+    private const array FRONT_DOOR = ['AGENTS.md', 'README.md'];
+
     public function __construct(private readonly BrainSettings $settings) {}
 
     public function schema(JsonSchema $schema): array
@@ -34,13 +41,18 @@ class GetMemoryMapTool extends LoggedTool
             return Response::error("Le vault du cerveau n'est pas configuré.");
         }
 
-        $readme = BrainDocument::where('path', 'README.md')->first();
+        // La porte d'entrée du vault appartient au vault, pas à TARS : on lit
+        // ce qu'il a — son README et, s'il en a un, le protocole de lecture
+        // destiné aux IA — sans jamais le réécrire.
+        $blocks = [];
 
-        if (! $readme) {
-            return Response::error("Le plan du vault n'a pas encore été écrit. Lance une indexation du cerveau.");
+        foreach (self::FRONT_DOOR as $path) {
+            $document = BrainDocument::where('path', $path)->first();
+
+            if ($document !== null && trim((string) $document->content) !== '') {
+                $blocks[] = "# {$path}\n\n".$this->truncate(trim((string) $document->content));
+            }
         }
-
-        $blocks = ["# README du vault\n\n".trim((string) $readme->content)];
 
         foreach (IndexFileGenerator::INDEXED_FOLDERS as $folder) {
             $index = BrainDocument::where('path', "{$folder}/_index.md")->first();
@@ -50,6 +62,10 @@ class GetMemoryMapTool extends LoggedTool
             }
 
             $blocks[] = "# {$folder}\n\n".$this->truncate(trim((string) $index->content));
+        }
+
+        if ($blocks === []) {
+            return Response::error("Le cerveau n'a pas encore été indexé. Lance une indexation.");
         }
 
         return Response::text(implode("\n\n---\n\n", $blocks));

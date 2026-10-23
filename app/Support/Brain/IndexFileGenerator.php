@@ -10,17 +10,28 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
 
 /**
- * Writes the vault's own table of contents: the root `README.md` and one
- * `_index.md` per structuring folder (§A.6). They are what an agent reads to
- * know where to look and where to write — so they are generated, never
- * hand-edited, and regenerated from the index at every reindexation.
+ * Writes one `_index.md` per structuring folder — the summaries an agent reads
+ * to know what a folder holds. They carry a « généré par TARS » banner and are
+ * regenerated from the index at every reindexation.
+ *
+ * What it deliberately does *not* write any more: the vault's root `README.md`.
+ * The vault is a shared brain — Thomas in Obsidian, Hermes, TARS and whatever
+ * comes next — so its front door belongs to the vault, not to one of its
+ * writers. TARS reposing its own README there overwrote Hermes's every fifteen
+ * minutes (`brain:index` is scheduled), committed the difference, and that
+ * local commit is exactly what `pull --ff-only` then refused for three months.
+ * `get_memory_map` reads whatever README and AGENTS.md the vault has instead.
  */
 class IndexFileGenerator
 {
     /**
-     * Folders that get an `_index.md`, in reading order. A folder that does not
-     * exist yet is created with its index: that is how the target tree appears
-     * in Obsidian without moving a single existing note.
+     * Folders that get an `_index.md`, in reading order.
+     *
+     * Only folders the vault actually holds notes in: inventing the others
+     * used to be how TARS's target tree « appeared » in Obsidian, but in a
+     * shared vault it plants five empty folders next to the ones Thomas and
+     * Hermes already use — two taxonomies in one repo, which is precisely the
+     * mess to avoid.
      */
     public const array INDEXED_FOLDERS = ['Projets', 'Personnes', 'Organisations', 'Veille', 'Skills'];
 
@@ -73,10 +84,16 @@ class IndexFileGenerator
             ->orderBy('path')
             ->get(['path', 'title', 'note_type', 'status', 'updated_on', 'mtime']);
 
-        $targets = ['README.md' => ['README du vault', $this->readme()]];
+        $targets = [];
 
         foreach (self::INDEXED_FOLDERS as $folder) {
             $inFolder = $documents->filter(fn (BrainDocument $document): bool => str_starts_with($document->path, "{$folder}/"));
+
+            // Pas de note, pas d'index : on ne crée pas le dossier pour y
+            // poser un sommaire vide.
+            if ($inFolder->isEmpty()) {
+                continue;
+            }
 
             $targets["{$folder}/_index.md"] = ["Index — {$folder}", $this->table($folder, $inFolder)];
 
@@ -138,11 +155,6 @@ class IndexFileGenerator
     private function freshness(BrainDocument $document): string
     {
         return $document->updated_on?->toDateString() ?? $document->mtime?->toDateString() ?? '';
-    }
-
-    private function readme(): string
-    {
-        return rtrim(File::get(resource_path('vault/README.md')))."\n";
     }
 
     /**

@@ -16,20 +16,36 @@ beforeEach(function () {
 
 afterEach(fn () => File::deleteDirectory($this->vaultPath));
 
-test('returns the README and the root indexes', function () {
+/**
+ * La porte d'entrée est **lue**, pas écrite : le vault est un cerveau partagé,
+ * son README et son AGENTS.md appartiennent au dépôt et non à TARS. C'est ce
+ * qui a changé le 23/10 — TARS reposait son propre README par-dessus celui
+ * d'Hermès à chaque réindexation.
+ */
+test('returns the front door the vault itself carries, plus the root indexes', function () {
+    BrainDocument::factory()->create(['path' => 'AGENTS.md', 'title' => 'Protocole', 'content' => "# Protocole de lecture\n\nLire 00 - HOT d'abord."]);
+    BrainDocument::factory()->create(['path' => 'README.md', 'title' => 'Contexte', 'content' => '# Contexte — la bibliothèque']);
     BrainDocument::factory()->create(['path' => 'Personnes/marc.md', 'title' => 'Marc Dupont', 'note_type' => 'person']);
     mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths'));
     app(IndexFileGenerator::class)->write();
 
     TarsServer::tool(GetMemoryMapTool::class, [])
         ->assertOk()
-        ->assertSee('README du vault')
-        ->assertSee('contrat de fichier')
+        ->assertSee('Protocole de lecture')
+        ->assertSee('Contexte — la bibliothèque')
         ->assertSee('Personnes')
         ->assertSee('Marc Dupont');
 });
 
-test('tells the agent to index when the plan has not been written yet', function () {
+test('works with only the indexes when the vault has no front door of its own', function () {
+    BrainDocument::factory()->create(['path' => 'Personnes/marc.md', 'title' => 'Marc Dupont', 'note_type' => 'person']);
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths'));
+    app(IndexFileGenerator::class)->write();
+
+    TarsServer::tool(GetMemoryMapTool::class, [])->assertOk()->assertSee('Marc Dupont');
+});
+
+test('tells the agent to index when nothing has been indexed yet', function () {
     TarsServer::tool(GetMemoryMapTool::class, [])->assertHasErrors();
 });
 

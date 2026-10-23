@@ -15,21 +15,55 @@ beforeEach(function () {
 
 afterEach(fn () => File::deleteDirectory($this->vaultPath));
 
-test('writes the README and one index per structuring folder', function () {
+test('writes one index per folder that actually holds notes', function () {
+    BrainDocument::factory()->create(['path' => 'Personnes/marc.md', 'title' => 'Marc', 'note_type' => 'person']);
+
     mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once()->with(
         Mockery::type('string'),
-        Mockery::on(fn (array $paths): bool => in_array('README.md', $paths, true) && in_array('Personnes/_index.md', $paths, true)),
+        Mockery::on(fn (array $paths): bool => in_array('Personnes/_index.md', $paths, true)),
         'tars: index',
     ));
 
     $result = app(IndexFileGenerator::class)->write();
 
     expect($result->isWritten())->toBeTrue()
-        ->and($result->paths)->toContain('README.md', 'Projets/_index.md', 'Personnes/_index.md', 'Organisations/_index.md', 'Veille/_index.md', 'Skills/_index.md')
-        ->and(File::get($this->vaultPath.'/README.md'))->toContain('Le vault — la seconde mémoire de Thomas')
-        ->and(File::get($this->vaultPath.'/README.md'))->toContain('Maintenu par TARS et Thomas')
-        ->and(File::get($this->vaultPath.'/Personnes/_index.md'))->toContain('Généré par TARS')
-        ->and(File::get($this->vaultPath.'/Personnes/_index.md'))->toContain("Aucune note pour l'instant");
+        ->and($result->paths)->toBe(['Personnes/_index.md'])
+        ->and(File::get($this->vaultPath.'/Personnes/_index.md'))->toContain('Généré par TARS');
+});
+
+/**
+ * Le vault est un cerveau partagé — Thomas dans Obsidian, Hermès, TARS. Sa
+ * porte d'entrée appartient donc au vault, pas à l'un de ses rédacteurs.
+ * Mesuré : TARS reposait son propre README par-dessus celui d'Hermès toutes les
+ * quinze minutes (`brain:index` est planifié), et ce commit local est
+ * exactement ce qu'un `pull --ff-only` a ensuite refusé pendant trois mois.
+ */
+test('never touches the root README, which belongs to the vault', function () {
+    File::put($this->vaultPath.'/README.md', "# Le README de quelqu'un d'autre\n");
+    BrainDocument::factory()->create(['path' => 'Personnes/marc.md', 'title' => 'Marc', 'note_type' => 'person']);
+
+    mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once());
+
+    $result = app(IndexFileGenerator::class)->write();
+
+    expect($result->paths)->not->toContain('README.md')
+        ->and(File::get($this->vaultPath.'/README.md'))->toBe("# Le README de quelqu'un d'autre\n");
+});
+
+/**
+ * Inventer les dossiers manquants était la façon dont l'arborescence cible
+ * « apparaissait » dans Obsidian. Dans un vault partagé, ça plante cinq
+ * dossiers vides à côté de ceux que Thomas et Hermès utilisent déjà — deux
+ * taxonomies dans un dépôt, précisément le bordel à éviter.
+ */
+test('does not invent a folder just to put an empty index in it', function () {
+    mockVaultGit(fn ($mock) => $mock->shouldNotReceive('commitPaths'));
+
+    $result = app(IndexFileGenerator::class)->write();
+
+    expect($result->paths)->toBe([])
+        ->and(File::exists($this->vaultPath.'/Personnes'))->toBeFalse()
+        ->and(File::exists($this->vaultPath.'/Projets'))->toBeFalse();
 });
 
 test('lists the documents of a folder with their type, status and freshness', function () {
@@ -98,6 +132,8 @@ test('is deterministic: the same index produces the same file', function () {
 });
 
 test('commits nothing when nothing changed', function () {
+    BrainDocument::factory()->create(['path' => 'Personnes/marc.md', 'title' => 'Marc', 'note_type' => 'person']);
+
     mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once());
 
     app(IndexFileGenerator::class)->write();
@@ -113,6 +149,8 @@ test('commits nothing when nothing changed', function () {
 });
 
 test('rewrites only the index that moved', function () {
+    BrainDocument::factory()->create(['path' => 'Projets/spreak/README.md', 'title' => 'Spreak', 'note_type' => 'project']);
+
     mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths'));
 
     app(IndexFileGenerator::class)->write();
@@ -126,14 +164,16 @@ test('rewrites only the index that moved', function () {
 });
 
 test('the generated files are themselves conformant and exempt from the folder check', function () {
+    BrainDocument::factory()->create(['path' => 'Personnes/marc.md', 'title' => 'Marc', 'note_type' => 'person']);
+
     mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once());
 
     app(IndexFileGenerator::class)->write();
 
-    $readme = BrainDocument::where('path', 'README.md')->firstOrFail();
+    $index = BrainDocument::where('path', 'Personnes/_index.md')->firstOrFail();
 
-    expect($readme->is_conformant)->toBeTrue()
-        ->and($readme->isConformanceExempt())->toBeTrue();
+    expect($index->is_conformant)->toBeTrue()
+        ->and($index->isConformanceExempt())->toBeTrue();
 });
 
 test('the write-index command stays quiet when the vault is not configured', function () {
@@ -144,16 +184,20 @@ test('the write-index command stays quiet when the vault is not configured', fun
     expect(File::exists($this->vaultPath.'/README.md'))->toBeFalse();
 });
 
-test('the index command reposes the README right after indexing', function () {
-    File::put($this->vaultPath.'/note.md', "# Une note\n\nContenu.");
+test('the index command reposes the folder indexes right after indexing, and still not the README', function () {
+    File::ensureDirectoryExists($this->vaultPath.'/Personnes');
+    File::put($this->vaultPath.'/Personnes/marc.md', "---\nschema: 3\ntype: person\ntitle: Marc\ndate: 2026-10-16\n---\n\n# Marc\n");
     mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths')->once());
 
     $this->artisan('brain:index')->assertExitCode(0);
 
-    expect(File::exists($this->vaultPath.'/README.md'))->toBeTrue();
+    expect(File::exists($this->vaultPath.'/Personnes/_index.md'))->toBeTrue()
+        ->and(File::exists($this->vaultPath.'/README.md'))->toBeFalse();
 });
 
 test('rewrites a generated file whose frontmatter drifted', function () {
+    BrainDocument::factory()->create(['path' => 'Personnes/marc.md', 'title' => 'Marc', 'note_type' => 'person']);
+
     mockVaultGit(fn ($mock) => $mock->shouldReceive('commitPaths'));
 
     app(IndexFileGenerator::class)->write();
@@ -162,7 +206,7 @@ test('rewrites a generated file whose frontmatter drifted', function () {
     $body = app(IndexFileGenerator::class)->operations();
     expect($body)->toBe([]);
 
-    File::put($this->vaultPath.'/Personnes/_index.md', "# Personnes\n\nAucune note pour l'instant.\n");
+    File::put($this->vaultPath.'/Personnes/_index.md', "# Personnes\n\nSans frontmatter.\n");
 
     expect(array_map(
         fn ($operation): string => $operation->relativePath,
