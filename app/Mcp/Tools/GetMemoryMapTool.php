@@ -4,7 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Models\BrainDocument;
 use App\Support\Brain\BrainSettings;
-use App\Support\Brain\IndexFileGenerator;
+use App\Support\Brain\VaultLayout;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -28,7 +28,10 @@ class GetMemoryMapTool extends LoggedTool
      */
     private const array FRONT_DOOR = ['AGENTS.md', 'README.md'];
 
-    public function __construct(private readonly BrainSettings $settings) {}
+    public function __construct(
+        private readonly BrainSettings $settings,
+        private readonly VaultLayout $layout,
+    ) {}
 
     public function schema(JsonSchema $schema): array
     {
@@ -54,7 +57,7 @@ class GetMemoryMapTool extends LoggedTool
             }
         }
 
-        foreach (IndexFileGenerator::INDEXED_FOLDERS as $folder) {
+        foreach ($this->layout->indexedFolders() as $folder) {
             $index = BrainDocument::where('path', "{$folder}/_index.md")->first();
 
             if (! $index) {

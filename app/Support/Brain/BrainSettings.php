@@ -52,6 +52,47 @@ class BrainSettings
         return $value ? Carbon::parse($value) : null;
     }
 
+    /**
+     * La disposition de *ce* vault : type de note → dossier racine.
+     *
+     * Lue par VaultLayout, qui retombe sur le défaut de l'ontologie pour tout
+     * type absent. Stockée en JSON parce que c'est une donnée du vault et
+     * qu'elle change sans redéploiement — comme le reste de la config cerveau.
+     *
+     * @return array<string, string>
+     */
+    public function folders(): array
+    {
+        $stored = $this->get('folders');
+
+        if ($stored !== null) {
+            $decoded = json_decode($stored, true);
+
+            // Une valeur illisible en base ne doit pas faire tomber chaque
+            // écriture du vault : on retombe sur le défaut.
+            if (is_array($decoded)) {
+                return array_filter(
+                    $decoded,
+                    fn (mixed $folder, mixed $type): bool => is_string($type) && is_string($folder) && $folder !== '',
+                    ARRAY_FILTER_USE_BOTH
+                );
+            }
+        }
+
+        /** @var array<string, string> $configured */
+        $configured = config('brain.folders', []);
+
+        return $configured;
+    }
+
+    /**
+     * @param  array<string, string>  $folders
+     */
+    public function setFolders(array $folders): void
+    {
+        $this->set('folders', $folders === [] ? null : (string) json_encode($folders));
+    }
+
     public function isConfigured(): bool
     {
         return filled($this->remoteUrl());

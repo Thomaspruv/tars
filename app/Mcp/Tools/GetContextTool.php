@@ -8,7 +8,7 @@ use App\Models\Entity;
 use App\Models\Goal;
 use App\Support\Brain\BrainHealth;
 use App\Support\Brain\BrainSettings;
-use App\Support\Brain\IndexFileGenerator;
+use App\Support\Brain\VaultLayout;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -19,7 +19,10 @@ use Laravel\Mcp\Server\Attributes\Name;
 #[Description("Le profil de Thomas (dossier Profil/ du vault) et un résumé de l'état courant (entités et objectifs actifs). Pensé pour être appelé en début de conversation.")]
 class GetContextTool extends LoggedTool
 {
-    public function __construct(private readonly BrainSettings $settings) {}
+    public function __construct(
+        private readonly BrainSettings $settings,
+        private readonly VaultLayout $layout,
+    ) {}
 
     public function schema(JsonSchema $schema): array
     {
@@ -64,7 +67,7 @@ class GetContextTool extends LoggedTool
     {
         $report = app(BrainHealth::class)->report();
 
-        $indexes = collect(IndexFileGenerator::INDEXED_FOLDERS)
+        $indexes = collect($this->layout->indexedFolders())
             ->filter(fn (string $folder): bool => BrainDocument::where('path', "{$folder}/_index.md")->exists())
             ->implode(', ');
 

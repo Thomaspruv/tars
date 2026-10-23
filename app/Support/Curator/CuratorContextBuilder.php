@@ -12,7 +12,7 @@ use App\Models\Goal;
 use App\Models\McpCall;
 use App\Models\Task;
 use App\Support\Brain\BrainHealth;
-use App\Support\Brain\Schema\NoteType;
+use App\Support\Brain\VaultLayout;
 use App\Support\FuzzyMatcher;
 use Illuminate\Support\Collection;
 
@@ -36,21 +36,32 @@ class CuratorContextBuilder
     private const array DUPLICATE_FOLDERS = ['Notes', 'Personnes', 'Organisations'];
 
     public function __construct(
-        private readonly BrainHealth $health = new BrainHealth,
+        private readonly BrainHealth $health,
+        private readonly VaultLayout $layout,
         private readonly FuzzyMatcher $fuzzyMatcher = new FuzzyMatcher,
     ) {}
 
     /**
-     * Folders the curator is ever allowed to touch: the ontology's own, and
-     * nothing else. Hermes's technical memory — whatever its folders are
-     * actually called — and any stray path outside the documented tree stay
-     * out of scope.
+     * Folders the curator is ever allowed to touch: the ontology's own *in
+     * this vault*, and nothing else. Hermes's technical memory — whatever its
+     * folders are actually called — and any stray path outside the documented
+     * tree stay out of scope.
      *
      * @return list<string>
      */
-    public static function managedFolders(): array
+    public function managedFolders(): array
     {
-        return array_values(array_unique(array_map(fn (NoteType $type): string => $type->folder(), NoteType::cases())));
+        return $this->layout->managedFolders();
+    }
+
+    /**
+     * Le dossier où le type de ce document devrait vivre dans ce vault.
+     */
+    private function folderForDocument(BrainDocument $document): string
+    {
+        $type = $document->noteType();
+
+        return $type !== null ? $this->layout->folderFor($type) : '?';
     }
 
     public function build(string $mission): string
@@ -88,9 +99,9 @@ class CuratorContextBuilder
             ->values();
     }
 
-    public static function isManagedPath(string $path): bool
+    public function isManagedPath(string $path): bool
     {
-        return in_array(explode('/', $path)[0], self::managedFolders(), true);
+        return in_array(explode('/', $path)[0], $this->managedFolders(), true);
     }
 
     /**
@@ -157,7 +168,7 @@ class CuratorContextBuilder
 
             $diagnosis = implode(' ', array_filter([
                 $document->is_conformant ? 'Conforme.' : 'Non conforme : '.implode(' ', $document->schemaErrors()),
-                BrainHealth::isMisplaced($document) ? "Mal placé : le type « {$document->note_type} » appartient au dossier {$document->noteType()?->folder()}/." : null,
+                $this->health->isMisplaced($document) ? "Mal placé : le type « {$document->note_type} » appartient au dossier {$this->folderForDocument($document)}/." : null,
             ]));
 
             return <<<MD

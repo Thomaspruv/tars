@@ -25,22 +25,15 @@ use Illuminate\Support\Facades\File;
 class IndexFileGenerator
 {
     /**
-     * Folders that get an `_index.md`, in reading order.
+     * Les dossiers qui reçoivent un `_index.md` viennent de la disposition du
+     * vault (`VaultLayout`) : leurs noms appartiennent au dépôt, pas à TARS.
      *
-     * Only folders the vault actually holds notes in: inventing the others
-     * used to be how TARS's target tree « appeared » in Obsidian, but in a
-     * shared vault it plants five empty folders next to the ones Thomas and
-     * Hermes already use — two taxonomies in one repo, which is precisely the
-     * mess to avoid.
+     * Et seulement ceux qui contiennent des notes : inventer les autres était
+     * la façon dont l'arborescence cible « apparaissait » dans Obsidian, mais
+     * dans un vault partagé ça plante cinq dossiers vides à côté de ceux qui
+     * servent déjà — deux taxonomies dans un dépôt, précisément le bordel à
+     * éviter.
      */
-    public const array INDEXED_FOLDERS = ['Projets', 'Personnes', 'Organisations', 'Veille', 'Skills'];
-
-    /**
-     * Folders whose sub-folders each deserve their own index — a veille
-     * subject, a skill category.
-     */
-    public const array NESTED_FOLDERS = ['Veille', 'Skills'];
-
     private const string BANNER = '> **Généré par TARS** — ne pas éditer. Ce fichier est réécrit à chaque réindexation du cerveau.';
 
     public function __construct(
@@ -48,6 +41,7 @@ class IndexFileGenerator
         private readonly VaultWriter $writer,
         private readonly VaultParser $parser,
         private readonly FrontmatterBuilder $frontmatter,
+        private readonly VaultLayout $layout,
     ) {}
 
     /**
@@ -86,7 +80,7 @@ class IndexFileGenerator
 
         $targets = [];
 
-        foreach (self::INDEXED_FOLDERS as $folder) {
+        foreach ($this->layout->indexedFolders() as $folder) {
             $inFolder = $documents->filter(fn (BrainDocument $document): bool => str_starts_with($document->path, "{$folder}/"));
 
             // Pas de note, pas d'index : on ne crée pas le dossier pour y
@@ -97,7 +91,7 @@ class IndexFileGenerator
 
             $targets["{$folder}/_index.md"] = ["Index — {$folder}", $this->table($folder, $inFolder)];
 
-            if (! in_array($folder, self::NESTED_FOLDERS, true)) {
+            if (! in_array($folder, $this->layout->nestedFolders(), true)) {
                 continue;
             }
 

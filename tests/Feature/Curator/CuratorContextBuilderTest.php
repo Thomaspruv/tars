@@ -15,7 +15,7 @@ test('todo mission selects only a-traiter notes under TARS/', function () {
     BrainDocument::factory()->create(['path' => 'TARS/2026-07-27-other.md', 'frontmatter' => ['type' => 'traite']]);
     BrainDocument::factory()->create(['path' => 'Notes/plombier.md', 'frontmatter' => ['type' => 'note']]);
 
-    $notes = (new CuratorContextBuilder)->notesToProcess('todo');
+    $notes = app(CuratorContextBuilder::class)->notesToProcess('todo');
 
     expect($notes)->toHaveCount(1)
         ->and($notes->first()->id)->toBe($todo->id);
@@ -29,7 +29,7 @@ test('tidy mission selects the whole sas plus unanchored notes, excluding Profil
     $anchored->entities()->attach($anchoredEntity);
     BrainDocument::factory()->create(['path' => 'Profil/perso.md']);
 
-    $notes = (new CuratorContextBuilder)->notesToProcess('tidy');
+    $notes = app(CuratorContextBuilder::class)->notesToProcess('tidy');
 
     $ids = $notes->pluck('id');
     expect($ids)->toContain($sas->id)
@@ -40,7 +40,7 @@ test('tidy mission selects the whole sas plus unanchored notes, excluding Profil
 test('tidy mission excludes unmanaged folders even when unanchored', function () {
     BrainDocument::factory()->create(['path' => 'ActiveContext/session.md']);
 
-    $notes = (new CuratorContextBuilder)->notesToProcess('tidy');
+    $notes = app(CuratorContextBuilder::class)->notesToProcess('tidy');
 
     expect($notes)->toBeEmpty();
 });
@@ -54,7 +54,7 @@ test('assembles the referential, living map, notes, mcp calls and open tasks sec
     Checklist::factory()->create(['name' => 'Courses']);
     McpCall::factory()->create(['tool' => 'add_task']);
 
-    $context = (new CuratorContextBuilder)->build('todo');
+    $context = app(CuratorContextBuilder::class)->build('todo');
 
     expect($context)
         ->toContain('## Référentiel d\'ancrage')
@@ -90,7 +90,7 @@ test('includes recent rejections for the notes being processed, excludes rejecti
         'created_at' => now()->subDays(40),
     ]);
 
-    $context = (new CuratorContextBuilder)->build('todo');
+    $context = app(CuratorContextBuilder::class)->build('todo');
 
     expect($context)->toContain('## Refus récents (30 derniers jours)')
         ->toContain('anchor')

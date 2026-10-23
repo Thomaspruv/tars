@@ -101,7 +101,7 @@ test('the context builder never submits Profil, Hermes territory or a generated 
 test('a document in the sas or the archives is never called misplaced', function (string $path) {
     $document = BrainDocument::factory()->create(['path' => $path, 'note_type' => 'person', 'is_conformant' => true]);
 
-    expect(BrainHealth::isMisplaced($document))->toBeFalse();
+    expect(app(BrainHealth::class)->isMisplaced($document))->toBeFalse();
 })->with(['TARS/2026-10-16-marc.md', 'Archives/marc.md']);
 
 test('runs one LLM call per batch of forty documents, all logged', function () {

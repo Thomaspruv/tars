@@ -25,4 +25,23 @@ return [
 
     'auto_index' => env('BRAIN_AUTO_INDEX', true),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Vault layout
+    |--------------------------------------------------------------------------
+    |
+    | Où chaque type de note est rangé dans ce vault. Vide = la disposition par
+    | défaut de l'ontologie (voir NoteType::folder()), celle d'un vault neuf
+    | que TARS dispose à sa façon.
+    |
+    | Le cerveau étant un dépôt unique partagé par plusieurs applications, sa
+    | disposition lui appartient : elle est souvent antérieure à TARS. Les
+    | valeurs réglées dans la table `settings` (clé `brain.folders`) prennent
+    | donc le pas, et c'est App\Support\Brain\VaultLayout qui les lit. Le
+    | règlement du cerveau est dans resources/vault/AGENTS.md.
+    |
+    */
+
+    'folders' => [],
+
 ];

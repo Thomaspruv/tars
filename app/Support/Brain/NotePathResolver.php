@@ -16,7 +16,10 @@ use Illuminate\Support\Str;
  */
 class NotePathResolver
 {
-    public function __construct(private readonly BrainSettings $settings) {}
+    public function __construct(
+        private readonly BrainSettings $settings,
+        private readonly VaultLayout $layout,
+    ) {}
 
     /**
      * @param  array{subject?: ?string, project?: ?string}  $options
@@ -27,20 +30,24 @@ class NotePathResolver
         $slug = Str::slug($title) ?: 'note';
         $project = $this->slugOrNull($options['project'] ?? null);
 
+        // Aucun nom de dossier en dur ici : la disposition appartient au
+        // vault, pas à TARS (voir VaultLayout).
+        $projects = $this->layout->folderFor(NoteType::Project);
+
         if ($type === NoteType::Project) {
-            return "Projets/{$slug}/README.md";
+            return "{$projects}/{$slug}/README.md";
         }
 
         if ($type === NoteType::Journal) {
-            return "Journal/{$date->format('Y')}/{$date->format('Y-m-d')}.md";
+            return $this->layout->folderFor($type)."/{$date->format('Y')}/{$date->format('Y-m-d')}.md";
         }
 
         $folder = match (true) {
-            $type === NoteType::Veille => 'Veille'.($this->slugOrNull($options['subject'] ?? null) !== null ? '/'.$this->slugOrNull($options['subject']) : ''),
+            $type === NoteType::Veille => $this->layout->folderFor($type).($this->slugOrNull($options['subject'] ?? null) !== null ? '/'.$this->slugOrNull($options['subject']) : ''),
             // Prepared for the Projets iteration: a project's dated notes live
             // alongside its brief rather than in the transverse folders.
-            $project !== null && in_array($type, [NoteType::Meeting, NoteType::Note, NoteType::Decision], true) => "Projets/{$project}/notes",
-            default => $type->folder(),
+            $project !== null && in_array($type, [NoteType::Meeting, NoteType::Note, NoteType::Decision], true) => "{$projects}/{$project}/notes",
+            default => $this->layout->folderFor($type),
         };
 
         $filename = $type->isDated()

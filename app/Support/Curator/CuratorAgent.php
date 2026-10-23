@@ -308,7 +308,7 @@ class CuratorAgent
 
         $movesFile = in_array($action, [BrainSuggestionAction::Move, BrainSuggestionAction::Merge], true);
 
-        return $movesFile && ($target === null || ! CuratorContextBuilder::isManagedPath($target));
+        return $movesFile && ($target === null || ! $this->contextBuilder->isManagedPath($target));
     }
 
     private function isRecentlyRejected(int $documentId, BrainSuggestionAction $action, ?string $target): bool

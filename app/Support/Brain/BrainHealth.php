@@ -17,11 +17,7 @@ use Illuminate\Support\Collection;
  */
 class BrainHealth
 {
-    /**
-     * Folders where a document's location says nothing about its type: the sas
-     * is a waiting room, the archives keep the type they had when filed.
-     */
-    public const array UNPLACED_FOLDERS = ['TARS', 'Archives'];
+    public function __construct(private readonly VaultLayout $layout) {}
 
     public function report(): BrainHealthReport
     {
@@ -60,11 +56,16 @@ class BrainHealth
             ->where('is_conformant', true)
             ->whereNotNull('note_type')
             ->get($columns)
-            ->filter(fn (BrainDocument $document): bool => self::isMisplaced($document))
+            ->filter($this->isMisplaced(...))
             ->values();
     }
 
-    public static function isMisplaced(BrainDocument $document): bool
+    /**
+     * Une note conforme rangée dans le mauvais dossier *pour ce vault* — la
+     * disposition étant une donnée du dépôt, c'est VaultLayout qui dit où le
+     * type devrait vivre.
+     */
+    public function isMisplaced(BrainDocument $document): bool
     {
         $type = $document->noteType();
         $folder = explode('/', $document->path)[0];
@@ -73,11 +74,13 @@ class BrainHealth
             return false;
         }
 
-        if (in_array($folder, self::UNPLACED_FOLDERS, true)) {
+        // Le sas est une salle d'attente, les archives gardent le type qu'elles
+        // avaient au classement : l'emplacement n'y dit rien du type.
+        if (in_array($folder, $this->layout->unplacedFolders(), true)) {
             return false;
         }
 
-        return $folder !== $type->folder();
+        return $folder !== $this->layout->folderFor($type);
     }
 
     /**

@@ -52,7 +52,7 @@ pas d'autre fonction, et c'est la raison de le garder.
 | `00 - HOT/` | le présent : règles, profil, état, index. Une page max chacun | `profil` |
 | `01 - PROJETS/<slug>/` | un dossier par projet : `fiche.md` vivant, `AGENTS.md`, specs | `project` |
 | `02 - SYSTEME/` | infra, accès, pipeline, config | `note` |
-| `03 - DECISIONS/` | `decision-log.md` — **un seul fichier**, en ajout, tagué `[projet]` | `decision` |
+| `03 - DECISIONS/` | une note datée par décision. **Un seul endroit**, jamais de log par projet | `decision` |
 | `04 - MEMOIRE-AGENTS/snapshots/` | fin de session, daté | — |
 | `05 - ARCHIVES/` | ce qui est terminé, avec sa date d'archivage | `archive` |
 | `06 - PERSO/` | vie privée : `BIENS/ FAMILLE/ FINANCES/ SANTE/ SOCIETES/` | `note` |
@@ -127,7 +127,12 @@ Exempts : `Profil/`, `.hermes/`, et les fichiers générés (`_index.md`).
    lit, donc un dossier de 500 notes est **invisible**.
 3. **`00 - HOT` court pour toujours.** L'ancien état part en
    `04 - MEMOIRE-AGENTS/snapshots/`.
-4. **Un seul decision-log**, global, tagué par projet. Pas de log par projet.
+4. **Un seul endroit pour les décisions**, global : `03 - DECISIONS/`. Jamais
+   de log par projet — c'est la fragmentation qu'on refuse. Mais **une note
+   datée par décision** plutôt qu'un fichier unique qui gonfle : c'est la règle
+   3 appliquée (une décision s'ajoute, elle ne se corrige pas), et une décision
+   par note se cherche, s'ancre et se cite. `decision-log.md` reste comme
+   archive des entrées d'avant cette règle.
 5. **Une note = un sujet.** Une note qui couvre cinq sujets matche mal sur les
    cinq et ne tient pas dans un extrait de recherche.
 

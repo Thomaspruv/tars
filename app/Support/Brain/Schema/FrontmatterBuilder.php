@@ -2,6 +2,7 @@
 
 namespace App\Support\Brain\Schema;
 
+use App\Support\Brain\VaultLayout;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 
@@ -11,7 +12,10 @@ use Illuminate\Support\Carbon;
  */
 class FrontmatterBuilder
 {
-    public function __construct(private readonly FrontmatterSchema $schema = new FrontmatterSchema) {}
+    public function __construct(
+        private readonly FrontmatterSchema $schema = new FrontmatterSchema,
+        private readonly ?VaultLayout $layout = null,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $extra
@@ -51,8 +55,10 @@ class FrontmatterBuilder
     {
         $merged = [...$frontmatter, ...$patch];
 
+        $folder = explode('/', $relativePath)[0];
+
         $type = NoteType::tryFrom((string) ($merged['type'] ?? ''))
-            ?? NoteType::fromFolder(explode('/', $relativePath)[0])
+            ?? ($this->layout ?? app(VaultLayout::class))->typeForFolder($folder)
             ?? NoteType::Note;
 
         $validated = $this->schema->validate($merged);
