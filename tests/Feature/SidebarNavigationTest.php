@@ -146,3 +146,19 @@ test('a running mission puts a dot on the Hermès space, never a number', functi
     expect($html)->toContain('mission en cours')
         ->and($html)->not->toContain('bg-(--aibg) text-(--ai)">1');
 });
+
+/**
+ * Le bouton abricot est la seule largeur fixe du menu, et le menu descend à
+ * 232 px : « + Poser quelque chose ⌘K » y réclamait 218 px de contenu pour
+ * 200 px disponibles, et le raccourci sortait de la pilule. L'étiquette reste,
+ * l'indice passe dans l'infobulle.
+ */
+test('the capture pill holds its label, and the shortcut rides outside the text', function () {
+    $sidebar = sidebar($this->get(route('today'))->getContent());
+
+    expect($sidebar)->toContain('Poser quelque chose')
+        ->and($sidebar)->toContain('aria-keyshortcuts="Meta+K"')
+        ->and($sidebar)->toContain('title="Poser quelque chose — ⌘K"')
+        // Plus de pastille dans la pilule : le ⌘K n'apparaît que dans l'attribut.
+        ->and(substr_count($sidebar, '⌘K'))->toBe(1);
+});

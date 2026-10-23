@@ -22,16 +22,24 @@ $aside = Spaces::aside();
     </a>
 
     {{-- La capture est le seul geste toujours disponible : elle a donc le seul
-         bouton abricot permanent de l'app. --}}
+         bouton abricot permanent de l'app.
+
+         Pas de pastille « ⌘K » dedans. Mesuré : à la largeur plancher du menu
+         (232 px, donc toute fenêtre sous ~1390 px) la pilule offre 200 px de
+         contenu, quand « + Poser quelque chose ⌘K » en réclame 218 — le
+         raccourci débordait de 18 px, et même à 1512 px il venait coller le
+         bord arrondi. L'étiquette est le geste, le raccourci n'est qu'un
+         indice : il descend dans l'infobulle et dans `aria-keyshortcuts`. --}}
     <button
         type="button"
         x-data
         x-on:click="window.dispatchEvent(new CustomEvent('open-quick-add'))"
-        class="sidebar-door mb-[22px] flex items-center gap-2 rounded-full bg-(--ac) px-4 py-3 font-bold whitespace-nowrap text-(--acT) shadow-[0_2px_0_var(--acsh)] transition-[background-color,box-shadow,translate] duration-(--dur-tap) ease-(--ease) hover:bg-(--achov) active:translate-y-[2px] active:shadow-none"
+        title="Poser quelque chose — ⌘K"
+        aria-keyshortcuts="Meta+K"
+        class="sidebar-door mb-[22px] flex items-center justify-center gap-2 rounded-full bg-(--ac) px-4 py-3 font-bold whitespace-nowrap text-(--acT) shadow-[0_2px_0_var(--acsh)] transition-[background-color,box-shadow,translate] duration-(--dur-tap) ease-(--ease) hover:bg-(--achov) active:translate-y-[2px] active:shadow-none"
     >
         <span aria-hidden="true" class="text-[17px] leading-none">+</span>
         Poser quelque chose
-        <span class="ml-auto text-[12px] opacity-60">⌘K</span>
     </button>
 
     <nav class="flex flex-col gap-[3px]">
