@@ -4,6 +4,7 @@ use App\Enums\BrainSuggestionStatus;
 use App\Enums\GitSyncStatus;
 use App\Models\BrainDocument;
 use App\Models\BrainSuggestion;
+use App\Jobs\RefreshVaultStatusJob;
 use App\Jobs\RunAgentCommandJob;
 use App\Models\AgentConfig;
 use App\Support\Brain\AnchorResolver;
@@ -11,14 +12,13 @@ use App\Support\Brain\BrainHealth;
 use App\Support\Brain\BrainHealthReport;
 use App\Support\Brain\BrainSettings;
 use App\Support\Brain\NotePathResolver;
+use App\Support\Brain\NoteSearch;
 use App\Support\Brain\Schema\FrontmatterSchema;
-use App\Support\Brain\GitRepository;
 use App\Support\Brain\Schema\FrontmatterBuilder;
 use App\Support\Brain\Schema\NoteType;
 use App\Support\Brain\VaultWriter;
 use App\Support\Curator\SuggestionApplier;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use League\CommonMark\CommonMarkConverter;
@@ -64,6 +64,17 @@ new #[Title('Mémoire')] class extends Component
             .$this->health->conformant.'/'.$this->health->underContract.' notes';
     }
 
+    /**
+     * L'état git du vault se relit (une ligne de `settings`) mais se vérifie
+     * hors requête : un `git fetch` coûte ~1,1 s de réseau, et il n'a rien à
+     * faire dans le chemin d'un clic de Thomas. Ici, donc — une fois par
+     * chargement de page, pas à chaque rendu.
+     */
+    public function mount(): void
+    {
+        RefreshVaultStatusJob::dispatchIfStale();
+    }
+
     #[Computed]
     public function configured(): bool
     {
@@ -79,9 +90,21 @@ new #[Title('Mémoire')] class extends Component
     #[Computed]
     public function lastPushedAt(): ?\Carbon\CarbonInterface
     {
-        return $this->configured
-            ? app(GitRepository::class)->lastPushAt(app(BrainSettings::class)->localPath())
-            : null;
+        return app(BrainSettings::class)->lastPushAt();
+    }
+
+    /**
+     * La synchro périodique en panne — une divergence ne se répare jamais
+     * d'elle-même, donc tant qu'elle est là le vault est figé et Thomas doit le
+     * savoir. Sans cette alerte, le seul indice était un « dernier pull »
+     * vieux de trois mois, enterré dans les Réglages.
+     *
+     * @return ?array{since: \Illuminate\Support\Carbon, message: string, attempts: int}
+     */
+    #[Computed]
+    public function syncAlert(): ?array
+    {
+        return app(BrainSettings::class)->syncFailure();
     }
 
     /**
@@ -160,23 +183,24 @@ new #[Title('Mémoire')] class extends Component
     }
 
     /**
-     * L'état git du vault, affiché en pied de l'arborescence.
-     *
-     * Mis en cache une minute : `git status` est un appel système, et cet
-     * écran se re-rend à chaque frappe dans la recherche.
+     * L'état git du vault, affiché en pied de l'arborescence : la valeur
+     * enregistrée par RefreshVaultStatusJob, relue en une requête.
      */
     #[Computed]
     public function gitStatus(): GitSyncStatus
     {
-        if (! $this->configured) {
-            return GitSyncStatus::Unknown;
-        }
+        return app(BrainSettings::class)->syncStatus();
+    }
 
-        return Cache::remember(
-            'brain.git-status',
-            now()->addMinute(),
-            fn (): GitSyncStatus => app(GitRepository::class)->status(app(BrainSettings::class)->localPath()),
-        );
+    /**
+     * Quand cet état a été constaté — porté en infobulle sur la pastille, pour
+     * qu'une pastille verte vieille d'une heure ne passe pas pour un contrôle
+     * à l'instant.
+     */
+    #[Computed]
+    public function gitCheckedAt(): ?\Carbon\CarbonInterface
+    {
+        return app(BrainSettings::class)->syncStatusAt();
     }
 
     #[Computed]
@@ -400,7 +424,9 @@ new #[Title('Mémoire')] class extends Component
             return new Collection;
         }
 
-        return BrainDocument::search($this->search)->orderBy('title')->limit(20)->get();
+        // Classées par pertinence, comme pour un agent : l'ordre alphabétique
+        // mettait « Autre chose » avant la note qu'on cherchait.
+        return app(NoteSearch::class)->find($this->search, 20);
     }
 
     public function selectDocument(string $documentPath): void
@@ -554,6 +580,18 @@ new #[Title('Mémoire')] class extends Component
                 <a href="{{ route('settings.index') }}#cerveau" wire:navigate class="mt-2 inline-block text-[13px] text-(--ac) hover:text-(--achov)">Forcer la synchro dans les Réglages →</a>
             </div>
         @endif
+
+        @if ($this->syncAlert)
+            <div class="mb-[22px] max-w-[620px] rounded-[16px] border border-(--dgr) bg-(--surf) p-4">
+                <p class="mb-1 text-[13px] font-semibold text-(--dgr)">
+                    La synchro du vault échoue depuis {{ $this->syncAlert['since']->diffForHumans(null, true) }}
+                    <span class="font-normal text-(--mut)">· {{ $this->syncAlert['attempts'] }} tentative{{ $this->syncAlert['attempts'] > 1 ? 's' : '' }}</span>
+                </p>
+                <p class="text-[13px] leading-[1.6] text-(--mut)">Le vault est figé : rien n'est tiré de GitHub ni poussé vers lui tant que ce n'est pas réglé.</p>
+                <p class="mt-1.5 font-mono text-[12px] leading-[1.6] text-(--mut)">{{ Str::limit($this->syncAlert["message"], 300) }}</p>
+                <a href="{{ route('settings.index') }}#cerveau" wire:navigate class="mt-2 inline-block text-[13px] text-(--ac) hover:text-(--achov)">Forcer la synchro dans les Réglages →</a>
+            </div>
+        @endif
     @endif
     <div class="grid grid-cols-1 items-start gap-x-7 gap-y-6 lg:grid-cols-[232px_minmax(0,1fr)] xl:grid-cols-[232px_minmax(0,1fr)_316px]">
         {{-- L'arborescence est une colonne de l'écran, plus une barre latérale
@@ -605,7 +643,7 @@ new #[Title('Mémoire')] class extends Component
                         <div class="h-full rounded-full bg-(--ai)" style="width: {{ $this->health->conformanceRate }}%"></div>
                     </div>
 
-                    <p class="flex items-center gap-2 text-[12px] {{ $gitTone[0] }}">
+                    <p class="flex items-center gap-2 text-[12px] {{ $gitTone[0] }}" @if ($this->gitCheckedAt) title="Vérifié {{ $this->gitCheckedAt->diffForHumans() }}" @endif>
                         <span class="size-[7px] shrink-0 rounded-full {{ $gitTone[1] }}" aria-hidden="true"></span>{{ $gitTone[2] }}
                         <span class="ml-auto font-mono text-[11px] text-(--mut)">{{ $this->gitBranch }}</span>
                     </p>

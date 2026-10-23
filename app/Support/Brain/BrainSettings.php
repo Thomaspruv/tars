@@ -2,7 +2,9 @@
 
 namespace App\Support\Brain;
 
+use App\Enums\GitSyncStatus;
 use App\Models\Setting;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 
 class BrainSettings
@@ -75,6 +77,45 @@ class BrainSettings
         $this->set('last_indexed_at', now()->toDateTimeString());
     }
 
+    /**
+     * L'état git du vault, tel que la dernière vérification l'a trouvé.
+     *
+     * Le vérifier demande un `git fetch`, donc un aller-retour réseau d'une
+     * seconde : c'est RefreshVaultStatusJob qui le fait, hors requête, et les
+     * écrans ne font plus que relire ce qu'il a écrit. Le faire dans un rendu,
+     * c'était faire attendre Thomas une seconde pour une pastille — à chaque
+     * frappe dans la recherche de /cerveau.
+     */
+    public function syncStatus(): GitSyncStatus
+    {
+        return GitSyncStatus::tryFrom((string) $this->get('sync_status')) ?? GitSyncStatus::Unknown;
+    }
+
+    /**
+     * Quand cet état a été constaté. Un écran qui montre une pastille sans
+     * pouvoir dire de quand elle date laisse croire qu'elle est vivante.
+     */
+    public function syncStatusAt(): ?Carbon
+    {
+        $value = $this->get('sync_status_at');
+
+        return $value ? Carbon::parse($value) : null;
+    }
+
+    public function lastPushAt(): ?Carbon
+    {
+        $value = $this->get('last_push_at');
+
+        return $value ? Carbon::parse($value) : null;
+    }
+
+    public function recordSyncStatus(GitSyncStatus $status, ?CarbonInterface $lastPushAt): void
+    {
+        $this->set('sync_status', $status->value);
+        $this->set('sync_status_at', now()->toDateTimeString());
+        $this->set('last_push_at', $lastPushAt?->toDateTimeString());
+    }
+
     public function lastPushError(): ?string
     {
         return $this->get('last_push_error');
@@ -101,6 +142,60 @@ class BrainSettings
         }
 
         $this->set('last_sync_warning', $message);
+    }
+
+    /**
+     * Depuis quand la synchro périodique échoue, et combien de fois de suite.
+     *
+     * `pullRebase()` ne rend `successful: false` que pour une vraie divergence
+     * — un remote injoignable passe en avertissement. Or une divergence ne se
+     * répare jamais d'elle-même : la synchro échouera à l'identique toutes les
+     * quinze minutes jusqu'à ce que Thomas tranche. Il faut donc le dire, et le
+     * dire dès le premier échec. Vécu : `git pull --ff-only` a refusé pendant
+     * trois mois sans que rien à l'écran ne le signale, et le vault est resté
+     * figé avec pour seul indice un `last_synced_at` vieux de l'été.
+     *
+     * @return ?array{since: Carbon, message: string, attempts: int}
+     */
+    public function syncFailure(): ?array
+    {
+        $since = $this->get('sync_failed_since');
+
+        if ($since === null) {
+            return null;
+        }
+
+        return [
+            'since' => Carbon::parse($since),
+            'message' => (string) $this->get('sync_failure_message'),
+            'attempts' => max(1, (int) $this->get('sync_failure_count')),
+        ];
+    }
+
+    /**
+     * La date retenue est celle du *premier* échec de la série : c'est elle qui
+     * dit depuis quand le vault est figé. Les suivants n'incrémentent que le
+     * compteur.
+     */
+    public function recordSyncFailure(string $message): void
+    {
+        if ($this->get('sync_failed_since') === null) {
+            $this->set('sync_failed_since', now()->toDateTimeString());
+        }
+
+        $this->set('sync_failure_message', $message);
+        $this->set('sync_failure_count', (string) (((int) $this->get('sync_failure_count')) + 1));
+    }
+
+    public function clearSyncFailure(): void
+    {
+        if ($this->get('sync_failed_since') === null) {
+            return;
+        }
+
+        $this->set('sync_failed_since', null);
+        $this->set('sync_failure_message', null);
+        $this->set('sync_failure_count', null);
     }
 
     public function lastConflictAt(): ?Carbon

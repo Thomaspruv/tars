@@ -101,14 +101,15 @@ test('syncs the vault now and refreshes the status', function () {
 
     $this->mock(GitRepository::class, function ($mock): void {
         $mock->shouldReceive('ensureCloned')->once();
-        $mock->shouldReceive('pull')->once()->andReturn(new GitPullResult(successful: true, message: 'ok'));
+        $mock->shouldReceive('pullRebase')->once()->andReturn(new GitPullResult(successful: true, message: 'ok'));
         $mock->shouldReceive('status')->andReturn(GitSyncStatus::Synced);
         $mock->shouldReceive('lastPushAt')->andReturnNull();
     });
 
     Livewire::test('pages::settings-app')->call('syncBrainNow');
 
-    expect((new BrainSettings)->lastSyncedAt())->not->toBeNull();
+    expect((new BrainSettings)->lastSyncedAt())->not->toBeNull()
+        ->and((new BrainSettings)->syncFailure())->toBeNull();
 });
 
 test('reindexes the vault from scratch', function () {

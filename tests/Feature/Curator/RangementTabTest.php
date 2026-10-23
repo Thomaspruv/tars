@@ -237,7 +237,10 @@ test('the conformance check is queued, and refuses to run without a configured c
         ->call('runConformanceCheck')
         ->assertHasErrors(['conformance']);
 
-    Queue::assertNothingPushed();
+    // Ce que ce test surveille, c'est la mission du curateur — pas le
+    // rafraîchissement de l'état du vault, que le mount() de l'écran met sur
+    // la file à chaque chargement.
+    Queue::assertNotPushed(RunAgentCommandJob::class);
 
     AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
 

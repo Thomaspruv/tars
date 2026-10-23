@@ -8,6 +8,7 @@ use App\Models\GoogleCalendarConnection;
 use App\Models\McpCall;
 use App\Support\Agents\AgentRunner;
 use App\Support\Archiving\ArchiveSettings;
+use App\Jobs\RefreshVaultStatusJob;
 use App\Support\Brain\BrainSettings;
 use App\Support\Brain\GitRepository;
 use App\Support\GoogleCalendar\GoogleCalendarClient;
@@ -95,6 +96,10 @@ new #[Title('Réglages')] class extends Component
     public function mount(): void
     {
         $settings = app(BrainSettings::class);
+
+        // Même raison que sur /cerveau : la vérification git part sur la file,
+        // une fois par chargement, et cet écran se contente de relire.
+        RefreshVaultStatusJob::dispatchIfStale();
 
         $this->brainRemoteUrl = (string) $settings->remoteUrl();
         $this->brainBranch = $settings->branch();
@@ -275,22 +280,30 @@ new #[Title('Réglages')] class extends Component
     }
 
     /**
-     * @return array{lastSynced: ?Carbon, lastIndexed: ?Carbon, documentsCount: int, gitStatus: GitSyncStatus, lastPushed: ?Carbon, lastPushError: ?string, lastSyncWarning: ?string, lastConflictAt: ?Carbon, lastConflictMessage: ?string}
+     * L'état du vault, relu dans les réglages — jamais recalculé.
+     *
+     * `git status` fait un `git fetch` (~1,1 s de réseau) : le laisser ici le
+     * faisait payer à chaque rendu de cet écran, c'est-à-dire à chaque champ
+     * touché dans une page qui en compte des dizaines. C'est
+     * RefreshVaultStatusJob qui va voir, hors requête.
+     *
+     * @return array{lastSynced: ?Carbon, lastIndexed: ?Carbon, documentsCount: int, gitStatus: GitSyncStatus, gitCheckedAt: ?Carbon, lastPushed: ?Carbon, lastPushError: ?string, lastSyncWarning: ?string, syncFailure: ?array{since: Carbon, message: string, attempts: int}, lastConflictAt: ?Carbon, lastConflictMessage: ?string}
      */
     #[Computed]
     public function brainStatus(): array
     {
         $settings = app(BrainSettings::class);
-        $git = app(GitRepository::class);
 
         return [
             'lastSynced' => $settings->lastSyncedAt(),
             'lastIndexed' => $settings->lastIndexedAt(),
             'documentsCount' => BrainDocument::count(),
-            'gitStatus' => $git->status($settings->localPath()),
-            'lastPushed' => $git->lastPushAt($settings->localPath()),
+            'gitStatus' => $settings->syncStatus(),
+            'gitCheckedAt' => $settings->syncStatusAt(),
+            'lastPushed' => $settings->lastPushAt(),
             'lastPushError' => $settings->lastPushError(),
             'lastSyncWarning' => $settings->lastSyncWarning(),
+            'syncFailure' => $settings->syncFailure(),
             'lastConflictAt' => $settings->lastConflictAt(),
             'lastConflictMessage' => $settings->lastConflictMessage(),
         ];
@@ -365,6 +378,10 @@ new #[Title('Réglages')] class extends Component
             $settings->recordPushError($e->getMessage());
             $this->brainSyncMessage = "Le push a échoué : {$e->getMessage()}";
         }
+
+        // Thomas vient de cliquer et attend le résultat : ici, et seulement
+        // ici, la vérification se fait dans la requête.
+        dispatch_sync(new RefreshVaultStatusJob);
 
         unset($this->brainStatus);
     }
@@ -726,6 +743,13 @@ new #[Title('Réglages')] class extends Component
                 </div>
 
                 <dl class="space-y-2 font-mono text-xs text-(--mut)">
+                    {{-- Le statut ci-dessus est un constat, pas une mesure en
+                         direct : dire de quand il date évite de lire une
+                         pastille verte comme une vérification à l'instant. --}}
+                    <div class="flex justify-between">
+                        <dt>Statut vérifié</dt>
+                        <dd class="text-(--tx)">{{ $this->brainStatus['gitCheckedAt']?->translatedFormat('d M · H:i') ?? '—' }}</dd>
+                    </div>
                     <div class="flex justify-between">
                         <dt>Dernier pull</dt>
                         <dd class="text-(--tx)">{{ $this->brainStatus['lastSynced']?->translatedFormat('d M · H:i') ?? '—' }}</dd>
@@ -750,6 +774,21 @@ new #[Title('Réglages')] class extends Component
                             Conflit git — {{ $this->brainStatus['lastConflictAt']->translatedFormat('d M · H:i') }}
                         </p>
                         <p class="text-[12px] leading-[1.6] text-(--mut)">{{ $this->brainStatus['lastConflictMessage'] }}</p>
+                    </div>
+                @endif
+
+                {{-- Une divergence ne se répare jamais d'elle-même : la
+                     synchro réessaiera à l'identique toutes les quinze minutes
+                     jusqu'à ce que Thomas tranche. Donc on le dit ici, et pas
+                     seulement par un « dernier pull » qui vieillit. --}}
+                @if ($this->brainStatus['syncFailure'])
+                    <div class="rounded-[14px] border border-(--dgr) bg-(--surf2) p-3.5">
+                        <p class="mb-1 text-[13px] font-semibold text-(--dgr)">
+                            Synchro en panne depuis {{ $this->brainStatus['syncFailure']['since']->diffForHumans(null, true) }}
+                            · {{ $this->brainStatus['syncFailure']['attempts'] }} tentative{{ $this->brainStatus['syncFailure']['attempts'] > 1 ? 's' : '' }}
+                        </p>
+                        <p class="text-[12px] leading-[1.6] text-(--mut)">Le vault est figé : rien n'est tiré de GitHub ni poussé vers lui.</p>
+                        <p class="mt-1.5 font-mono text-[11px] leading-[1.6] text-(--mut)">{{ Str::limit($this->brainStatus['syncFailure']['message'], 300) }}</p>
                     </div>
                 @endif
 
