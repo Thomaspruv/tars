@@ -300,7 +300,7 @@ new #[Title('Revue')] class extends Component
      n'aide. Tout l'écran est une parole d'agent — il n'a donc pas besoin de
      filet vert, c'est le document entier qui l'est. --}}
 <div>
-    <x-space-tabs space="recul" class="mb-3.5 -ml-3.5" />
+    <x-space-tabs space="recul" class="mb-3.5" />
 
     @if (! $this->currentReview)
         <x-screen-header title="Aucune revue" class="mb-[22px]" />

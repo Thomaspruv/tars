@@ -162,3 +162,38 @@ test('the capture pill holds its label, and the shortcut rides outside the text'
         // Plus de pastille dans la pilule : le ⌘K n'apparaît que dans l'attribut.
         ->and(substr_count($sidebar, '⌘K'))->toBe(1);
 });
+
+/**
+ * La barre d'onglets d'un espace, à ne pas confondre avec la barre latérale :
+ * ses trois mots étaient posés nus sur le fond. Rien ne disait qu'« Entités »
+ * et « Listes » étaient des endroits où aller, et le `--surf2` du courant se
+ * détache du fond clair de 1,1 de rapport — autant dire rien.
+ */
+function spaceTabs(string $html, string $space): string
+{
+    // L'attribut seul : la balise `<nav>` du composant porte ses attributs sur
+    // plusieurs lignes, « <nav aria-label » ne s'y trouve pas d'un bloc.
+    return Str::before(Str::after($html, 'aria-label="'.$space.'"'), '</nav>');
+}
+
+test('a space tab bar marks where I am, and gives its neighbours an edge', function () {
+    $bar = spaceTabs($this->get(route('brain.index'))->getContent(), 'Mémoire');
+
+    // L'abricot du courant est celui de la barre du bas en mobile : « vous
+    // êtes ici » se dit d'une seule façon dans l'app.
+    expect($bar)->toContain('border-transparent bg-(--acbg) text-(--ac)')
+        ->and(substr_count($bar, 'border-(--bd) bg-(--surf)'))->toBe(2);
+});
+
+test('a count sitting on the current tab keeps its pill', function () {
+    OpenDecision::factory()->count(2)->create(['status' => OpenDecisionStatus::Open]);
+
+    $bar = spaceTabs($this->get(route('decisions.index'))->getContent(), 'Objectifs');
+
+    // Sur un onglet déjà abricot, `--acbg` sur `--acbg` effacerait la pastille :
+    // le chiffre passe en plein abricot.
+    expect($bar)->toContain('bg-(--ac) text-(--acT)">2');
+
+    // Et il reste une pastille pâle partout ailleurs — ici dans la barre latérale.
+    expect(sidebar($this->get(route('today'))->getContent()))->toContain('bg-(--acbg) text-(--ac)">2');
+});

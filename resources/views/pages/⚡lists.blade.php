@@ -110,7 +110,7 @@ new #[Title('Listes')] class extends Component
 ?>
 
 <div>
-    <x-space-tabs space="memoire" class="mb-3.5 -ml-3.5" />
+    <x-space-tabs space="memoire" class="mb-3.5" />
 
     <x-screen-header
         :kicker="$this->lists->count().' '.Str::plural('liste', $this->lists->count()).' · '.$this->pinnedCount.' '.Str::plural('épinglée', $this->pinnedCount)"

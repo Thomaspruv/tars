@@ -353,7 +353,7 @@ new #[Title('À trier')] class extends Component
 ?>
 
 <div>
-    <x-space-tabs space="trier" class="mb-3.5 -ml-3.5" />
+    <x-space-tabs space="trier" class="mb-3.5" />
 
     <x-screen-header :kicker="$this->kicker" title="À trier" class="mb-3">
         <x-slot:actions>

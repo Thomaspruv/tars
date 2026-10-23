@@ -234,7 +234,7 @@ new #[Title('Objectifs')] class extends Component
      pour la dernière fois) est la seule information secondaire : l'objectif qui
      dort depuis trois semaines passe devant, sans rouge. --}}
 <div>
-    <x-space-tabs space="objectifs" class="mb-3.5 -ml-3.5" />
+    <x-space-tabs space="objectifs" class="mb-3.5" />
 
     <x-screen-header :kicker="$this->headerCounts" title="Objectifs" class="mb-[22px]">
         <x-slot:actions>

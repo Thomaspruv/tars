@@ -12,6 +12,14 @@
     // chargement et seulement là : au premier rendu Livewire — un clic, une
     // validation, un `wire:poll` — la route courante devient `livewire.update`,
     // plus aucun onglet ne correspondait, et la barre disparaissait de l'écran.
+    //
+    // Trois pastilles, pas trois mots posés sur le fond. Les voisins étaient du
+    // texte `--mut` sans contour : rien ne disait qu'« Entités » et « Listes »
+    // étaient des endroits où aller, et le courant portait un `--surf2` qui, en
+    // clair, se détache du fond de 1,1 de rapport — autant dire rien. Le
+    // courant prend donc l'abricot, qui est déjà le « vous êtes ici » de la
+    // barre du bas en mobile, et les voisins prennent un contour : un onglet se
+    // voit avant de se lire.
     $resolved = \App\Support\Navigation\Spaces::named($space) ?? \App\Support\Navigation\Spaces::current();
     $tabs = $resolved === null ? [] : $resolved['tabs'];
 @endphp
@@ -20,7 +28,7 @@
     <nav
         aria-label="{{ $resolved['label'] }}"
         {{ $attributes->class([
-            'flex gap-1' => $variant === 'bar',
+            'flex flex-wrap gap-1.5' => $variant === 'bar',
             'flex flex-col gap-0.5' => $variant === 'column',
         ]) }}
     >
@@ -31,15 +39,18 @@
                 wire:navigate
                 @if ($isCurrent) aria-current="page" @endif
                 @class([
-                    'press flex items-center gap-2 rounded-full text-[13px] font-semibold',
+                    // Le contour est porté par les deux états — transparent sur
+                    // le courant — sinon les pastilles ne font pas la même
+                    // hauteur et la ligne se décale de 2 px.
+                    'press flex items-center gap-2 rounded-full border text-[13px] font-bold',
                     'px-3.5 py-2' => $variant === 'bar',
                     'px-3 py-2' => $variant === 'column',
-                    'bg-(--surf2) text-(--tx)' => $isCurrent,
-                    'text-(--mut) hover:bg-(--surf) hover:text-(--tx)' => ! $isCurrent,
+                    'border-transparent bg-(--acbg) text-(--ac)' => $isCurrent,
+                    'border-(--bd) bg-(--surf) text-(--mut) hover:border-(--bd2) hover:text-(--tx)' => ! $isCurrent,
                 ])
             >
                 {{ $tab['label'] }}
-                <x-nav-signal :key="$tab['signal']" />
+                <x-nav-signal :key="$tab['signal']" :on-accent="$isCurrent" />
             </a>
         @endforeach
     </nav>

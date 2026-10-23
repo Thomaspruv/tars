@@ -382,7 +382,7 @@ new #[Title('Planning · Mois')] class extends Component
      par jour au plus. Les journées chargées prennent un fond blé, les échéances
      et les jalons une pastille blé, le week-end est en creux. --}}
 <div class="flex min-h-[calc(100vh-120px)] flex-col">
-    <x-space-tabs space="planning" class="mb-3.5 -ml-3.5" />
+    <x-space-tabs space="planning" class="mb-3.5" />
 
     <x-screen-header :kicker="$this->monthSummary" :title="$this->monthLabel" class="mb-3.5">
         <x-slot:actions>

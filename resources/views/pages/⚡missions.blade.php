@@ -441,7 +441,7 @@ new #[Title('Missions')] class extends Component
 ?>
 
 <div @if ($this->runningCount > 0) wire:poll.2s @else wire:poll.15s @endif>
-    <x-space-tabs space="hermes" class="mb-3.5 -ml-3.5" />
+    <x-space-tabs space="hermes" class="mb-3.5" />
 
     <x-screen-header
         :kicker="$this->runningCount > 0 ? $this->runningCount.' en cours' : 'rien en cours'"

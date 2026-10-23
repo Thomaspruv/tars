@@ -562,7 +562,7 @@ new #[Title('Mémoire')] class extends Component
      — arborescence, note, contexte du curateur — mais à l'intérieur, sans
      dupliquer la marque ni obliger à revenir en arrière pour en sortir. --}}
 <div>
-    <x-space-tabs space="memoire" class="mb-3.5 -ml-3.5" />
+    <x-space-tabs space="memoire" class="mb-3.5" />
 
     <x-screen-header :kicker="$this->healthKicker" title="Mémoire" class="mb-4">
         <x-slot:actions>

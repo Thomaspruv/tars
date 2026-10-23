@@ -366,7 +366,7 @@ new #[Title('Agents')] class extends Component
 
     {{-- Les agents système sont l'onglet « réglage » de l'espace Hermès : ils
          tournent tout seuls, on vient ici choisir leur modèle, pas les lancer. --}}
-    <x-space-tabs space="hermes" class="mb-3.5 -ml-3.5" />
+    <x-space-tabs space="hermes" class="mb-3.5" />
 
     <x-screen-header
         :kicker="count($this->agentNames()).' agents · '.$activeAgents.' '.Str::plural('actif', $activeAgents)"

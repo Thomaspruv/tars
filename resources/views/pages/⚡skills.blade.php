@@ -144,7 +144,7 @@ new #[Title('Skills')] class extends Component
 <div x-data="{ adding: false }">
     @php $total = collect($this->grouped)->flatten()->count(); @endphp
 
-    <x-space-tabs space="hermes" class="mb-3.5 -ml-3.5" />
+    <x-space-tabs space="hermes" class="mb-3.5" />
 
     <x-screen-header :kicker="$total.' '.Str::plural('skill', $total).' installés'" title="Skills" class="mb-4">
         <x-slot:actions>

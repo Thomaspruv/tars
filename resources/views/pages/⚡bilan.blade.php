@@ -411,7 +411,7 @@ new #[Title('Bilan de vie')] class extends Component
      par l'agent en portent. La courbe d'humeur est en abricot, pas en vert :
      c'est ma donnée, pas la sienne. --}}
 <div>
-    <x-space-tabs space="recul" class="mb-3.5 -ml-3.5" />
+    <x-space-tabs space="recul" class="mb-3.5" />
 
     <x-screen-header
         :kicker="$this->periodLabel"
