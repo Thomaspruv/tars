@@ -42,6 +42,12 @@ class GitRepository
         Process::path($path)->run(['git', 'checkout', '-B', $branch, '--track', "origin/{$branch}"])->throw();
     }
 
+    /**
+     * Un pull qui ne réécrit jamais rien — donc un pull qui ne rattrape jamais
+     * un remote dès qu'un commit local existe. N'en faire la synchro
+     * périodique de rien : c'est `pullRebase()` qu'il faut (voir
+     * SyncBrainCommand, qui a payé trois mois de vault figé pour l'apprendre).
+     */
     public function pull(string $path): GitPullResult
     {
         $result = Process::path($path)->run(['git', 'pull', '--ff-only']);

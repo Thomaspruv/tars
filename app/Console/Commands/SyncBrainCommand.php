@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\RefreshVaultStatusJob;
 use App\Support\Brain\BrainSettings;
 use App\Support\Brain\GitRepository;
 use App\Support\Brain\VaultIndexer;
@@ -31,15 +32,33 @@ class SyncBrainCommand extends Command
 
         $git->ensureCloned($settings->remoteUrl(), $settings->branch(), $settings->localPath());
 
-        $pull = $git->pull($settings->localPath());
+        // `pullRebase()` et non `pull()` : un `pull --ff-only` refuse dès qu'un
+        // commit local existe, et comme Tars en crée lui-même à chaque
+        // écriture, la moindre divergence condamnait la synchro à échouer à
+        // l'identique pour toujours. C'est ce qui a gelé le vault pendant trois
+        // mois. Le rebase est aussi ce que VaultWriter fait déjà avant chaque
+        // écriture : une seule façon de rattraper le remote.
+        $pull = $git->pullRebase($settings->localPath());
 
         if (! $pull->successful) {
+            $settings->recordSyncFailure($pull->message);
             $this->error("Échec du pull : {$pull->message}");
 
             return self::FAILURE;
         }
 
+        // Un remote injoignable, ou des modifications pas encore committées,
+        // ne bloquent pas : le rebase n'a rien réécrit, et la raison remonte en
+        // avertissement dans les Réglages.
+        $settings->recordSyncWarning($pull->warning);
+        $settings->clearSyncFailure();
+
         $settings->markSynced();
+
+        // La synchro vient de parler au remote : c'est le moment le moins cher
+        // pour constater l'état du vault, et ça évite qu'un écran ouvert pour
+        // la première fois n'ait qu'un « état git inconnu » à montrer.
+        dispatch_sync(new RefreshVaultStatusJob);
 
         $summary = $indexer->indexAll();
 
