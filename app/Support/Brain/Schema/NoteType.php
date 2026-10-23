@@ -4,8 +4,8 @@ namespace App\Support\Brain\Schema;
 
 /**
  * The ontology of the vault — what a note *is*, which decides where it lives
- * and how it is named. See `resources/vault/README.md` (the copy TARS writes
- * into the vault) and SPEC-TARS-OS-v1 §A.3/§A.4.
+ * and how it is named. The rulebook is `resources/vault/AGENTS.md`; the
+ * type → folder mapping below is still hardcoded and has to follow it.
  */
 enum NoteType: string
 {

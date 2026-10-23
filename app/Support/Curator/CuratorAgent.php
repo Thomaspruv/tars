@@ -102,7 +102,7 @@ class CuratorAgent
 
         $systemPrompt = str_replace(
             '{{VAULT_README}}',
-            File::get(resource_path('vault/README.md')),
+            File::get(resource_path('vault/AGENTS.md')),
             File::get(resource_path('prompts/curator-conformance.md')),
         );
 

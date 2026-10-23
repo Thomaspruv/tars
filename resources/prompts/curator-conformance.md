@@ -66,9 +66,10 @@ Réponds **uniquement** en JSON, un objet par document, sans texte autour :
 N'inclus que les suggestions de confiance `high` ou `medium`. Un document sur
 lequel tu ne proposes rien peut être omis, ou renvoyé en `none`.
 
-## La constitution — le README du vault
+## La constitution — le règlement du cerveau
 
-Ce qui suit est la loi du vault, telle que TARS la pose dans le dépôt. C'est
-elle qui dit ce qu'est un type, où il vit et comment il se nomme.
+Ce qui suit est la loi du cerveau : le règlement unique du dépôt, qui vaut pour
+toute application qui y écrit. C'est lui qui dit ce qu'est un type, où il vit et
+comment il se nomme.
 
 {{VAULT_README}}

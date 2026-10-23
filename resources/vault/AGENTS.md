@@ -1,139 +1,154 @@
-> **Maintenu par TARS et Thomas.** Modifications de fond : dans le repo TARS,
-> `resources/vault/README.md`. Ce fichier est reposé dans le vault à chaque
-> réindexation — l'éditer ici serait écrasé.
+# AGENTS.md — le règlement du cerveau
 
-# Le vault — la seconde mémoire de Thomas
+> **Un seul cerveau, un seul règlement.** Ce fichier remplace les trois textes
+> qui se contredisaient : l'ancien `AGENTS.md`, `00 - HOT/regles.md` (section
+> mémoire) et le `README.md` que TARS reposait ici toutes les quinze minutes.
+> Il régit ce dépôt pour **toute** application qui s'y branche — Obsidian,
+> Hermès, TARS, et les suivantes.
+>
+> Décision du 23/10/2026 : **un dépôt unique**. Révoque la séparation
+> « Contexte = référence / TARS = vivant » actée le 31/08/2026.
 
-Ce dépôt est la mémoire longue de Thomas : ce qu'il sait, qui il connaît, ce
-qu'il a décidé, ce qu'il suit. Il est écrit par trois mains, et **git est le
-seul mécanisme de synchronisation** entre elles :
+## 1. Les trois règles qui tranchent tout le reste
 
-| Qui | Par quoi | Où |
+**1. Le frontmatter dit ce qu'est une note. Le dossier dit seulement où on la
+range.** C'est le frontmatter qui est lu par les machines (`type:`), jamais le
+chemin. Une application qui écrit un frontmatter conforme est comprise
+immédiatement, quel que soit le dossier qu'elle a choisi. C'est ça, et rien
+d'autre, qui empêche d'avoir cinquante versions du même cerveau.
+
+**2. Une chose, une note, un endroit.** Jamais deux notes sur le même sujet.
+Si une information en concerne deux, elle vit dans une seule et l'autre
+**pointe** (`related:`). Un cerveau devient un bordel par duplication, pas par
+volume.
+
+**3. Daté ou vivant, il faut choisir.** Si l'information se *corrige* →
+vivant : un fichier, réécrit en place, chemin stable. Si elle s'*ajoute* →
+daté : un fichier par fois, immuable, empilé. Un fichier vivant qu'on empile
+devient un journal illisible ; un fichier daté qu'on réécrit perd l'historique.
+
+## 2. Ce qu'une IA lit au démarrage
+
+Dans cet ordre, et **jamais tout le dépôt** :
+
+1. `AGENTS.md` — ce fichier.
+2. `00 - HOT/etat-present.md` — l'état daté du moment.
+3. `00 - HOT/regles.md` — les règles absolues.
+4. `00 - HOT/profil.md` — qui est l'utilisateur.
+5. `get_today()` / `get_context()` — la vie courante structurée (tâches,
+   agenda, objectifs). En cas de divergence avec un fichier, **la base gagne**.
+
+Le reste se trouve à la demande : `search_brain` (la requête est découpée en
+mots, les accents repliés, les résultats classés — une question en langage
+naturel fonctionne), puis `read_note` avec le chemin rendu.
+
+Le numérotage des dossiers (`00`, `01`, …) **est** l'ordre de lecture : il n'a
+pas d'autre fonction, et c'est la raison de le garder.
+
+## 3. L'arborescence
+
+| Dossier | Ce qu'il contient | `type:` |
 |---|---|---|
-| **Thomas** | Obsidian | partout |
-| **Hermes** | les outils MCP de TARS (`upsert_note`, `add_note`) | partout, via TARS |
-| **les agents TARS** | le service vault de TARS | partout, via TARS |
+| `00 - HOT/` | le présent : règles, profil, état, index. Une page max chacun | `profil` |
+| `01 - PROJETS/<slug>/` | un dossier par projet : `fiche.md` vivant, `AGENTS.md`, specs | `project` |
+| `02 - SYSTEME/` | infra, accès, pipeline, config | `note` |
+| `03 - DECISIONS/` | `decision-log.md` — **un seul fichier**, en ajout, tagué `[projet]` | `decision` |
+| `04 - MEMOIRE-AGENTS/snapshots/` | fin de session, daté | — |
+| `05 - ARCHIVES/` | ce qui est terminé, avec sa date d'archivage | `archive` |
+| `06 - PERSO/` | vie privée : `BIENS/ FAMILLE/ FINANCES/ SANTE/ SOCIETES/` | `note` |
+| `07 - IDEES/` | `idees.md` — backlog, avec statut | — |
+| `08 - INBOX/` | dépôt libre, **objectif : vide** | `a-traiter` |
+| `09 - GENS/` | une fiche vivante par personne et par organisation | `person`, `org` |
+| `10 - SAVOIR/` | connaissance vivante, une note par sujet | `note` |
+| `11 - JOURNAL/AAAA/` · `11 - JOURNAL/Bilans/` | un fichier par jour, un par bilan | `journal` |
+| `12 - VEILLE/<sujet>/` | daté, un passage par fichier | `veille` |
+| `13 - REUNIONS/` | daté, `AAAA-MM-JJ-sujet.md` | `meeting` |
+| `14 - SKILLS/<categorie>/<nom>/` | `SKILL.md` | `skill` |
 
-TARS commit et pousse après chaque écriture machine. Il fait un `pull --rebase`
-**avant** d'écrire : en cas de divergence, il n'écrase rien — il garde le
-contenu dans le sas (`TARS/`) et prévient Thomas.
+Les dossiers `09` à `14` sont **nouveaux** : ils sont ce qu'il manquait pour
+que la vie courante tienne dans ce dépôt plutôt que dans un second.
 
-## Par où commencer quand on est une IA
+`_index.md` dans un dossier est **généré** — sommaire avec titre, type, statut,
+fraîcheur, lien. Ne jamais l'éditer. Il n'est créé que pour un dossier qui
+contient des notes.
 
-Dans cet ordre, et pas un autre :
+## 4. Nommage
 
-1. **`README.md`** — ce fichier : les règles et la carte.
-2. **`Profil/`** — qui est Thomas (`perso.md`, `pro.md`, `preferences.md`, `capacite.md`).
-3. **`Projets/_index.md`** — ce qui est en cours, puis le `README.md` du projet concerné.
-4. Le dossier correspondant au besoin (`Personnes/`, `Réunions/`, `Notes/`…), via son `_index.md`.
+- **Fichiers en kebab-case**, sans accents : `fiscalite-sarl.md`.
+- **Dates en ISO**, toujours : `2026-10-23`. Un fichier daté commence par sa
+  date : `2026-10-23-point-hubspot.md`. Ça trie à l'œil et par la machine.
+- **Le titre est l'index.** Le `title:` du frontmatter doit se comprendre seul,
+  hors de son dossier, et contenir les mots qu'on taperait pour le chercher.
+  `Spreak — Concurrence` ✅ · `fiche.md`, `marche.md`, `spec-produit` ❌ — ces
+  trois-là existent aujourd'hui et sont introuvables.
+- **Un H1 dans chaque fichier**, identique au `title:`. Sans lui, le titre
+  indexé retombe sur le nom de fichier.
+- **Jamais de `DIVERS/`, `MISC/`, `AUTRES/`.** Une chose a sa place, on la lui
+  crée, ou on décide qu'elle ne vaut pas d'être gardée.
+- **Pas de `_template/` indexé** : les gabarits vivent hors du dépôt ou dans un
+  dossier masqué (`.templates/`). Aujourd'hui `<Nom du projet>` sort en
+  résultat de recherche.
 
-Chaque dossier structurant porte un `_index.md` **généré par TARS** : titre,
-type, statut, dernière mise à jour, lien. C'est le sommaire — ne jamais
-l'éditer à la main, il est réécrit à chaque réindexation.
+## 5. Le contrat de frontmatter (v3)
 
-Pour chercher sans savoir où regarder : `get_memory_map` (ce fichier + les
-index), puis `search_brain` (plein texte), puis `read_note`.
-
-## L'ontologie — les types de choses dont TARS se souvient
-
-| Type | Vit où (structuré) | Vit où (texte) | Exemple |
-|---|---|---|---|
-| **Projet** | table `projects` | `Projets/<slug>/` | « Spreak — intégration HubSpot » |
-| **Objectif** | `goals` | ancre `goal:` | « 500k CA » |
-| **Entité** (personne, organisation, lieu, outil) | `entities` | `Personnes/`, `Organisations/`, ancre `entity:` | « Marc », « SARL Alpha » |
-| **Tâche / Événement / Liste** | `tasks`, `events`, `lists` | — jamais dans le vault | |
-| **Décision** | `decisions` | `Décisions/AAAA-MM-JJ-sujet.md` | |
-| **Note datée** (réunion, appel) | — | `Réunions/AAAA-MM-JJ-sujet.md` | |
-| **Note vivante** (connaissance) | — | `Notes/sujet.md` | « fiscalité SARL » |
-| **Journal** | `journal_entries` | `Journal/AAAA/` | exclu de `get_context` |
-| **Veille** | — | `Veille/<sujet>/AAAA-MM-JJ.md` | |
-| **Skill** | lu depuis le disque | `Skills/<categorie>/<nom>/SKILL.md` | |
-| **Profil** | — | `Profil/` | sacré, relu chaque mois |
-| **Sas** | — | `TARS/` | objectif : vide |
-| **Archives** | — | `Archives/` | |
-
-Deux principes qui tranchent la plupart des cas :
-
-- **Le dossier dit la nature, l'ancre dit le sujet.** Une note mal rangée mais
-  ancrée reste retrouvable ; l'inverse non.
-- **Daté ou vivant ?** Si l'information change la semaine prochaine et que je
-  *corrige* la note → vivant, un seul fichier réécrit en place. Si j'en
-  *écris une autre* → daté, immuable, empilé.
-
-## Où écrire, selon le type
-
-Le chemin est **toujours calculé par TARS**, jamais choisi par l'appelant. Pour
-mémoire, voici la règle qu'il applique :
-
-| `type` | Dossier | Nommage |
-|---|---|---|
-| `project` | `Projets/<slug>/` | `README.md` (le brief vivant) |
-| `person` | `Personnes/` | `<slug>.md` — vivant |
-| `org` | `Organisations/` | `<slug>.md` — vivant |
-| `meeting` | `Réunions/` | `AAAA-MM-JJ-<slug>.md` — daté |
-| `note` | `Notes/` | `<slug>.md` — vivant |
-| `decision` | `Décisions/` | `AAAA-MM-JJ-<slug>.md` — daté |
-| `journal` | `Journal/AAAA/` | `AAAA-MM-JJ.md` — un par jour |
-| `veille` | `Veille/<sujet>/` | `AAAA-MM-JJ-<slug>.md` — daté |
-| `skill` | `Skills/<categorie>/<nom>/` | `SKILL.md` |
-| `profil` | `Profil/` | `<slug>.md` — vivant |
-| `a-traiter` | `TARS/` | brut, à trier — objectif : dossier vide |
-| `archive` | `Archives/` | le fichier d'origine, avec sa date d'archivage |
-
-Une note datée écrite deux fois le même jour ne remplace pas la première : elle
-est suffixée (`-2`, `-3`). Une note vivante réécrite est une **mise à jour** :
-même chemin, corps remplacé, `date` d'origine conservée, `updated` rafraîchie.
-
-## Le contrat de fichier (frontmatter v3)
-
-Tout fichier du vault commence par un frontmatter YAML. `schema`, `type`,
-`title` et `date` sont **obligatoires** ; `status` l'est pour `project`,
-`veille` et `a-traiter`.
+Tout fichier commence par ça. `schema`, `type`, `title`, `date` sont
+**obligatoires** ; `status` l'est pour `project`, `veille` et `a-traiter`.
 
 ```yaml
 ---
-schema: 3                      # version du contrat
-type: meeting                  # project|person|org|meeting|note|decision|journal|veille|skill|profil|a-traiter|archive
+schema: 3
+type: meeting          # project|person|org|meeting|note|decision|journal|veille|skill|profil|a-traiter|archive
 title: "Point HubSpot avec Marc"
-date: 2026-10-16               # l'événement, ou la création
-updated: 2026-10-16            # dernière modification de fond
-status: active                 # active|paused|done|archived
-project: "spreak-hubspot"      # slug du projet, si la note en dépend
-entity: ["Marc", "SARL Alpha"] # noms naturels — TARS les résout en fuzzy
+date: 2026-10-16       # l'événement, ou la création
+updated: 2026-10-23    # dernière modification de fond
+status: active         # active|paused|done|archived
+project: "spreak"      # slug du projet, si la note en dépend
+entity: ["Marc", "SARL Alpha"]   # noms naturels, résolus en fuzzy
 goal: "500k CA"
 tags: [crm, integration]
-source: hermes                 # thomas|hermes|agent-<nom>|connector-<nom>
+source: hermes         # thomas|hermes|agent-<nom>|connector-<nom>
 related: ["[[fiscalite-sarl]]"]
 ---
 ```
 
-**Ce que coûte une note non conforme :** TARS l'indexe en plein texte, mais ne
-résout pas ses ancres — elle n'apparaît alors sur aucune fiche entité ou
-objectif, et le curateur propose sa complétion. C'est volontaire : le contrat
-doit être le chemin le plus court.
+**Ce que coûte une note non conforme :** elle est indexée en plein texte, mais
+ses ancres `entity:`/`goal:` ne sont pas résolues — elle n'apparaît donc sur
+aucune fiche entité ni objectif. Le curateur propose sa complétion par lots.
 
-Exempts du contrat : `Profil/` (rédigé à la main, par Thomas) et `.hermes/`
-(la mémoire technique d'Hermes). Toujours indexés, ancres résolues, jamais
-signalés.
+Exempts : `Profil/`, `.hermes/`, et les fichiers générés (`_index.md`).
 
-## Ce qu'on ne fait jamais
+## 6. Pour que ça tienne à l'échelle
 
-- **Supprimer.** Jamais, par aucun chemin. On archive (`Archives/`, avec
-  `archived:`). Aucun outil MCP ne supprime de note.
-- **Écrire dans `.hermes/`** quand on n'est pas Hermes : c'est son territoire,
-  le curateur n'y touche pas.
-- **Écrire hors du sas quand on est un connecteur.** Un connecteur (mail,
-  calendrier) dépose des *candidats* dans `TARS/` en `a-traiter` avec
-  `source: connector-<nom>` ; le curateur et le triage font le reste.
-- **Choisir un chemin soi-même** quand on écrit via MCP : c'est TARS qui le
-  calcule, d'après le `type`.
-- **Éditer un `_index.md`** : il est généré.
+1. **Promotion** : un fichier au-delà de ~200 lignes devient un dossier. Une
+   idée validée monte en projet, et l'entrée d'`idees.md` pointe vers elle.
+2. **Fan-out borné** : aucun dossier plat au-delà de ~100 notes. Au-delà, on
+   shard sur un axe stable — l'année pour du daté, le sujet pour du vivant.
+   Raison concrète : un `_index.md` est tronqué à 200 lignes quand un agent le
+   lit, donc un dossier de 500 notes est **invisible**.
+3. **`00 - HOT` court pour toujours.** L'ancien état part en
+   `04 - MEMOIRE-AGENTS/snapshots/`.
+4. **Un seul decision-log**, global, tagué par projet. Pas de log par projet.
+5. **Une note = un sujet.** Une note qui couvre cinq sujets matche mal sur les
+   cinq et ne tient pas dans un extrait de recherche.
 
-## Les deux indicateurs de santé
+## 7. Ce qu'on ne fait jamais
 
-1. **Le sas `TARS/` proche de zéro** — comme une inbox.
-2. **Zéro note non conforme** hors zones exemptées — donc zéro note sans ancre
-   là où une ancre a du sens.
+- **Supprimer.** Jamais, par aucun chemin : on archive (`05 - ARCHIVES/`, avec
+  `archived:`). Aucun outil MCP ne supprime.
+- **Écraser la porte d'entrée.** `README.md` et `AGENTS.md` à la racine
+  appartiennent au dépôt, pas à l'une des applications qui y écrit. Aucune
+  machine ne les régénère.
+- **Inventer un dossier de haut niveau** sans l'ajouter à ce tableau.
+- **Écrire dans `.hermes/`** quand on n'est pas Hermès.
+- **Choisir son chemin soi-même** quand on écrit via MCP : il est calculé
+  d'après le `type`.
+- **Écrire « plus tard ».** Une décision, une préférence, un token se notent
+  sur le moment.
+- **Exposer `06 - PERSO/`** hors du dépôt.
 
-Le curateur les surveille (mission conformité, chaque dimanche et à la
-demande), `/cerveau` les affiche, la revue hebdo les rappelle.
+## 8. Les indicateurs de santé
+
+1. `08 - INBOX/` proche de zéro.
+2. Zéro note non conforme hors zones exemptées.
+
+Le curateur les surveille, `/cerveau` les affiche, la revue hebdo les rappelle.

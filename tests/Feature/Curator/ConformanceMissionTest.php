@@ -278,7 +278,7 @@ test('a limit caps how many documents one pass submits', function () {
     expect(app(CuratorAgent::class)->processConformance(AgentRunTrigger::Manual, limit: 10))->toHaveCount(1);
 });
 
-test('the prompt carries the vault README as its constitution', function () {
+test('the prompt carries the brain rulebook as its constitution', function () {
     AgentConfig::factory()->create(['agent_name' => 'curateur', 'enabled' => true]);
     nonConformantDocument();
 
@@ -286,7 +286,11 @@ test('the prompt carries the vault README as its constitution', function () {
         $mock->shouldReceive('run')
             ->once()
             ->withArgs(function ($config, string $systemPrompt, array $messages, $trigger): bool {
-                return str_contains($systemPrompt, 'Le vault — la seconde mémoire de Thomas')
+                // Le règlement unique du cerveau (resources/vault/AGENTS.md),
+                // dont ses trois règles de tête : c'est à lui que le curateur
+                // ramène l'existant.
+                return str_contains($systemPrompt, 'le règlement du cerveau')
+                    && str_contains($systemPrompt, 'Le frontmatter dit ce qu\'est une note')
                     && str_contains($systemPrompt, 'mission **conformité**')
                     && ! str_contains($systemPrompt, '{{VAULT_README}}');
             })
